@@ -15,4 +15,7 @@
 		<PackageReference Include="MimeKit" Version="4.8.0" />
 		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
 	</ItemGroup>
+	<ItemGroup>
+	  <Folder Include="RequestAndResponse\" />
+	</ItemGroup>
 </Project>

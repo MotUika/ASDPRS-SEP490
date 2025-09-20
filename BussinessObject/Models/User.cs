@@ -34,6 +34,8 @@ namespace BussinessObject.Models
         [StringLength(50)]
         public string StudentCode { get; set; }
 
+        public string? AvatarUrl { get; set; }
+
         [Required]
         public bool IsActive { get; set; }
 

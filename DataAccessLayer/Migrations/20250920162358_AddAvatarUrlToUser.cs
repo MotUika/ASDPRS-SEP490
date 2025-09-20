@@ -1,13 +1,16 @@
 ﻿using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
+#nullable disable
+
 namespace DataAccessLayer.Migrations
 {
-    public partial class InitialCreate : Migration
+    /// <inheritdoc />
+    public partial class AddAvatarUrlToUser : Migration
     {
+        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            // Existing table creation code (unchanged)
             migrationBuilder.CreateTable(
                 name: "Campuses",
                 columns: table => new
@@ -36,18 +39,6 @@ namespace DataAccessLayer.Migrations
                     table.PrimaryKey("PK_Roles", x => x.RoleId);
                 });
 
-            // Seed Roles table
-            migrationBuilder.InsertData(
-                table: "Roles",
-                columns: new[] { "RoleName", "Description" },
-                values: new object[,]
-                {
-                    { "Admin", "Administrator with full system access" },
-                    { "Student", "Student user with limited access" },
-                    { "Instructor", "Instructor with course management access" }
-                });
-
-            // Remaining table creation code (unchanged)
             migrationBuilder.CreateTable(
                 name: "AcademicYears",
                 columns: table => new
@@ -106,6 +97,7 @@ namespace DataAccessLayer.Migrations
                     FirstName = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
                     LastName = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
                     StudentCode = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    AvatarUrl = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     IsActive = table.Column<bool>(type: "bit", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
                 },
@@ -734,19 +726,19 @@ namespace DataAccessLayer.Migrations
                 {
                     table.PrimaryKey("PK_DocumentEmbeddings", x => x.EmbeddingId);
                     table.ForeignKey(
-                        name: "FK_DocumentEmbeddings_AISummaries",
+                        name: "FK_DocumentEmbeddings_AISummary",
                         column: x => x.SourceId,
                         principalTable: "AISummaries",
                         principalColumn: "SummaryId",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_DocumentEmbeddings_Reviews",
+                        name: "FK_DocumentEmbeddings_Review",
                         column: x => x.SourceId,
                         principalTable: "Reviews",
                         principalColumn: "ReviewId",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_DocumentEmbeddings_Submissions",
+                        name: "FK_DocumentEmbeddings_Submission",
                         column: x => x.SourceId,
                         principalTable: "Submissions",
                         principalColumn: "SubmissionId",
@@ -972,6 +964,7 @@ namespace DataAccessLayer.Migrations
                 column: "CampusId");
         }
 
+        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
