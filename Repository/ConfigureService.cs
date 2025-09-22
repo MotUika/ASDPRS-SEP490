@@ -59,6 +59,8 @@ namespace Repository
             services.AddScoped<CourseInstanceDAO>();
             services.AddScoped<CourseStudentDAO>();
             services.AddScoped<CourseInstructorDAO>();
+            services.AddScoped<AssignmentDAO>();
+            services.AddScoped<CourseRepository>();
             //
 
             return services;

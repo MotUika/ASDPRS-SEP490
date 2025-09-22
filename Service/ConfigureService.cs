@@ -28,6 +28,12 @@ namespace Service
             services.AddAutoMapper(typeof(CurriculumMappingProfile));
             services.AddAutoMapper(typeof(CourseInstanceMappingProfile));
             services.AddAutoMapper(typeof(UserMappingProfile));
+            services.AddAutoMapper(typeof(RubricTemplateMappingProfile));
+            services.AddAutoMapper(typeof(CriteriaTemplateMappingProfile));
+            services.AddAutoMapper(typeof(RubricMappingProfile));
+            services.AddAutoMapper(typeof(CriteriaMappingProfile));
+            services.AddAutoMapper(typeof(CriteriaFeedbackMappingProfile));
+
 
 
 
@@ -38,6 +44,14 @@ namespace Service
             services.AddScoped<ICourseService, CourseService>();
             services.AddScoped<ICurriculumService, CurriculumService>();
             services.AddScoped<ICourseInstanceService, CourseInstanceService>();
+            services.AddScoped<ITokenService, TokenService>();
+            services.AddScoped<IEmailService, EmailService>();
+            services.AddScoped<ICriteriaTemplateService, CriteriaTemplateService>();
+            services.AddScoped<IRubricTemplateService, RubricTemplateService>();
+            services.AddScoped<IRubricService, RubricService>();
+            services.AddScoped<ICriteriaService, CriteriaService>();
+            services.AddScoped<ICriteriaFeedbackService, CriteriaFeedbackService>();
+
             return services;
 
         }
