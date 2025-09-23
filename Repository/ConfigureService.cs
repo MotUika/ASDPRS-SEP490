@@ -35,10 +35,17 @@ namespace Repository
             services.AddScoped<ICurriculumRepository, CurriculumRepository>();
             services.AddScoped<ISemesterRepository, SemesterRepository>();
             services.AddScoped<ISubmissionRepository, SubmissionRepository>();
-            services.AddScoped<INotificationRepository, NotificationRepository>();
-            services.AddScoped<ICriteriaRepository, CriteriaRepository>();
+/*            services.AddScoped<INotificationRepository, NotificationRepository>();
+*/            services.AddScoped<ICriteriaRepository, CriteriaRepository>();
             services.AddScoped<IRubricTemplateRepository, RubricTemplateRepository>();
             services.AddScoped<IRubricRepository, RubricRepository>();
+            services.AddScoped<IAssignmentRepository, AssignmentRepository>();
+            services.AddScoped<ICourseRepository, CourseRepository>();
+            services.AddScoped<IRegradeRequestRepository, RegradeRequestRepository>();
+            services.AddScoped<IDocumentEmbeddingRepository, DocumentEmbeddingRepository>();
+            services.AddScoped<IAISummaryRepository, AISummaryRepository>();
+
+
 
 
             //
