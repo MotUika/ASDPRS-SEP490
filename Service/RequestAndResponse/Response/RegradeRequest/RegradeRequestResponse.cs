@@ -1,0 +1,44 @@
+﻿using System;
+
+namespace Service.RequestAndResponse.Response.RegradeRequest
+{
+    public class RegradeRequestResponse
+    {
+        public int RequestId { get; set; }
+        public int SubmissionId { get; set; }
+        public string Reason { get; set; }
+        public string Status { get; set; }
+        public DateTime RequestedAt { get; set; }
+        public int? ReviewedByInstructorId { get; set; }
+        public string ResolutionNotes { get; set; }
+
+        // Navigation properties for detailed view
+        public SubmissionInfoResponse Submission { get; set; }
+        public UserInfoResponse RequestedByStudent { get; set; }
+        public UserInfoResponse ReviewedByInstructor { get; set; }
+        public AssignmentInfoResponse Assignment { get; set; }
+    }
+
+    public class SubmissionInfoResponse
+    {
+        public int SubmissionId { get; set; }
+        public string FileName { get; set; }
+        public DateTime SubmittedAt { get; set; }
+        public string Status { get; set; }
+    }
+
+    public class UserInfoResponse
+    {
+        public int UserId { get; set; }
+        public string FullName { get; set; }
+        public string Email { get; set; }
+        public string Role { get; set; }
+    }
+
+    public class AssignmentInfoResponse
+    {
+        public int AssignmentId { get; set; }
+        public string Title { get; set; }
+        public string CourseName { get; set; }
+    }
+}

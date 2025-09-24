@@ -1,29 +1,13 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using Microsoft.AspNetCore.Identity;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace BussinessObject.Models
 {
-    public class User
+    public class User : IdentityUser<int> // Inherit from IdentityUser<int>
     {
-        [Key]
-        public int UserId { get; set; }
-
         [Required]
         public int CampusId { get; set; }
-
-        [Required]
-        [StringLength(100)]
-        public string Username { get; set; }
-
-        [Required]
-        public string PasswordHash { get; set; }
-
-        [Required]
-        [StringLength(256)]
-        [EmailAddress]
-        public string Email { get; set; }
 
         [StringLength(50)]
         public string FirstName { get; set; }

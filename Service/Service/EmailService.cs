@@ -1,10 +1,8 @@
 ﻿using MailKit.Security;
 using MimeKit;
 using Service.IService;
+using Microsoft.Extensions.Configuration; // Add this using
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace Service.Service
@@ -16,12 +14,12 @@ namespace Service.Service
         private readonly string _smtpServer;
         private readonly int _smtpPort;
 
-        public EmailService(string fromEmail, string password, string smtpServer = "smtp.gmail.com", int smtpPort = 587)
+        public EmailService(IConfiguration configuration)
         {
-            _fromEmail = fromEmail;
-            _password = password;
-            _smtpServer = smtpServer;
-            _smtpPort = smtpPort;
+            _fromEmail = configuration["EmailSettings:SenderEmail"];
+            _password = configuration["EmailSettings:SenderPassword"];
+            _smtpServer = configuration["EmailSettings:SmtpServer"] ?? "smtp.gmail.com";
+            _smtpPort = configuration.GetValue<int>("EmailSettings:SmtpPort", 587);
         }
 
         public async Task<bool> SendEmail(string email, string subject, string htmlContent)

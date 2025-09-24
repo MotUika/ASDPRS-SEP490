@@ -33,7 +33,7 @@ namespace Repository.BaseRepository
         {
             // Get user roles from database
             var userRoles = await _dbContext.UserRoles
-                .Where(ur => ur.UserId == user.UserId)
+                .Where(ur => ur.UserId == user.Id)
                 .Join(_dbContext.Roles,
                     ur => ur.RoleId,
                     r => r.RoleId,
@@ -46,7 +46,7 @@ namespace Repository.BaseRepository
                 new Claim(JwtRegisteredClaimNames.Sub, user.Email),
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
                 new Claim(JwtRegisteredClaimNames.GivenName, user.FirstName + " " + user.LastName),
-                new Claim("userId", user.UserId.ToString())
+                new Claim("userId", user.Id.ToString())
             };
 
             // Add role claims
@@ -77,7 +77,7 @@ namespace Repository.BaseRepository
             {
                 Id = Guid.NewGuid(),
                 JwtId = token.Id,
-                UserId = user.UserId,
+                UserId = user.Id,
                 Token = refreshToken,
                 IsUsed = false,
                 IsRevoked = false,
@@ -193,7 +193,7 @@ namespace Repository.BaseRepository
                 await _dbContext.SaveChangesAsync();
 
                 // Create new token
-                var user = await _dbContext.Users.SingleOrDefaultAsync(u => u.UserId == storedToken.UserId);
+                var user = await _dbContext.Users.SingleOrDefaultAsync(u => u.Id == storedToken.UserId);
                 var token = await CreateToken(user);
 
                 return new ApiResponse

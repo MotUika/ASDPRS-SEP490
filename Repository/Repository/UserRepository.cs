@@ -1,14 +1,9 @@
 ﻿using BussinessObject.Models;
 using DataAccessLayer;
-using DataAccessLayer.BaseDAO;
+using DataAccessLayer.DAO;
 using Microsoft.EntityFrameworkCore;
 using Repository.BaseRepository;
 using Repository.IRepository;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Repository.Repository
 {
@@ -16,7 +11,7 @@ namespace Repository.Repository
     {
         private readonly ASDPRSContext _context;
 
-        public UserRepository(BaseDAO<User> baseDao, ASDPRSContext context) : base(baseDao)
+        public UserRepository(UserDAO userDao, ASDPRSContext context) : base(userDao)
         {
             _context = context;
         }
@@ -55,7 +50,7 @@ namespace Repository.Repository
             return await _context.Users
                 .Include(u => u.UserRoles)
                 .ThenInclude(ur => ur.Role)
-                .FirstOrDefaultAsync(u => u.UserId == userId);
+                .FirstOrDefaultAsync(u => u.Id == userId);
         }
     }
 }

@@ -1,8 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Service.RequestAndResponse.Response.User
 {
@@ -19,5 +16,6 @@ namespace Service.RequestAndResponse.Response.User
         public string AvatarUrl { get; set; }
         public bool IsActive { get; set; }
         public DateTime CreatedAt { get; set; }
+        public List<string> Roles { get; set; } = new List<string>(); // Thêm property Roles
     }
 }

@@ -1,5 +1,5 @@
 ﻿using BussinessObject.Models;
-using DataAccessLayer;
+using DataAccessLayer.DAO;
 using Microsoft.EntityFrameworkCore;
 using Repository.BaseRepository;
 using Repository.IRepository;
