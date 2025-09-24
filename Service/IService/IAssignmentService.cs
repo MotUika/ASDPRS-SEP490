@@ -1,0 +1,25 @@
+﻿using Service.RequestAndResponse.BaseResponse;
+using Service.RequestAndResponse.Request.Assignment;
+using Service.RequestAndResponse.Response.Assignment;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+
+namespace Service.IService
+{
+    public interface IAssignmentService
+    {
+        Task<BaseResponse<AssignmentResponse>> CreateAssignmentAsync(CreateAssignmentRequest request);
+        Task<BaseResponse<AssignmentResponse>> UpdateAssignmentAsync(UpdateAssignmentRequest request);
+        Task<BaseResponse<bool>> DeleteAssignmentAsync(int assignmentId);
+        Task<BaseResponse<AssignmentResponse>> GetAssignmentByIdAsync(int assignmentId);
+        Task<BaseResponse<AssignmentResponse>> GetAssignmentWithDetailsAsync(int assignmentId);
+        Task<BaseResponse<List<AssignmentResponse>>> GetAssignmentsByCourseInstanceAsync(int courseInstanceId);
+        Task<BaseResponse<List<AssignmentSummaryResponse>>> GetAssignmentsByInstructorAsync(int instructorId);
+        Task<BaseResponse<List<AssignmentSummaryResponse>>> GetAssignmentsByStudentAsync(int studentId);
+        Task<BaseResponse<List<AssignmentSummaryResponse>>> GetActiveAssignmentsAsync();
+        Task<BaseResponse<List<AssignmentSummaryResponse>>> GetOverdueAssignmentsAsync();
+        Task<BaseResponse<bool>> ExtendDeadlineAsync(int assignmentId, DateTime newDeadline);
+        Task<BaseResponse<bool>> UpdateRubricAsync(int assignmentId, int rubricId);
+        Task<BaseResponse<AssignmentStatsResponse>> GetAssignmentStatisticsAsync(int assignmentId);
+    }
+}

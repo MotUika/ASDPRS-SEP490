@@ -1,6 +1,7 @@
 ﻿using BussinessObject.Models;
 using DataAccessLayer;
 using DataAccessLayer.BaseDAO;
+using DataAccessLayer.DAO;
 using Microsoft.EntityFrameworkCore;
 using Repository.BaseRepository;
 using Repository.IRepository;
@@ -16,7 +17,7 @@ namespace Repository.Repository
     {
         private readonly ASDPRSContext _context;
 
-        public CourseInstanceRepository(BaseDAO<CourseInstance> baseDao, ASDPRSContext context) : base(baseDao)
+        public CourseInstanceRepository(CourseInstanceDAO courseInstanceDao, ASDPRSContext context) : base(courseInstanceDao)
         {
             _context = context;
         }

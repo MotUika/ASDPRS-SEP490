@@ -8,5 +8,7 @@ namespace Service.IService
     {
         Task<TokenModel> CreateToken(User user);
         Task<ApiResponse> RenewToken(TokenModel model);
+        Task<ApiResponse> RefreshToken(string refreshToken); // Thay đổi trả về ApiResponse
+        Task RevokeRefreshToken(int userId);
     }
 }

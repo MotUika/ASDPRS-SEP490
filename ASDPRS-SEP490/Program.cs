@@ -1,12 +1,15 @@
+﻿using BussinessObject.Models;
 using DataAccessLayer;
-using BussinessObject.Models;
+using DataAccessLayer.BaseDAO;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Authentication.Google;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
-using Repository.IBaseRepository;
+using Repository;
 using Repository.BaseRepository;
+using Repository.IBaseRepository;
+using Service;
 using Service.IService;
 using Service.Service;
 using System.Text;
@@ -78,11 +81,28 @@ builder.Services.AddAuthentication(options =>
     options.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"];
 });
 
+// Add Identity
+builder.Services.AddIdentity<User, IdentityRole<int>>(options =>
+{
+    options.Password.RequireDigit = true;
+    options.Password.RequiredLength = 6;
+})
+.AddEntityFrameworkStores<ASDPRSContext>()
+.AddDefaultTokenProviders();
+
+builder.Services.AddScoped(typeof(BaseDAO<>), typeof(EfBaseDAO<>));
+builder.Services.AddScoped(typeof(IBaseRepository<>), typeof(BaseRepository<>));
+
 // Add JSON serializer settings to handle reference loops
 builder.Services.AddControllers().AddNewtonsoftJson(options =>
 {
     options.SerializerSettings.ReferenceLoopHandling = Newtonsoft.Json.ReferenceLoopHandling.Ignore;
 });
+
+// Đăng ký Repository + Service
+builder.Services.ConfigureRepositoryService(builder.Configuration);
+builder.Services.ConfigureServiceService(builder.Configuration);
+builder.Services.AddScoped(typeof(IBaseRepository<>), typeof(BaseRepository<>));
 
 // Configure CORS
 builder.Services.AddCors(options =>

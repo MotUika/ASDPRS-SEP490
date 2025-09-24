@@ -24,13 +24,15 @@ namespace Service.Service
         private readonly ASDPRSContext _context;
         private readonly IMapper _mapper;
         private readonly IEmailService _emailService;
+        private readonly ITokenService _tokenService;
 
-        public UserService(IUserRepository userRepository, ASDPRSContext context, IMapper mapper, IEmailService emailService)
+        public UserService(IUserRepository userRepository, ASDPRSContext context, IMapper mapper, IEmailService emailService, ITokenService tokenService)
         {
             _userRepository = userRepository;
             _context = context;
             _mapper = mapper;
             _emailService = emailService;
+            _tokenService = tokenService;
         }
 
         public async Task<BaseResponse<UserResponse>> GetUserByIdAsync(int id)
@@ -79,16 +81,16 @@ namespace Service.Service
                 if (existingUser.Email != request.Email)
                 {
                     var userWithSameEmail = await _context.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
-                    if (userWithSameEmail != null && userWithSameEmail.UserId != request.UserId)
+                    if (userWithSameEmail != null && userWithSameEmail.Id != request.UserId)
                     {
                         return new BaseResponse<UserResponse>("Another user with this email already exists", StatusCodeEnum.Conflict_409, null);
                     }
                 }
 
-                if (existingUser.Username != request.Username)
+                if (existingUser.UserName != request.Username)
                 {
-                    var userWithSameUsername = await _context.Users.FirstOrDefaultAsync(u => u.Username == request.Username);
-                    if (userWithSameUsername != null && userWithSameUsername.UserId != request.UserId)
+                    var userWithSameUsername = await _context.Users.FirstOrDefaultAsync(u => u.UserName == request.Username);
+                    if (userWithSameUsername != null && userWithSameUsername.Id != request.UserId)
                     {
                         return new BaseResponse<UserResponse>("Another user with this username already exists", StatusCodeEnum.Conflict_409, null);
                     }
@@ -148,7 +150,7 @@ namespace Service.Service
         {
             try
             {
-                var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
+                var user = await _context.Users.FirstOrDefaultAsync(u => u.UserName == username);
                 if (user == null)
                 {
                     return new BaseResponse<UserResponse>("User not found", StatusCodeEnum.NotFound_404, null);
@@ -330,7 +332,7 @@ namespace Service.Service
                 <h2>Welcome to ASDPRS System</h2>
                 <p>Dear {user.FirstName} {user.LastName},</p>
                 <p>Your account has been successfully created by the administrator.</p>
-                <p><strong>Username:</strong> {user.Username}</p>
+                <p><strong>Username:</strong> {user.UserName}</p>
                 <p><strong>Password:</strong> {password}</p>
                 <p>Please log in and change your password as soon as possible for security reasons.</p>
                 <br>
@@ -362,7 +364,7 @@ namespace Service.Service
                 }
 
                 // Check if username already exists
-                var existingUserByUsername = await _context.Users.FirstOrDefaultAsync(u => u.Username == request.Username);
+                var existingUserByUsername = await _context.Users.FirstOrDefaultAsync(u => u.UserName == request.Username);
                 if (existingUserByUsername != null)
                 {
                     return new BaseResponse<UserResponse>("User with this username already exists", StatusCodeEnum.Conflict_409, null);
@@ -390,6 +392,117 @@ namespace Service.Service
                 return new BaseResponse<UserResponse>($"Error creating user: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
+        public async Task<BaseResponse<LoginResponse>> LoginAsync(LoginRequest request)
+        {
+            try
+            {
+                var user = await _context.Users
+                    .Include(u => u.UserRoles)
+                    .ThenInclude(ur => ur.Role)
+                    .Include(u => u.Campus)
+                    .FirstOrDefaultAsync(u => u.UserName == request.Username);
+
+                if (user == null)
+                {
+                    return new BaseResponse<LoginResponse>("Invalid username or password", StatusCodeEnum.Unauthorized_401, null);
+                }
+
+                if (!user.IsActive)
+                {
+                    return new BaseResponse<LoginResponse>("Account is deactivated", StatusCodeEnum.Unauthorized_401, null);
+                }
+
+                if (!VerifyPassword(request.Password, user.PasswordHash))
+                {
+                    return new BaseResponse<LoginResponse>("Invalid username or password", StatusCodeEnum.Unauthorized_401, null);
+                }
+
+                // Generate token
+                var token = await _tokenService.CreateToken(user);
+
+                var response = new LoginResponse
+                {
+                    AccessToken = token.AccessToken,
+                    RefreshToken = token.RefreshToken,
+                    UserId = user.Id,
+                    Email = user.Email,
+                    FirstName = user.FirstName,
+                    LastName = user.LastName,
+                    Roles = user.UserRoles.Select(ur => ur.Role.RoleName).ToList(),
+                    CampusId = user.CampusId
+                };
+
+                return new BaseResponse<LoginResponse>("Login successful", StatusCodeEnum.OK_200, response);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<LoginResponse>($"Error during login: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
+            }
+        }
+
+        public async Task<BaseResponse<bool>> AssignRolesAsync(AssignRoleRequest request)
+        {
+            try
+            {
+                var user = await _context.Users
+                    .Include(u => u.UserRoles)
+                    .FirstOrDefaultAsync(u => u.Id == request.UserId);
+
+                if (user == null)
+                {
+                    return new BaseResponse<bool>("User not found", StatusCodeEnum.NotFound_404, false);
+                }
+
+                // Remove existing roles
+                _context.UserRoles.RemoveRange(user.UserRoles);
+
+                // Add new roles
+                foreach (var roleName in request.Roles)
+                {
+                    var role = await _context.Roles.FirstOrDefaultAsync(r => r.RoleName == roleName);
+                    if (role != null)
+                    {
+                        _context.UserRoles.Add(new UserRole
+                        {
+                            UserId = user.Id,
+                            RoleId = role.RoleId
+                        });
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+
+                return new BaseResponse<bool>("Roles assigned successfully", StatusCodeEnum.OK_200, true);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<bool>($"Error assigning roles: {ex.Message}", StatusCodeEnum.InternalServerError_500, false);
+            }
+        }
+
+        public async Task<BaseResponse<IEnumerable<string>>> GetUserRolesAsync(int userId)
+        {
+            try
+            {
+                var user = await _context.Users
+                    .Include(u => u.UserRoles)
+                    .ThenInclude(ur => ur.Role)
+                    .FirstOrDefaultAsync(u => u.Id == userId);
+
+                if (user == null)
+                {
+                    return new BaseResponse<IEnumerable<string>>("User not found", StatusCodeEnum.NotFound_404, null);
+                }
+
+                var roles = user.UserRoles.Select(ur => ur.Role.RoleName).ToList();
+                return new BaseResponse<IEnumerable<string>>("Roles retrieved successfully", StatusCodeEnum.OK_200, roles);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<IEnumerable<string>>($"Error retrieving roles: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
+            }
+        }
+
         private string GenerateRandomPassword(int length = 12)
         {
             const string validChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_-+=[{]};:>|./?";

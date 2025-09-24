@@ -24,5 +24,17 @@ namespace Service.Service
         {
             return await _tokenRepository.RenewToken(model);
         }
+
+        public async Task<ApiResponse> RefreshToken(string refreshToken)
+        {
+            return await _tokenRepository.RenewToken(new TokenModel { RefreshToken = refreshToken });
+        }
+
+        public async Task RevokeRefreshToken(int userId)
+        {
+            // Implement logic revoke token ở đây
+            // Ví dụ: xóa refresh token từ database
+            await Task.CompletedTask;
+        }
     }
 }

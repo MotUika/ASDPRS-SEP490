@@ -1,14 +1,15 @@
 ﻿using BussinessObject.Models;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using System.IO;
 
 namespace DataAccessLayer
 {
-    public class ASDPRSContext : DbContext
+    public class ASDPRSContext : IdentityDbContext<User, IdentityRole<int>, int>
     {
-        public ASDPRSContext(DbContextOptions<ASDPRSContext> options)
-            : base(options)
+        public ASDPRSContext(DbContextOptions<ASDPRSContext> options) : base(options)
         {
         }
 
@@ -42,8 +43,12 @@ namespace DataAccessLayer
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            // Configure entity relationships and constraints
-            // Campus
+            base.OnModelCreating(modelBuilder); // Call IdentityDbContext's configuration
+
+            // Remove conflicting User and UserRole configurations
+            // IdentityDbContext already configures AspNetUsers and AspNetUserRoles
+
+            // Configure non-Identity relationships
             modelBuilder.Entity<Campus>()
                 .HasMany(c => c.Users)
                 .WithOne(u => u.Campus)
@@ -67,13 +72,6 @@ namespace DataAccessLayer
                 .WithOne(ci => ci.Campus)
                 .HasForeignKey(ci => ci.CampusId)
                 .OnDelete(DeleteBehavior.Restrict);
-
-            // User
-            modelBuilder.Entity<User>()
-                .HasMany(u => u.UserRoles)
-                .WithOne(ur => ur.User)
-                .HasForeignKey(ur => ur.UserId)
-                .OnDelete(DeleteBehavior.Cascade);
 
             modelBuilder.Entity<User>()
                 .HasMany(u => u.CourseInstructors)
@@ -127,7 +125,7 @@ namespace DataAccessLayer
                 .HasMany(u => u.SentNotifications)
                 .WithOne(n => n.SenderUser)
                 .HasForeignKey(n => n.SenderUserId)
-                .OnDelete(DeleteBehavior.Restrict);
+                .OnDelete(DeleteBehavior.SetNull);
 
             modelBuilder.Entity<User>()
                 .HasMany(u => u.ReviewedRegradeRequests)
@@ -135,16 +133,18 @@ namespace DataAccessLayer
                 .HasForeignKey(rr => rr.ReviewedByInstructorId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // Role
+            // Role and UserRole configurations are handled by IdentityDbContext
+            // Remove these to avoid conflicts:
+            /*
             modelBuilder.Entity<Role>()
                 .HasMany(r => r.UserRoles)
                 .WithOne(ur => ur.Role)
                 .HasForeignKey(ur => ur.RoleId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            // UserRole
             modelBuilder.Entity<UserRole>()
                 .HasKey(ur => ur.UserRoleId);
+            */
 
             // AcademicYear
             modelBuilder.Entity<AcademicYear>()

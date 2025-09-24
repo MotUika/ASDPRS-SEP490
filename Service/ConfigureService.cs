@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Repository;
 using Repository.IRepository;
 using Repository.Repository;
+using Service.Interface;
 using Service.IService;
 using Service.Mapping;
 using Service.Service;
@@ -37,20 +38,31 @@ namespace Service
 
 
 
-            services.AddScoped<IUserService, UserService>();
+
+            // Register service interfaces and implementations
             services.AddScoped<ICampusService, CampusService>();
             services.AddScoped<IAcademicYearService, AcademicYearService>();
             services.AddScoped<ISemesterService, SemesterService>();
             services.AddScoped<ICourseService, CourseService>();
             services.AddScoped<ICurriculumService, CurriculumService>();
-            services.AddScoped<ICourseInstanceService, CourseInstanceService>();
-            services.AddScoped<ITokenService, TokenService>();
-            services.AddScoped<IEmailService, EmailService>();
             services.AddScoped<ICriteriaTemplateService, CriteriaTemplateService>();
             services.AddScoped<IRubricTemplateService, RubricTemplateService>();
             services.AddScoped<IRubricService, RubricService>();
             services.AddScoped<ICriteriaService, CriteriaService>();
             services.AddScoped<ICriteriaFeedbackService, CriteriaFeedbackService>();
+            services.AddScoped<IReviewService, ReviewService>();
+            services.AddScoped<IDocumentEmbeddingService, DocumentEmbeddingService>();
+            services.AddScoped<IAssignmentService, AssignmentService>();
+            services.AddScoped<IAISummaryService, AISummaryService>();
+            services.AddScoped<ISubmissionService, SubmissionService>();
+            services.AddScoped<IRegradeRequestService, RegradeRequestService>();
+
+            // Add UserService and other dependencies if needed
+            services.AddScoped<IUserService, UserService>();
+            services.AddScoped<IEmailService, EmailService>();
+            services.AddScoped<ITokenService, TokenService>();
+            services.AddScoped<IFileStorageService, FileStorageService>();
+
 
             return services;
 
