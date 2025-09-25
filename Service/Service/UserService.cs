@@ -1,6 +1,7 @@
 ﻿using AutoMapper;
 using BussinessObject.Models;
 using DataAccessLayer;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Repository.IRepository;
 using Service.IService;
@@ -25,14 +26,25 @@ namespace Service.Service
         private readonly IMapper _mapper;
         private readonly IEmailService _emailService;
         private readonly ITokenService _tokenService;
+        private readonly UserManager<User> _userManager;
+        private readonly RoleManager<IdentityRole<int>> _roleManager;
 
-        public UserService(IUserRepository userRepository, ASDPRSContext context, IMapper mapper, IEmailService emailService, ITokenService tokenService)
+        public UserService(
+            IUserRepository userRepository,
+            ASDPRSContext context,
+            IMapper mapper,
+            IEmailService emailService,
+            ITokenService tokenService,
+            UserManager<User> userManager,
+            RoleManager<IdentityRole<int>> roleManager)
         {
             _userRepository = userRepository;
             _context = context;
             _mapper = mapper;
             _emailService = emailService;
             _tokenService = tokenService;
+            _userManager = userManager;
+            _roleManager = roleManager;
         }
 
         public async Task<BaseResponse<UserResponse>> GetUserByIdAsync(int id)
@@ -80,7 +92,7 @@ namespace Service.Service
 
                 if (existingUser.Email != request.Email)
                 {
-                    var userWithSameEmail = await _context.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
+                    var userWithSameEmail = await _userManager.FindByEmailAsync(request.Email);
                     if (userWithSameEmail != null && userWithSameEmail.Id != request.UserId)
                     {
                         return new BaseResponse<UserResponse>("Another user with this email already exists", StatusCodeEnum.Conflict_409, null);
@@ -89,7 +101,7 @@ namespace Service.Service
 
                 if (existingUser.UserName != request.Username)
                 {
-                    var userWithSameUsername = await _context.Users.FirstOrDefaultAsync(u => u.UserName == request.Username);
+                    var userWithSameUsername = await _userManager.FindByNameAsync(request.Username);
                     if (userWithSameUsername != null && userWithSameUsername.Id != request.UserId)
                     {
                         return new BaseResponse<UserResponse>("Another user with this username already exists", StatusCodeEnum.Conflict_409, null);
@@ -97,9 +109,14 @@ namespace Service.Service
                 }
 
                 _mapper.Map(request, existingUser);
-                var updatedUser = await _userRepository.UpdateAsync(existingUser);
-                var response = _mapper.Map<UserResponse>(updatedUser);
+                var result = await _userManager.UpdateAsync(existingUser);
 
+                if (!result.Succeeded)
+                {
+                    return new BaseResponse<UserResponse>($"Error updating user: {string.Join(", ", result.Errors.Select(e => e.Description))}", StatusCodeEnum.BadRequest_400, null);
+                }
+
+                var response = _mapper.Map<UserResponse>(existingUser);
                 return new BaseResponse<UserResponse>("User updated successfully", StatusCodeEnum.OK_200, response);
             }
             catch (Exception ex)
@@ -118,7 +135,12 @@ namespace Service.Service
                     return new BaseResponse<bool>("User not found", StatusCodeEnum.NotFound_404, false);
                 }
 
-                await _userRepository.DeleteAsync(user);
+                var result = await _userManager.DeleteAsync(user);
+                if (!result.Succeeded)
+                {
+                    return new BaseResponse<bool>($"Error deleting user: {string.Join(", ", result.Errors.Select(e => e.Description))}", StatusCodeEnum.BadRequest_400, false);
+                }
+
                 return new BaseResponse<bool>("User deleted successfully", StatusCodeEnum.OK_200, true);
             }
             catch (Exception ex)
@@ -131,7 +153,7 @@ namespace Service.Service
         {
             try
             {
-                var user = await _userRepository.GetByEmailAsync(email);
+                var user = await _userManager.FindByEmailAsync(email);
                 if (user == null)
                 {
                     return new BaseResponse<UserResponse>("User not found", StatusCodeEnum.NotFound_404, null);
@@ -150,7 +172,7 @@ namespace Service.Service
         {
             try
             {
-                var user = await _context.Users.FirstOrDefaultAsync(u => u.UserName == username);
+                var user = await _userManager.FindByNameAsync(username);
                 if (user == null)
                 {
                     return new BaseResponse<UserResponse>("User not found", StatusCodeEnum.NotFound_404, null);
@@ -169,8 +191,8 @@ namespace Service.Service
         {
             try
             {
-                var users = await _userRepository.GetByRoleAsync(roleName);
-                var response = _mapper.Map<IEnumerable<UserResponse>>(users);
+                var usersInRole = await _userManager.GetUsersInRoleAsync(roleName);
+                var response = _mapper.Map<IEnumerable<UserResponse>>(usersInRole);
                 return new BaseResponse<IEnumerable<UserResponse>>("Users retrieved successfully", StatusCodeEnum.OK_200, response);
             }
             catch (Exception ex)
@@ -183,7 +205,10 @@ namespace Service.Service
         {
             try
             {
-                var users = await _userRepository.GetByCampusIdAsync(campusId);
+                var users = await _context.Users
+                    .Where(u => u.CampusId == campusId)
+                    .ToListAsync();
+
                 var response = _mapper.Map<IEnumerable<UserResponse>>(users);
                 return new BaseResponse<IEnumerable<UserResponse>>("Users retrieved successfully", StatusCodeEnum.OK_200, response);
             }
@@ -197,7 +222,7 @@ namespace Service.Service
         {
             try
             {
-                var user = await _userRepository.GetByIdAsync(request.UserId);
+                var user = await _userManager.FindByIdAsync(request.UserId.ToString());
                 if (user == null)
                 {
                     return new BaseResponse<string>("User not found", StatusCodeEnum.NotFound_404, null);
@@ -210,7 +235,12 @@ namespace Service.Service
                 }
 
                 user.AvatarUrl = request.AvatarUrl;
-                await _userRepository.UpdateAsync(user);
+                var result = await _userManager.UpdateAsync(user);
+
+                if (!result.Succeeded)
+                {
+                    return new BaseResponse<string>($"Error updating avatar: {string.Join(", ", result.Errors.Select(e => e.Description))}", StatusCodeEnum.BadRequest_400, null);
+                }
 
                 return new BaseResponse<string>("Avatar updated successfully", StatusCodeEnum.OK_200, request.AvatarUrl);
             }
@@ -224,21 +254,17 @@ namespace Service.Service
         {
             try
             {
-                var user = await _userRepository.GetByIdAsync(request.UserId);
+                var user = await _userManager.FindByIdAsync(request.UserId.ToString());
                 if (user == null)
                 {
                     return new BaseResponse<bool>("User not found", StatusCodeEnum.NotFound_404, false);
                 }
 
-                // Verify current password
-                if (!VerifyPassword(request.CurrentPassword, user.PasswordHash))
+                var result = await _userManager.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
+                if (!result.Succeeded)
                 {
-                    return new BaseResponse<bool>("Current password is incorrect", StatusCodeEnum.BadRequest_400, false);
+                    return new BaseResponse<bool>($"Error changing password: {string.Join(", ", result.Errors.Select(e => e.Description))}", StatusCodeEnum.BadRequest_400, false);
                 }
-
-                // Update password
-                user.PasswordHash = HashPassword(request.NewPassword);
-                await _userRepository.UpdateAsync(user);
 
                 return new BaseResponse<bool>("Password changed successfully", StatusCodeEnum.OK_200, true);
             }
@@ -252,14 +278,19 @@ namespace Service.Service
         {
             try
             {
-                var user = await _userRepository.GetByIdAsync(userId);
+                var user = await _userManager.FindByIdAsync(userId.ToString());
                 if (user == null)
                 {
                     return new BaseResponse<bool>("User not found", StatusCodeEnum.NotFound_404, false);
                 }
 
                 user.IsActive = false;
-                await _userRepository.UpdateAsync(user);
+                var result = await _userManager.UpdateAsync(user);
+
+                if (!result.Succeeded)
+                {
+                    return new BaseResponse<bool>($"Error deactivating user: {string.Join(", ", result.Errors.Select(e => e.Description))}", StatusCodeEnum.BadRequest_400, false);
+                }
 
                 return new BaseResponse<bool>("User deactivated successfully", StatusCodeEnum.OK_200, true);
             }
@@ -273,14 +304,19 @@ namespace Service.Service
         {
             try
             {
-                var user = await _userRepository.GetByIdAsync(userId);
+                var user = await _userManager.FindByIdAsync(userId.ToString());
                 if (user == null)
                 {
                     return new BaseResponse<bool>("User not found", StatusCodeEnum.NotFound_404, false);
                 }
 
                 user.IsActive = true;
-                await _userRepository.UpdateAsync(user);
+                var result = await _userManager.UpdateAsync(user);
+
+                if (!result.Succeeded)
+                {
+                    return new BaseResponse<bool>($"Error activating user: {string.Join(", ", result.Errors.Select(e => e.Description))}", StatusCodeEnum.BadRequest_400, false);
+                }
 
                 return new BaseResponse<bool>("User activated successfully", StatusCodeEnum.OK_200, true);
             }
@@ -289,26 +325,20 @@ namespace Service.Service
                 return new BaseResponse<bool>($"Error activating user: {ex.Message}", StatusCodeEnum.InternalServerError_500, false);
             }
         }
+
         public async Task<BaseResponse<AccountStatisticsResponse>> GetTotalAccountsAsync()
         {
             try
             {
-                // Get all users with their roles
-                var usersWithRoles = await _context.Users
-                    .Include(u => u.UserRoles)
-                    .ThenInclude(ur => ur.Role)
-                    .ToListAsync();
+                var users = await _userManager.Users.ToListAsync();
 
-                // Count users by role
-                var adminCount = usersWithRoles.Count(u => u.UserRoles.Any(ur => ur.Role.RoleName == "Admin"));
-                var studentCount = usersWithRoles.Count(u => u.UserRoles.Any(ur => ur.Role.RoleName == "Student"));
-                var instructorCount = usersWithRoles.Count(u => u.UserRoles.Any(ur => ur.Role.RoleName == "Instructor"));
-
-                var totalAccounts = usersWithRoles.Count;
+                var adminCount = (await _userManager.GetUsersInRoleAsync("Admin")).Count;
+                var studentCount = (await _userManager.GetUsersInRoleAsync("Student")).Count;
+                var instructorCount = (await _userManager.GetUsersInRoleAsync("Instructor")).Count;
 
                 var response = new AccountStatisticsResponse
                 {
-                    TotalAccounts = totalAccounts,
+                    TotalAccounts = users.Count,
                     AdminAccounts = adminCount,
                     StudentAccounts = studentCount,
                     InstructorAccounts = instructorCount
@@ -321,6 +351,7 @@ namespace Service.Service
                 return new BaseResponse<AccountStatisticsResponse>($"Error retrieving account statistics: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
+
         private async Task<bool> SendWelcomeEmail(User user, string password)
         {
             try
@@ -347,6 +378,7 @@ namespace Service.Service
                 return false;
             }
         }
+
         public async Task<BaseResponse<UserResponse>> CreateUserAsync(CreateUserRequest request)
         {
             try
@@ -356,35 +388,61 @@ namespace Service.Service
                     return new BaseResponse<UserResponse>("Email is required", StatusCodeEnum.BadRequest_400, null);
                 }
 
-                // Check if email already exists
-                var existingUserByEmail = await _context.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
+                // Check email exists
+                var existingUserByEmail = await _userManager.FindByEmailAsync(request.Email);
                 if (existingUserByEmail != null)
                 {
                     return new BaseResponse<UserResponse>("User with this email already exists", StatusCodeEnum.Conflict_409, null);
                 }
 
-                // Check if username already exists
-                var existingUserByUsername = await _context.Users.FirstOrDefaultAsync(u => u.UserName == request.Username);
+                // Check username exists
+                var existingUserByUsername = await _userManager.FindByNameAsync(request.Username);
                 if (existingUserByUsername != null)
                 {
                     return new BaseResponse<UserResponse>("User with this username already exists", StatusCodeEnum.Conflict_409, null);
                 }
 
+                // Check student code exists
+                if (!string.IsNullOrWhiteSpace(request.StudentCode))
+                {
+                    var existingStudent = await _context.Users.FirstOrDefaultAsync(u => u.StudentCode == request.StudentCode);
+                    if (existingStudent != null)
+                    {
+                        return new BaseResponse<UserResponse>("A user with this StudentCode already exists", StatusCodeEnum.Conflict_409, null);
+                    }
+                }
+
                 var user = _mapper.Map<User>(request);
 
                 // Generate random password if not provided
-                string password = string.IsNullOrEmpty(request.Password) ?
-                    GenerateRandomPassword() : request.Password;
+                string password = string.IsNullOrEmpty(request.Password)
+                    ? GenerateRandomPassword()
+                    : request.Password;
 
-                // Hash the password
-                user.PasswordHash = HashPassword(password);
+                var result = await _userManager.CreateAsync(user, password);
+                if (!result.Succeeded)
+                {
+                    return new BaseResponse<UserResponse>($"Error creating user: {string.Join(", ", result.Errors.Select(e => e.Description))}", StatusCodeEnum.BadRequest_400, null);
+                }
 
-                var createdUser = await _userRepository.AddAsync(user);
-                var response = _mapper.Map<UserResponse>(createdUser);
+                // Assign student role by default
+                if (string.IsNullOrEmpty(request.Role))
+                {
+                    request.Role = "Student";
+                }
 
-                // Send welcome email with credentials
-                await SendWelcomeEmail(createdUser, password);
+                var roleResult = await _userManager.AddToRoleAsync(user, request.Role);
+                if (!roleResult.Succeeded)
+                {
+                    // If role assignment fails, delete the user
+                    await _userManager.DeleteAsync(user);
+                    return new BaseResponse<UserResponse>($"Error assigning role: {string.Join(", ", roleResult.Errors.Select(e => e.Description))}", StatusCodeEnum.BadRequest_400, null);
+                }
 
+                // Send welcome email
+                await SendWelcomeEmail(user, password);
+
+                var response = _mapper.Map<UserResponse>(user);
                 return new BaseResponse<UserResponse>("User created successfully", StatusCodeEnum.Created_201, response);
             }
             catch (Exception ex)
@@ -392,16 +450,12 @@ namespace Service.Service
                 return new BaseResponse<UserResponse>($"Error creating user: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
+
         public async Task<BaseResponse<LoginResponse>> LoginAsync(LoginRequest request)
         {
             try
             {
-                var user = await _context.Users
-                    .Include(u => u.UserRoles)
-                    .ThenInclude(ur => ur.Role)
-                    .Include(u => u.Campus)
-                    .FirstOrDefaultAsync(u => u.UserName == request.Username);
-
+                var user = await _userManager.FindByNameAsync(request.Username);
                 if (user == null)
                 {
                     return new BaseResponse<LoginResponse>("Invalid username or password", StatusCodeEnum.Unauthorized_401, null);
@@ -412,10 +466,14 @@ namespace Service.Service
                     return new BaseResponse<LoginResponse>("Account is deactivated", StatusCodeEnum.Unauthorized_401, null);
                 }
 
-                if (!VerifyPassword(request.Password, user.PasswordHash))
+                var passwordValid = await _userManager.CheckPasswordAsync(user, request.Password);
+                if (!passwordValid)
                 {
                     return new BaseResponse<LoginResponse>("Invalid username or password", StatusCodeEnum.Unauthorized_401, null);
                 }
+
+                // Get user roles
+                var roles = await _userManager.GetRolesAsync(user);
 
                 // Generate token
                 var token = await _tokenService.CreateToken(user);
@@ -428,9 +486,12 @@ namespace Service.Service
                     Email = user.Email,
                     FirstName = user.FirstName,
                     LastName = user.LastName,
-                    Roles = user.UserRoles.Select(ur => ur.Role.RoleName).ToList(),
+                    StudentCode = user.StudentCode,
+                    Roles = roles.ToList(),
                     CampusId = user.CampusId
                 };
+
+                Console.WriteLine($"DEBUG: LoginResponse = {System.Text.Json.JsonSerializer.Serialize(response)}");
 
                 return new BaseResponse<LoginResponse>("Login successful", StatusCodeEnum.OK_200, response);
             }
@@ -444,33 +505,28 @@ namespace Service.Service
         {
             try
             {
-                var user = await _context.Users
-                    .Include(u => u.UserRoles)
-                    .FirstOrDefaultAsync(u => u.Id == request.UserId);
-
+                var user = await _userManager.FindByIdAsync(request.UserId.ToString());
                 if (user == null)
                 {
                     return new BaseResponse<bool>("User not found", StatusCodeEnum.NotFound_404, false);
                 }
 
-                // Remove existing roles
-                _context.UserRoles.RemoveRange(user.UserRoles);
+                // Get current roles
+                var currentRoles = await _userManager.GetRolesAsync(user);
 
-                // Add new roles
-                foreach (var roleName in request.Roles)
+                // Remove current roles
+                var removeResult = await _userManager.RemoveFromRolesAsync(user, currentRoles);
+                if (!removeResult.Succeeded)
                 {
-                    var role = await _context.Roles.FirstOrDefaultAsync(r => r.RoleName == roleName);
-                    if (role != null)
-                    {
-                        _context.UserRoles.Add(new UserRole
-                        {
-                            UserId = user.Id,
-                            RoleId = role.RoleId
-                        });
-                    }
+                    return new BaseResponse<bool>($"Error removing current roles: {string.Join(", ", removeResult.Errors.Select(e => e.Description))}", StatusCodeEnum.BadRequest_400, false);
                 }
 
-                await _context.SaveChangesAsync();
+                // Add new roles
+                var addResult = await _userManager.AddToRolesAsync(user, request.Roles);
+                if (!addResult.Succeeded)
+                {
+                    return new BaseResponse<bool>($"Error assigning new roles: {string.Join(", ", addResult.Errors.Select(e => e.Description))}", StatusCodeEnum.BadRequest_400, false);
+                }
 
                 return new BaseResponse<bool>("Roles assigned successfully", StatusCodeEnum.OK_200, true);
             }
@@ -484,17 +540,13 @@ namespace Service.Service
         {
             try
             {
-                var user = await _context.Users
-                    .Include(u => u.UserRoles)
-                    .ThenInclude(ur => ur.Role)
-                    .FirstOrDefaultAsync(u => u.Id == userId);
-
+                var user = await _userManager.FindByIdAsync(userId.ToString());
                 if (user == null)
                 {
                     return new BaseResponse<IEnumerable<string>>("User not found", StatusCodeEnum.NotFound_404, null);
                 }
 
-                var roles = user.UserRoles.Select(ur => ur.Role.RoleName).ToList();
+                var roles = await _userManager.GetRolesAsync(user);
                 return new BaseResponse<IEnumerable<string>>("Roles retrieved successfully", StatusCodeEnum.OK_200, roles);
             }
             catch (Exception ex)
@@ -515,20 +567,6 @@ namespace Service.Service
             }
 
             return new string(chars);
-        }
-
-        private string HashPassword(string password)
-        {
-            using (var sha256 = SHA256.Create())
-            {
-                var hashedBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(password));
-                return Convert.ToBase64String(hashedBytes);
-            }
-        }
-
-        private bool VerifyPassword(string password, string hashedPassword)
-        {
-            return HashPassword(password) == hashedPassword;
         }
     }
 }

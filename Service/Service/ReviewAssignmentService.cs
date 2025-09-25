@@ -700,9 +700,9 @@ namespace Service.Service
                 });
             }
 
-            // Sử dụng FirstName và LastName thay vì FullName
             var reviewerName = reviewer != null ? $"{reviewer.FirstName} {reviewer.LastName}".Trim() : string.Empty;
-            var studentName = student != null ? $"{student.FirstName} {student.LastName}".Trim() : string.Empty;
+            var studentName = assignment?.IsBlindReview == true ? "Anonymous" : (student != null ? $"{student.FirstName} {student.LastName}".Trim() : string.Empty);
+            var studentCode = assignment?.IsBlindReview == true ? string.Empty : (student?.StudentCode ?? string.Empty);
 
             return new ReviewAssignmentResponse
             {
@@ -717,7 +717,7 @@ namespace Service.Service
                 ReviewerEmail = reviewer?.Email ?? string.Empty,
                 AssignmentTitle = assignment?.Title ?? string.Empty,
                 StudentName = studentName,
-                StudentCode = student?.StudentCode ?? string.Empty,
+                StudentCode = studentCode,
                 CourseName = assignment?.CourseInstance?.Course?.CourseName ?? string.Empty,
                 Reviews = reviewResponses
             };

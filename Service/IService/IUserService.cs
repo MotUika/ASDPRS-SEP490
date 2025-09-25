@@ -27,7 +27,7 @@ namespace Service.IService
         Task<BaseResponse<bool>> ActivateUserAsync(int userId);
         Task<BaseResponse<AccountStatisticsResponse>> GetTotalAccountsAsync();
         Task<BaseResponse<LoginResponse>> LoginAsync(LoginRequest request);
-        Task<BaseResponse<bool>> AssignRolesAsync(AssignRoleRequest request);
-        Task<BaseResponse<IEnumerable<string>>> GetUserRolesAsync(int userId);
+/*        Task<BaseResponse<bool>> AssignRolesAsync(AssignRoleRequest request);
+*/        Task<BaseResponse<IEnumerable<string>>> GetUserRolesAsync(int userId);
     }
 }

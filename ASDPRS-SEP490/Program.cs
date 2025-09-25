@@ -132,6 +132,35 @@ else
 }
 
 app.UseCors("AllowAll");
+app.Use(async (context, next) =>
+{
+    // giữ original stream
+    var originalBodyStream = context.Response.Body;
+
+    try
+    {
+        using var memStream = new MemoryStream();
+        context.Response.Body = memStream;
+
+        await next(); // chạy tiếp pipeline
+
+        memStream.Seek(0, SeekOrigin.Begin);
+        var responseBody = await new StreamReader(memStream).ReadToEndAsync();
+
+        // Log ra console / file
+        Console.WriteLine("===== RESPONSE BODY (final) =====");
+        Console.WriteLine(responseBody);
+        Console.WriteLine("=================================");
+
+        // copy lại vào original stream
+        memStream.Seek(0, SeekOrigin.Begin);
+        await memStream.CopyToAsync(originalBodyStream);
+    }
+    finally
+    {
+        context.Response.Body = originalBodyStream;
+    }
+});
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

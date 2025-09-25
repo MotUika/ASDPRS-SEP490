@@ -215,7 +215,6 @@ namespace Service.Service
         {
             try
             {
-                // Validate course instance exists
                 var courseInstance = await _courseInstanceRepository.GetByIdAsync(request.CourseInstanceId);
                 if (courseInstance == null)
                 {

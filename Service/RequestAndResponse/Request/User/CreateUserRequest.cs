@@ -29,6 +29,8 @@ namespace Service.RequestAndResponse.Request.User
 
         public string AvatarUrl { get; set; }
 
+        public string Role { get; set; }
+
         [Required]
         public bool IsActive { get; set; } = true;
     }
