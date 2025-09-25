@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace DataAccessLayer.Migrations
 {
     /// <inheritdoc />
-    public partial class AddAvatarUrlToUser : Migration
+    public partial class InitialCreate : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -41,7 +41,7 @@ namespace DataAccessLayer.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "Roles",
+                name: "Role",
                 columns: table => new
                 {
                     RoleId = table.Column<int>(type: "int", nullable: false)
@@ -51,7 +51,7 @@ namespace DataAccessLayer.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Roles", x => x.RoleId);
+                    table.PrimaryKey("PK_Role", x => x.RoleId);
                 });
 
             migrationBuilder.CreateTable(
@@ -337,7 +337,7 @@ namespace DataAccessLayer.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "UserRoles",
+                name: "UserRole",
                 columns: table => new
                 {
                     UserRoleId = table.Column<int>(type: "int", nullable: false)
@@ -348,17 +348,17 @@ namespace DataAccessLayer.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_UserRoles", x => x.UserRoleId);
+                    table.PrimaryKey("PK_UserRole", x => x.UserRoleId);
                     table.ForeignKey(
-                        name: "FK_UserRoles_AspNetUsers_UserId",
+                        name: "FK_UserRole_AspNetUsers_UserId",
                         column: x => x.UserId,
                         principalTable: "AspNetUsers",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
-                        name: "FK_UserRoles_Roles_RoleId",
+                        name: "FK_UserRole_Role_RoleId",
                         column: x => x.RoleId,
-                        principalTable: "Roles",
+                        principalTable: "Role",
                         principalColumn: "RoleId",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -1125,13 +1125,13 @@ namespace DataAccessLayer.Migrations
                 column: "UpdatedByUserId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_UserRoles_RoleId",
-                table: "UserRoles",
+                name: "IX_UserRole_RoleId",
+                table: "UserRole",
                 column: "RoleId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_UserRoles_UserId",
-                table: "UserRoles",
+                name: "IX_UserRole_UserId",
+                table: "UserRole",
                 column: "UserId");
         }
 
@@ -1175,7 +1175,7 @@ namespace DataAccessLayer.Migrations
                 name: "SystemConfigs");
 
             migrationBuilder.DropTable(
-                name: "UserRoles");
+                name: "UserRole");
 
             migrationBuilder.DropTable(
                 name: "AspNetRoles");
@@ -1193,7 +1193,7 @@ namespace DataAccessLayer.Migrations
                 name: "CourseInstructors");
 
             migrationBuilder.DropTable(
-                name: "Roles");
+                name: "Role");
 
             migrationBuilder.DropTable(
                 name: "CriteriaTemplates");

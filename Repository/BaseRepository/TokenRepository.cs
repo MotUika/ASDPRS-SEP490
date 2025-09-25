@@ -1,4 +1,4 @@
-using BussinessObject.IdentityModel;
+﻿using BussinessObject.IdentityModel;
 using BussinessObject.Models;
 using DataAccessLayer;
 using Microsoft.AspNetCore.Mvc;
@@ -31,23 +31,23 @@ namespace Repository.BaseRepository
 
         public async Task<TokenModel> CreateToken(User user)
         {
-            // Get user roles from database
             var userRoles = await _dbContext.UserRoles
                 .Where(ur => ur.UserId == user.Id)
                 .Join(_dbContext.Roles,
                     ur => ur.RoleId,
-                    r => r.RoleId,
-                    (ur, r) => r.RoleName)
+                    r => r.Id,
+                    (ur, r) => r.Name)
                 .ToListAsync();
 
             var claims = new List<Claim>
-            {
-                new Claim(JwtRegisteredClaimNames.Email, user.Email),
-                new Claim(JwtRegisteredClaimNames.Sub, user.Email),
-                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-                new Claim(JwtRegisteredClaimNames.GivenName, user.FirstName + " " + user.LastName),
-                new Claim("userId", user.Id.ToString())
-            };
+    {
+        new Claim(JwtRegisteredClaimNames.Email, user.Email ?? string.Empty),
+        new Claim(JwtRegisteredClaimNames.Sub, user.Email ?? string.Empty),
+        new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+        new Claim(JwtRegisteredClaimNames.GivenName, (user.FirstName + " " + user.LastName).Trim()),
+        new Claim("userId", user.Id.ToString()),
+        new Claim("studentCode", user.StudentCode ?? string.Empty)
+    };
 
             // Add role claims
             foreach (var role in userRoles)
@@ -81,8 +81,8 @@ namespace Repository.BaseRepository
                 Token = refreshToken,
                 IsUsed = false,
                 IsRevoked = false,
-                CreateAt = DateTime.Now,
-                ExpiredAt = DateTime.Now.AddDays(7)
+                CreateAt = DateTime.UtcNow,
+                ExpiredAt = DateTime.UtcNow.AddDays(7)
             };
 
             await _dbContext.RefreshTokens.AddAsync(refreshTokenEntity);
@@ -94,6 +94,7 @@ namespace Repository.BaseRepository
                 RefreshToken = refreshToken
             };
         }
+
 
         private static string GenerateRefreshToken()
         {

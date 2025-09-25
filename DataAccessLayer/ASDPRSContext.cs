@@ -16,8 +16,6 @@ namespace DataAccessLayer
         // DbSets for all entities
         public DbSet<Campus> Campuses { get; set; }
         public DbSet<User> Users { get; set; }
-        public DbSet<Role> Roles { get; set; }
-        public DbSet<UserRole> UserRoles { get; set; }
         public DbSet<AcademicYear> AcademicYears { get; set; }
         public DbSet<Semester> Semesters { get; set; }
         public DbSet<Curriculum> Curriculums { get; set; }

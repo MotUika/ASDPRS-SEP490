@@ -155,20 +155,20 @@ namespace Service.Service
             }
         }
 
-/*        public async Task<BaseResponse<IEnumerable<RubricResponse>>> GetRubricsByAssignmentIdAsync(int assignmentId)
-        {
-            try
-            {
-                var rubrics = await _rubricRepository.GetByAssignmentIdAsync(assignmentId);
-                var response = _mapper.Map<IEnumerable<RubricResponse>>(rubrics);
+        /*        public async Task<BaseResponse<IEnumerable<RubricResponse>>> GetRubricsByAssignmentIdAsync(int assignmentId)
+                {
+                    try
+                    {
+                        var rubrics = await _rubricRepository.GetByAssignmentIdAsync(assignmentId);
+                        var response = _mapper.Map<IEnumerable<RubricResponse>>(rubrics);
 
-                return new BaseResponse<IEnumerable<RubricResponse>>("Rubrics retrieved successfully", StatusCodeEnum.OK_200, response);
-            }
-            catch (Exception ex)
-            {
-                return new BaseResponse<IEnumerable<RubricResponse>>($"Error retrieving rubrics: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
-            }
-        }*/
+                        return new BaseResponse<IEnumerable<RubricResponse>>("Rubrics retrieved successfully", StatusCodeEnum.OK_200, response);
+                    }
+                    catch (Exception ex)
+                    {
+                        return new BaseResponse<IEnumerable<RubricResponse>>($"Error retrieving rubrics: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
+                    }
+                }*/
 
         public async Task<BaseResponse<RubricResponse>> GetRubricWithCriteriaAsync(int rubricId)
         {
@@ -198,5 +198,5 @@ namespace Service.Service
                 return new BaseResponse<RubricResponse>($"Error retrieving rubric with criteria: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
-        }
     }
+}

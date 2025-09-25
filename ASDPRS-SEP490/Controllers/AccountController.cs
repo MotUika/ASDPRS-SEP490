@@ -1,14 +1,15 @@
 ﻿using DataAccessLayer;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Google;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Service.IService;
-using Service.RequestAndResponse.Request.User;
 using Service.RequestAndResponse.BaseResponse;
+using Service.RequestAndResponse.Request.User;
+using Service.RequestAndResponse.Response.User;
 using System.Security.Claims;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Authorization;
 
 namespace ASDPRS_SEP490.Controllers
 {
@@ -31,12 +32,12 @@ namespace ASDPRS_SEP490.Controllers
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
             var result = await _userService.LoginAsync(request);
-            if (!result.StatusCode.ToString().StartsWith("2"))
-            {
-                return StatusCode((int)result.StatusCode, result.Message);
-            }
-            return Ok(result.Data);
+
+            // Trả về luôn BaseResponse
+            return StatusCode((int)result.StatusCode, result);
         }
+
+
 
         [HttpPost("refresh-token")]
         public async Task<IActionResult> RefreshToken([FromBody] string refreshToken)
@@ -44,7 +45,7 @@ namespace ASDPRS_SEP490.Controllers
             try
             {
                 var response = await _tokenService.RefreshToken(refreshToken);
-                if (response == null || !response.Success) // Kiểm tra theo cấu trúc ApiResponse của bạn
+                if (response == null || !response.Success)
                 {
                     return BadRequest("Invalid refresh token");
                 }

@@ -46,7 +46,6 @@ namespace Service.Service
         {
             try
             {
-                // Validate ReviewAssignment exists
                 var reviewAssignment = await _reviewAssignmentRepository.GetByIdAsync(request.ReviewAssignmentId);
                 if (reviewAssignment == null)
                 {
@@ -56,7 +55,6 @@ namespace Service.Service
                         null);
                 }
 
-                // Check if review already exists for this assignment
                 var existingReviews = await _reviewRepository.GetByReviewAssignmentIdAsync(request.ReviewAssignmentId);
                 if (existingReviews.Any(r => r.ReviewType == request.ReviewType && r.FeedbackSource == request.FeedbackSource))
                 {
@@ -78,7 +76,6 @@ namespace Service.Service
 
                 await _reviewRepository.AddAsync(review);
 
-                // Create criteria feedbacks
                 if (request.CriteriaFeedbacks != null && request.CriteriaFeedbacks.Any())
                 {
                     foreach (var cfRequest in request.CriteriaFeedbacks)
@@ -97,6 +94,9 @@ namespace Service.Service
                         await _criteriaFeedbackRepository.AddAsync(criteriaFeedback);
                     }
                 }
+
+                reviewAssignment.Status = "Completed";
+                await _reviewAssignmentRepository.UpdateAsync(reviewAssignment);
 
                 var response = await MapToResponse(review);
                 return new BaseResponse<ReviewResponse>(

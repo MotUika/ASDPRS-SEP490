@@ -45,8 +45,8 @@ namespace ASDPRS_SEP490.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> CreateUser([FromBody] CreateUserRequest request)
+/*        [Authorize(Roles = "Admin")]
+*/        public async Task<IActionResult> CreateUser([FromBody] CreateUserRequest request)
         {
             var result = await _userService.CreateUserAsync(request);
             if (!result.StatusCode.ToString().StartsWith("2"))
