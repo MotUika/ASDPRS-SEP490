@@ -1,11 +1,8 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Service.IService;
 using Service.RequestAndResponse.Request.User;
-using Service.RequestAndResponse.BaseResponse;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
-using System.Collections.Generic;
-using BussinessObject.IdentityModel;
 
 namespace ASDPRS_SEP490.Controllers
 {
@@ -21,39 +18,27 @@ namespace ASDPRS_SEP490.Controllers
         }
 
         [HttpGet("{id}")]
-        [Authorize]
+        /*[Authorize]*/
         public async Task<IActionResult> GetUser(int id)
         {
             var result = await _userService.GetUserByIdAsync(id);
-            if (!result.StatusCode.ToString().StartsWith("2"))
-            {
-                return StatusCode((int)result.StatusCode, result.Message);
-            }
-            return Ok(result.Data);
+            return StatusCode((int)result.StatusCode, result);
         }
 
         [HttpGet]
-        [Authorize(Roles = "Admin")]
+        /*[Authorize(Roles = "Admin")]*/
         public async Task<IActionResult> GetAllUsers()
         {
             var result = await _userService.GetAllUsersAsync();
-            if (!result.StatusCode.ToString().StartsWith("2"))
-            {
-                return StatusCode((int)result.StatusCode, result.Message);
-            }
-            return Ok(result.Data);
+            return StatusCode((int)result.StatusCode, result);
         }
 
         [HttpPost]
-/*        [Authorize(Roles = "Admin")]
-*/        public async Task<IActionResult> CreateUser([FromBody] CreateUserRequest request)
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> CreateUser([FromBody] CreateUserRequest request)
         {
             var result = await _userService.CreateUserAsync(request);
-            if (!result.StatusCode.ToString().StartsWith("2"))
-            {
-                return StatusCode((int)result.StatusCode, result.Message);
-            }
-            return CreatedAtAction(nameof(GetUser), new { id = result.Data.UserId }, result.Data);
+            return StatusCode((int)result.StatusCode, result);
         }
 
         [HttpPut("{id}")]
@@ -61,16 +46,10 @@ namespace ASDPRS_SEP490.Controllers
         public async Task<IActionResult> UpdateUser(int id, [FromBody] UpdateUserRequest request)
         {
             if (id != request.UserId)
-            {
-                return BadRequest("User ID mismatch");
-            }
+                return BadRequest(new { message = "User ID mismatch" });
 
             var result = await _userService.UpdateUserAsync(request);
-            if (!result.StatusCode.ToString().StartsWith("2"))
-            {
-                return StatusCode((int)result.StatusCode, result.Message);
-            }
-            return Ok(result.Data);
+            return StatusCode((int)result.StatusCode, result);
         }
 
         [HttpDelete("{id}")]
@@ -78,11 +57,7 @@ namespace ASDPRS_SEP490.Controllers
         public async Task<IActionResult> DeleteUser(int id)
         {
             var result = await _userService.DeleteUserAsync(id);
-            if (!result.StatusCode.ToString().StartsWith("2"))
-            {
-                return StatusCode((int)result.StatusCode, result.Message);
-            }
-            return Ok(result.Data);
+            return StatusCode((int)result.StatusCode, result);
         }
 
         [HttpGet("email/{email}")]
@@ -90,11 +65,7 @@ namespace ASDPRS_SEP490.Controllers
         public async Task<IActionResult> GetUserByEmail(string email)
         {
             var result = await _userService.GetUserByEmailAsync(email);
-            if (!result.StatusCode.ToString().StartsWith("2"))
-            {
-                return StatusCode((int)result.StatusCode, result.Message);
-            }
-            return Ok(result.Data);
+            return StatusCode((int)result.StatusCode, result);
         }
 
         [HttpGet("username/{username}")]
@@ -102,11 +73,7 @@ namespace ASDPRS_SEP490.Controllers
         public async Task<IActionResult> GetUserByUsername(string username)
         {
             var result = await _userService.GetUserByUsernameAsync(username);
-            if (!result.StatusCode.ToString().StartsWith("2"))
-            {
-                return StatusCode((int)result.StatusCode, result.Message);
-            }
-            return Ok(result.Data);
+            return StatusCode((int)result.StatusCode, result);
         }
 
         [HttpGet("role/{roleName}")]
@@ -114,11 +81,7 @@ namespace ASDPRS_SEP490.Controllers
         public async Task<IActionResult> GetUsersByRole(string roleName)
         {
             var result = await _userService.GetUsersByRoleAsync(roleName);
-            if (!result.StatusCode.ToString().StartsWith("2"))
-            {
-                return StatusCode((int)result.StatusCode, result.Message);
-            }
-            return Ok(result.Data);
+            return StatusCode((int)result.StatusCode, result);
         }
 
         [HttpGet("campus/{campusId}")]
@@ -126,11 +89,7 @@ namespace ASDPRS_SEP490.Controllers
         public async Task<IActionResult> GetUsersByCampus(int campusId)
         {
             var result = await _userService.GetUsersByCampusAsync(campusId);
-            if (!result.StatusCode.ToString().StartsWith("2"))
-            {
-                return StatusCode((int)result.StatusCode, result.Message);
-            }
-            return Ok(result.Data);
+            return StatusCode((int)result.StatusCode, result);
         }
 
         [HttpPut("{id}/avatar")]
@@ -144,11 +103,7 @@ namespace ASDPRS_SEP490.Controllers
             };
 
             var result = await _userService.UpdateUserAvatarAsync(request);
-            if (!result.StatusCode.ToString().StartsWith("2"))
-            {
-                return StatusCode((int)result.StatusCode, result.Message);
-            }
-            return Ok(result.Data);
+            return StatusCode((int)result.StatusCode, result);
         }
 
         [HttpPut("{id}/password")]
@@ -157,11 +112,7 @@ namespace ASDPRS_SEP490.Controllers
         {
             request.UserId = id;
             var result = await _userService.ChangePasswordAsync(request);
-            if (!result.StatusCode.ToString().StartsWith("2"))
-            {
-                return StatusCode((int)result.StatusCode, result.Message);
-            }
-            return Ok(result.Data);
+            return StatusCode((int)result.StatusCode, result);
         }
 
         [HttpPut("{id}/deactivate")]
@@ -169,11 +120,7 @@ namespace ASDPRS_SEP490.Controllers
         public async Task<IActionResult> DeactivateUser(int id)
         {
             var result = await _userService.DeactivateUserAsync(id);
-            if (!result.StatusCode.ToString().StartsWith("2"))
-            {
-                return StatusCode((int)result.StatusCode, result.Message);
-            }
-            return Ok(result.Data);
+            return StatusCode((int)result.StatusCode, result);
         }
 
         [HttpPut("{id}/activate")]
@@ -181,11 +128,7 @@ namespace ASDPRS_SEP490.Controllers
         public async Task<IActionResult> ActivateUser(int id)
         {
             var result = await _userService.ActivateUserAsync(id);
-            if (!result.StatusCode.ToString().StartsWith("2"))
-            {
-                return StatusCode((int)result.StatusCode, result.Message);
-            }
-            return Ok(result.Data);
+            return StatusCode((int)result.StatusCode, result);
         }
 
         [HttpGet("statistics")]
@@ -193,58 +136,33 @@ namespace ASDPRS_SEP490.Controllers
         public async Task<IActionResult> GetAccountStatistics()
         {
             var result = await _userService.GetTotalAccountsAsync();
-            if (!result.StatusCode.ToString().StartsWith("2"))
-            {
-                return StatusCode((int)result.StatusCode, result.Message);
-            }
-            return Ok(result.Data);
+            return StatusCode((int)result.StatusCode, result);
         }
 
         [HttpPost("instructor-email")]
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> AddInstructorEmail([FromBody] string email)
         {
-            try
+            if (!email.EndsWith("@fpt.edu.vn"))
+                return BadRequest(new { message = "Only @fpt.edu.vn emails are allowed" });
+
+            var existingUser = await _userService.GetUserByEmailAsync(email);
+            if (existingUser.StatusCode.ToString().StartsWith("2"))
+                return BadRequest(new { message = "Email already exists in system" });
+
+            var createRequest = new CreateUserRequest
             {
-                if (!email.EndsWith("@fpt.edu.vn"))
-                {
-                    return BadRequest("Only @fpt.edu.vn emails are allowed");
-                }
+                Email = email,
+                Username = email.Split('@')[0],
+                FirstName = "Instructor",
+                LastName = "FPT",
+                CampusId = 1,
+                IsActive = true,
+                Role = "Instructor"
+            };
 
-                // Check if email already exists
-                var existingUser = await _userService.GetUserByEmailAsync(email);
-                if (existingUser.StatusCode.ToString().StartsWith("2"))
-                {
-                    return BadRequest("Email already exists in system");
-                }
-
-                // Create a new user with instructor role
-                var createRequest = new CreateUserRequest
-                {
-                    Email = email,
-                    Username = email.Split('@')[0], // Use the part before @ as username
-                    FirstName = "Instructor",
-                    LastName = "FPT",
-                    CampusId = 1, // Default campus
-                    IsActive = true
-                };
-
-                var result = await _userService.CreateUserAsync(createRequest);
-
-                if (!result.StatusCode.ToString().StartsWith("2"))
-                {
-                    return StatusCode((int)result.StatusCode, result.Message);
-                }
-
-                // Note: In a real implementation, you would also assign the instructor role here
-                // This would require adding a method to your UserService to assign roles
-
-                return Ok($"Instructor email {email} added successfully");
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, $"Error adding instructor email: {ex.Message}");
-            }
+            var result = await _userService.CreateUserAsync(createRequest);
+            return StatusCode((int)result.StatusCode, result);
         }
     }
 }

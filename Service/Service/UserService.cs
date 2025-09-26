@@ -58,6 +58,8 @@ namespace Service.Service
                 }
 
                 var response = _mapper.Map<UserResponse>(user);
+                response.Roles = (await _userManager.GetRolesAsync(user)).ToList();
+
                 return new BaseResponse<UserResponse>("User retrieved successfully", StatusCodeEnum.OK_200, response);
             }
             catch (Exception ex)
@@ -71,8 +73,16 @@ namespace Service.Service
             try
             {
                 var users = await _userRepository.GetAllAsync();
-                var response = _mapper.Map<IEnumerable<UserResponse>>(users);
-                return new BaseResponse<IEnumerable<UserResponse>>("Users retrieved successfully", StatusCodeEnum.OK_200, response);
+                var responses = new List<UserResponse>();
+
+                foreach (var user in users)
+                {
+                    var mapped = _mapper.Map<UserResponse>(user);
+                    mapped.Roles = (await _userManager.GetRolesAsync(user)).ToList();
+                    responses.Add(mapped);
+                }
+
+                return new BaseResponse<IEnumerable<UserResponse>>("Users retrieved successfully", StatusCodeEnum.OK_200, responses);
             }
             catch (Exception ex)
             {
@@ -160,6 +170,8 @@ namespace Service.Service
                 }
 
                 var response = _mapper.Map<UserResponse>(user);
+                response.Roles = (await _userManager.GetRolesAsync(user)).ToList();
+
                 return new BaseResponse<UserResponse>("User retrieved successfully", StatusCodeEnum.OK_200, response);
             }
             catch (Exception ex)
@@ -179,6 +191,8 @@ namespace Service.Service
                 }
 
                 var response = _mapper.Map<UserResponse>(user);
+                response.Roles = (await _userManager.GetRolesAsync(user)).ToList();
+
                 return new BaseResponse<UserResponse>("User retrieved successfully", StatusCodeEnum.OK_200, response);
             }
             catch (Exception ex)
@@ -209,8 +223,15 @@ namespace Service.Service
                     .Where(u => u.CampusId == campusId)
                     .ToListAsync();
 
-                var response = _mapper.Map<IEnumerable<UserResponse>>(users);
-                return new BaseResponse<IEnumerable<UserResponse>>("Users retrieved successfully", StatusCodeEnum.OK_200, response);
+                var responses = new List<UserResponse>();
+                foreach (var user in users)
+                {
+                    var mapped = _mapper.Map<UserResponse>(user);
+                    mapped.Roles = (await _userManager.GetRolesAsync(user)).ToList();
+                    responses.Add(mapped);
+                }
+
+                return new BaseResponse<IEnumerable<UserResponse>>("Users retrieved successfully", StatusCodeEnum.OK_200, responses);
             }
             catch (Exception ex)
             {
