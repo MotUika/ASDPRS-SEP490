@@ -1,5 +1,7 @@
 ﻿using BussinessObject.Models;
+using DataAccessLayer;
 using Microsoft.EntityFrameworkCore;
+using OfficeOpenXml;
 using Repository.IRepository;
 using Service.IService;
 using Service.RequestAndResponse.BaseResponse;
@@ -18,15 +20,92 @@ namespace Service.Service
         private readonly ICourseStudentRepository _courseStudentRepository;
         private readonly ICourseInstanceRepository _courseInstanceRepository;
         private readonly IUserRepository _userRepository;
+        private readonly ASDPRSContext _context;
 
         public CourseStudentService(
             ICourseStudentRepository courseStudentRepository,
             ICourseInstanceRepository courseInstanceRepository,
-            IUserRepository userRepository)
+            IUserRepository userRepository,
+            ASDPRSContext context)
         {
             _courseStudentRepository = courseStudentRepository;
             _courseInstanceRepository = courseInstanceRepository;
             _userRepository = userRepository;
+            _context = context;
+        }
+
+        // Method import Excel: Đọc file, thêm sinh viên, kiểm tra đơn giản
+        public async Task<BaseResponse<List<CourseStudentResponse>>> ImportStudentsFromExcelAsync(int courseInstanceId, Stream excelStream, int? changedByUserId)
+        {
+            try
+            {
+                var courseInstance = await _courseInstanceRepository.GetByIdAsync(courseInstanceId);
+                if (courseInstance == null) return new BaseResponse<List<CourseStudentResponse>>("Không tìm thấy lớp", StatusCodeEnum.NotFound_404, null);
+
+                var existingStudents = (await _courseStudentRepository.GetByCourseInstanceIdAsync(courseInstanceId)).Select(cs => cs.UserId).ToHashSet();
+
+                var responses = new List<CourseStudentResponse>();
+                using var package = new ExcelPackage(excelStream);
+                var worksheet = package.Workbook.Worksheets[0];
+
+                for (int row = 2; row <= worksheet.Dimension.End.Row; row++)
+                {
+                    var studentCode = worksheet.Cells[row, 4].Value?.ToString();  // Cột Code (ví dụ: SE161544)
+                    bool isRetaking = worksheet.Cells[row, 8].Value?.ToString()?.ToLower() == "true";  // Giả định cột 8 là IsRetaking, mặc định false nếu không có
+
+                    if (string.IsNullOrEmpty(studentCode)) continue;
+
+                    var user = await _context.Users.FirstOrDefaultAsync(u => u.StudentCode == studentCode);
+                    if (user == null || existingStudents.Contains(user.Id)) continue;
+
+                    // Kiểm tra: Campus khớp, Semester khớp, Curriculum có môn
+                    if (user.CampusId != courseInstance.CampusId) continue;
+                    if (courseInstance.SemesterId == null) continue;
+                    var curriculum = await _context.Curriculums.Include(c => c.Courses).FirstOrDefaultAsync(c => c.CampusId == user.CampusId);
+                    if (curriculum == null || !curriculum.Courses.Any(c => c.CourseId == courseInstance.CourseId)) continue;
+
+                    var courseStudent = new CourseStudent
+                    {
+                        CourseInstanceId = courseInstanceId,
+                        UserId = user.Id,
+                        EnrolledAt = DateTime.UtcNow,
+                        Status = isRetaking ? "Retaking" : "Pending",
+                        StatusChangedAt = DateTime.UtcNow,
+                        ChangedByUserId = changedByUserId
+                    };
+                    await _courseStudentRepository.AddAsync(courseStudent);
+                    responses.Add(new CourseStudentResponse { /* Map đơn giản, như code cũ */ });
+                }
+
+                return new BaseResponse<List<CourseStudentResponse>>("Import thành công", StatusCodeEnum.Created_201, responses);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<List<CourseStudentResponse>>("Lỗi import: " + ex.Message, StatusCodeEnum.InternalServerError_500, null);
+            }
+        }
+
+        // Method enroll: Sinh viên nhập key để kích hoạt
+        public async Task<BaseResponse<CourseStudentResponse>> EnrollStudentAsync(int courseInstanceId, int studentUserId, string enrollKey)
+        {
+            try
+            {
+                var courseInstance = await _courseInstanceRepository.GetByIdAsync(courseInstanceId);
+                if (courseInstance == null || courseInstance.EnrollmentPassword != enrollKey) return new BaseResponse<CourseStudentResponse>("Key sai hoặc lớp không tồn tại", StatusCodeEnum.BadRequest_400, null);
+
+                var courseStudent = (await _courseStudentRepository.GetByCourseInstanceIdAsync(courseInstanceId)).FirstOrDefault(cs => cs.UserId == studentUserId && cs.Status == "Pending");
+
+                if (courseStudent == null) return new BaseResponse<CourseStudentResponse>("Bạn chưa được import vào lớp", StatusCodeEnum.NotFound_404, null);
+
+                courseStudent.Status = "Enrolled";
+                await _courseStudentRepository.UpdateAsync(courseStudent);
+
+                return new BaseResponse<CourseStudentResponse>("Enroll thành công", StatusCodeEnum.OK_200, new CourseStudentResponse { /* Map */ });
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<CourseStudentResponse>("Lỗi enroll: " + ex.Message, StatusCodeEnum.InternalServerError_500, null);
+            }
         }
 
         public async Task<BaseResponse<CourseStudentResponse>> CreateCourseStudentAsync(CreateCourseStudentRequest request)
