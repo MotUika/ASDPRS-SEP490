@@ -103,15 +103,42 @@ namespace Service.Service
             try
             {
                 var courseInstance = _mapper.Map<CourseInstance>(request);
-                var createdCourseInstance = await _courseInstanceRepository.AddAsync(courseInstance);
-                var response = _mapper.Map<CourseInstanceResponse>(createdCourseInstance);
-
-                return new BaseResponse<CourseInstanceResponse>("Course instance created successfully", StatusCodeEnum.Created_201, response);
+                courseInstance.EnrollmentPassword = GenerateEnrollKey();  // Tạo key tự động
+                var created = await _courseInstanceRepository.AddAsync(courseInstance);
+                var response = _mapper.Map<CourseInstanceResponse>(created);
+                return new BaseResponse<CourseInstanceResponse>("Lớp tạo thành công với key: " + courseInstance.EnrollmentPassword, StatusCodeEnum.Created_201, response);
             }
             catch (Exception ex)
             {
-                return new BaseResponse<CourseInstanceResponse>($"Error creating course instance: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
+                return new BaseResponse<CourseInstanceResponse>("Lỗi khi tạo lớp: " + ex.Message, StatusCodeEnum.InternalServerError_500, null);
             }
+        }
+
+        public async Task<BaseResponse<string>> UpdateEnrollKeyAsync(int courseInstanceId, string newKey)
+        {
+            try
+            {
+                var courseInstance = await _courseInstanceRepository.GetByIdAsync(courseInstanceId);
+                if (courseInstance == null)
+                {
+                    return new BaseResponse<string>("Không tìm thấy lớp", StatusCodeEnum.NotFound_404, null);
+                }
+                courseInstance.EnrollmentPassword = newKey;  // Cập nhật key
+                await _courseInstanceRepository.UpdateAsync(courseInstance);
+                return new BaseResponse<string>("Key lớp cập nhật thành công", StatusCodeEnum.OK_200, newKey);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<string>("Lỗi cập nhật key: " + ex.Message, StatusCodeEnum.InternalServerError_500, null);
+            }
+        }
+
+        private string GenerateEnrollKey(int length = 6)
+        {
+            const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+            var random = new Random();
+            var key = new string(Enumerable.Repeat(chars, length).Select(s => s[random.Next(s.Length)]).ToArray());
+            return "ENROLL-" + key;
         }
 
         public async Task<BaseResponse<CourseInstanceResponse>> UpdateCourseInstanceAsync(UpdateCourseInstanceRequest request)
@@ -199,5 +226,6 @@ namespace Service.Service
                 return new BaseResponse<IEnumerable<CourseInstanceResponse>>($"Error retrieving course instances: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
+
     }
 }

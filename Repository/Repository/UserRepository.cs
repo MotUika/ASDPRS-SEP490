@@ -52,5 +52,13 @@ namespace Repository.Repository
                 .ThenInclude(ur => ur.Role)
                 .FirstOrDefaultAsync(u => u.Id == userId);
         }
+        public async Task<User> GetByStudentCodeAsync(string studentCode)
+        {
+            return await _context.Users
+                .Include(u => u.Campus)
+                .Include(u => u.UserRoles)
+                .ThenInclude(ur => ur.Role)
+                .FirstOrDefaultAsync(u => u.StudentCode == studentCode);
+        }
     }
 }
