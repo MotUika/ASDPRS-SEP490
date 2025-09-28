@@ -1133,6 +1133,37 @@ namespace DataAccessLayer.Migrations
                 name: "IX_UserRole_UserId",
                 table: "UserRole",
                 column: "UserId");
+            // Insert Campus for FK
+            migrationBuilder.InsertData(
+                table: "Campuses",
+                columns: new[] { "CampusId", "CampusName", "Address" },
+                values: new object[,] { 
+                    {1, "Hồ Chí Minh", "7 Đ. D1, Long Thạnh Mỹ, Thủ Đức, Hồ Chí Minh" },
+                    {2, "Hà Nội", "Khu Công Nghệ Cao Hòa Lạc, km 29, Đại lộ, Thăng Long, Hà Nội" }
+                });
+
+            // Insert Roles
+            migrationBuilder.InsertData(
+                table: "AspNetRoles",
+                columns: new[] { "Id", "Name", "NormalizedName", "ConcurrencyStamp" },
+                values: new object[,]
+                {
+                    { 1, "Admin", "ADMIN", null },
+                    { 2, "Student", "STUDENT", null },
+                    { 3, "Instructor", "INSTRUCTOR", null }
+                });
+
+            // Insert Admin User
+            migrationBuilder.InsertData(
+                table: "AspNetUsers",
+                columns: new[] { "Id", "CampusId", "FirstName", "LastName", "StudentCode", "AvatarUrl", "IsActive", "CreatedAt", "UserName", "NormalizedUserName", "Email", "NormalizedEmail", "EmailConfirmed", "PasswordHash", "SecurityStamp", "ConcurrencyStamp", "PhoneNumber", "PhoneNumberConfirmed", "TwoFactorEnabled", "LockoutEnd", "LockoutEnabled", "AccessFailedCount" },
+                values: new object[] { 1, 1, "Admin", "User", "ADMIN001", null, true, DateTime.UtcNow, "admin", "ADMIN", "admin@example.com", "ADMIN@EXAMPLE.COM", true, "AQAAAAIAAYagAAAAEK95SlxvEPzqxJyTxIof0ufhmHVKdEGcuw7MxCBj92JUehpXlaMI0F4RrX3mzLDNzA==", Guid.NewGuid().ToString(), Guid.NewGuid().ToString(), null, false, false, null, true, 0 });
+
+            // Assign Admin Role to User
+            migrationBuilder.InsertData(
+                table: "AspNetUserRoles",
+                columns: new[] { "UserId", "RoleId" },
+                values: new object[] { 1, 1 });
         }
 
         /// <inheritdoc />
