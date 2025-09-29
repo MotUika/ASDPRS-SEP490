@@ -1,8 +1,10 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using BussinessObject.Models;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Service.IService;
 using Service.RequestAndResponse.Request.User;
+using System.Security.Claims;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Authorization;
 
 namespace ASDPRS_SEP490.Controllers
 {
@@ -163,6 +165,49 @@ namespace ASDPRS_SEP490.Controllers
 
             var result = await _userService.CreateUserAsync(createRequest);
             return StatusCode((int)result.StatusCode, result);
+        }
+        [HttpGet("test-auth")]
+        [Authorize] // Chỉ cần authenticated
+        public IActionResult TestAuth()
+        {
+            var userInfo = new
+            {
+                IsAuthenticated = User.Identity.IsAuthenticated,
+                UserId = User.FindFirst("userId")?.Value,
+                UserName = User.Identity.Name,
+                // ✅ SỬA: Dùng "role" thay vì ClaimTypes.Role
+                Roles = User.Claims.Where(c => c.Type == "role").Select(c => c.Value).ToList(),
+                AllClaims = User.Claims.Select(c => new { c.Type, c.Value }).ToList()
+            };
+
+            return Ok(userInfo);
+        }
+
+        [HttpGet("test-admin")]
+        [Authorize(Roles = "Admin")] // Sẽ tìm claim với type "role" và value "Admin"
+        public IActionResult TestAdmin()
+        {
+            return Ok("Admin access successful!");
+        }
+
+        [HttpGet("test-roles")]
+        public IActionResult TestRoles()
+        {
+            // Kiểm tra tất cả các cách để lấy roles
+            var roleClaims1 = User.Claims.Where(c => c.Type == "role").Select(c => c.Value).ToList();
+            var roleClaims2 = User.Claims.Where(c => c.Type == ClaimTypes.Role).Select(c => c.Value).ToList();
+            var roleClaims3 = User.Claims.Where(c => c.Type.EndsWith("role")).Select(c => c.Value).ToList();
+
+            var isInRoleAdmin = User.IsInRole("Admin");
+
+            return Ok(new
+            {
+                RolesFromRoleClaim = roleClaims1,
+                RolesFromClaimTypesRole = roleClaims2,
+                RolesFromAnyRole = roleClaims3,
+                IsInRoleAdmin = isInRoleAdmin,
+                AllClaims = User.Claims.Select(c => new { Type = c.Type, Value = c.Value })
+            });
         }
     }
 }
