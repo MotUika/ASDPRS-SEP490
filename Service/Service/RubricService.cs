@@ -7,6 +7,7 @@ using Service.IService;
 using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Enums;
 using Service.RequestAndResponse.Request.Rubric;
+using Service.RequestAndResponse.Response.Criteria;
 using Service.RequestAndResponse.Response.Rubric;
 using System;
 using System.Collections.Generic;
@@ -178,7 +179,7 @@ namespace Service.Service
                     .Include(r => r.Template)
                     .Include(r => r.Assignment)
                     .Include(r => r.Criteria)
-                    .ThenInclude(c => c.CriteriaTemplate)
+                        .ThenInclude(c => c.CriteriaTemplate)
                     .FirstOrDefaultAsync(r => r.RubricId == rubricId);
 
                 if (rubric == null)
@@ -190,6 +191,12 @@ namespace Service.Service
                 response.CriteriaCount = rubric.Criteria?.Count ?? 0;
                 response.TemplateTitle = rubric.Template?.Title;
                 response.AssignmentTitle = rubric.Assignment?.Title;
+
+                // Map danh sách criteria
+                if (rubric.Criteria != null)
+                {
+                    response.Criteria = _mapper.Map<List<CriteriaResponse>>(rubric.Criteria);
+                }
 
                 return new BaseResponse<RubricResponse>("Rubric with criteria retrieved successfully", StatusCodeEnum.OK_200, response);
             }

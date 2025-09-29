@@ -1,4 +1,6 @@
-﻿namespace Service.RequestAndResponse.Response.Rubric
+﻿using Service.RequestAndResponse.Response.Criteria;
+
+namespace Service.RequestAndResponse.Response.Rubric
 {
     public class RubricResponse
     {
@@ -11,5 +13,6 @@
         public string Description { get; set; }
         public bool IsModified { get; set; }
         public int CriteriaCount { get; set; }
+        public List<CriteriaResponse> Criteria { get; set; } = new List<CriteriaResponse>();
     }
 }

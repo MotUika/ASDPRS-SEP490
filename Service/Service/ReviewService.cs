@@ -46,6 +46,7 @@ namespace Service.Service
         {
             try
             {
+                // Lấy review assignment
                 var reviewAssignment = await _reviewAssignmentRepository.GetByIdAsync(request.ReviewAssignmentId);
                 if (reviewAssignment == null)
                 {
@@ -55,6 +56,7 @@ namespace Service.Service
                         null);
                 }
 
+                // Kiểm tra xem review đã tồn tại chưa
                 var existingReviews = await _reviewRepository.GetByReviewAssignmentIdAsync(request.ReviewAssignmentId);
                 if (existingReviews.Any(r => r.ReviewType == request.ReviewType && r.FeedbackSource == request.FeedbackSource))
                 {
@@ -64,10 +66,26 @@ namespace Service.Service
                         null);
                 }
 
+                // Tính OverallScore tự động từ criteria feedbacks
+                decimal? overallScore = null;
+                if (request.CriteriaFeedbacks != null && request.CriteriaFeedbacks.Any(cf => cf.Score.HasValue))
+                {
+                    var validScores = request.CriteriaFeedbacks
+                        .Where(cf => cf.Score.HasValue)
+                        .Select(cf => cf.Score.Value)
+                        .ToList();
+
+                    if (validScores.Any())
+                    {
+                        overallScore = Math.Round(validScores.Average(), 2);
+                    }
+                }
+
+                // Tạo review
                 var review = new Review
                 {
                     ReviewAssignmentId = request.ReviewAssignmentId,
-                    OverallScore = request.OverallScore,
+                    OverallScore = overallScore,
                     GeneralFeedback = request.GeneralFeedback,
                     ReviewedAt = request.ReviewedAt ?? DateTime.UtcNow,
                     ReviewType = request.ReviewType,
@@ -76,6 +94,7 @@ namespace Service.Service
 
                 await _reviewRepository.AddAsync(review);
 
+                // Tạo criteria feedbacks
                 if (request.CriteriaFeedbacks != null && request.CriteriaFeedbacks.Any())
                 {
                     foreach (var cfRequest in request.CriteriaFeedbacks)
@@ -88,16 +107,19 @@ namespace Service.Service
                             ReviewId = review.ReviewId,
                             CriteriaId = cfRequest.CriteriaId,
                             ScoreAwarded = cfRequest.Score,
-                            Feedback = cfRequest.Feedback
+                            Feedback = cfRequest.Feedback,
+                            FeedbackSource = request.FeedbackSource
                         };
 
                         await _criteriaFeedbackRepository.AddAsync(criteriaFeedback);
                     }
                 }
 
+                // Cập nhật review assignment status
                 reviewAssignment.Status = "Completed";
                 await _reviewAssignmentRepository.UpdateAsync(reviewAssignment);
 
+                // Map to response
                 var response = await MapToResponse(review);
                 return new BaseResponse<ReviewResponse>(
                     "Review created successfully",
