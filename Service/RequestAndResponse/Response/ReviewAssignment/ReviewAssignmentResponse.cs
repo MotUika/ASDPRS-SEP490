@@ -22,6 +22,16 @@ namespace Service.RequestAndResponse.Response.ReviewAssignment
         public string StudentCode { get; set; }
         public string CourseName { get; set; }
 
+        // New properties for student review flow
+        public string AssignmentDescription { get; set; }
+        public DateTime AssignmentDeadline { get; set; }
+        public string CourseCode { get; set; }
+        public string SectionCode { get; set; }
+        public string FileUrl { get; set; }
+        public string FileName { get; set; }
+        public string Keywords { get; set; }
+        public DateTime SubmittedAt { get; set; }
+
         public List<ReviewResponse> Reviews { get; set; } = new List<ReviewResponse>();
         public bool IsOverdue => DateTime.UtcNow > Deadline && Status != "Completed";
         public int DaysUntilDeadline => (int)(Deadline - DateTime.UtcNow).TotalDays;

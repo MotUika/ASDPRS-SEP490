@@ -1,12 +1,15 @@
 ﻿using BussinessObject.Models;
 using Microsoft.EntityFrameworkCore;
 using Repository.IRepository;
+using Repository.Repository;
 using Service.IService;
 using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Enums;
 using Service.RequestAndResponse.Request.ReviewAssignment;
+using Service.RequestAndResponse.Response.Criteria;
 using Service.RequestAndResponse.Response.Review;
 using Service.RequestAndResponse.Response.ReviewAssignment;
+using Service.RequestAndResponse.Response.Rubric;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -22,6 +25,9 @@ namespace Service.Service
         private readonly IUserRepository _userRepository;
         private readonly IReviewRepository _reviewRepository;
         private readonly ICourseStudentRepository _courseStudentRepository;
+        private readonly ICourseInstanceRepository _courseInstanceRepository;
+        private readonly ICriteriaRepository _criteriaRepository;
+        private readonly IRubricRepository _rubricRepository;
 
         public ReviewAssignmentService(
             IReviewAssignmentRepository reviewAssignmentRepository,
@@ -29,7 +35,10 @@ namespace Service.Service
             IAssignmentRepository assignmentRepository,
             IUserRepository userRepository,
             IReviewRepository reviewRepository,
-            ICourseStudentRepository courseStudentRepository)
+            ICourseStudentRepository courseStudentRepository,
+            ICourseInstanceRepository courseInstanceRepository,
+            ICriteriaRepository criteriaRepository,
+            IRubricRepository rubricRepository)
         {
             _reviewAssignmentRepository = reviewAssignmentRepository;
             _submissionRepository = submissionRepository;
@@ -37,6 +46,9 @@ namespace Service.Service
             _userRepository = userRepository;
             _reviewRepository = reviewRepository;
             _courseStudentRepository = courseStudentRepository;
+            _courseInstanceRepository = courseInstanceRepository;
+            _criteriaRepository = criteriaRepository;
+            _rubricRepository = rubricRepository;
         }
 
         public async Task<BaseResponse<ReviewAssignmentResponse>> CreateReviewAssignmentAsync(CreateReviewAssignmentRequest request)
@@ -676,7 +688,165 @@ namespace Service.Service
 
             await _reviewAssignmentRepository.AddAsync(reviewAssignment);
         }
+        public async Task<BaseResponse<List<ReviewAssignmentResponse>>> GetPendingReviewsForStudentAsync(int studentId, int? courseInstanceId = null)
+        {
+            try
+            {
+                var reviewAssignments = await _reviewAssignmentRepository.GetByReviewerIdAsync(studentId);
 
+                // Mở rộng điều kiện status để bao gồm cả 'Pending'
+                var pendingAssignments = reviewAssignments
+                    .Where(ra => ra.Status == "Pending" || ra.Status == "Assigned" || ra.Status == "In Progress")
+                    .ToList();
+
+                var responses = new List<ReviewAssignmentResponse>();
+
+                foreach (var ra in pendingAssignments)
+                {
+                    var submission = await _submissionRepository.GetByIdAsync(ra.SubmissionId);
+                    if (submission == null) continue;
+
+                    var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
+                    if (assignment == null) continue;
+
+                    // Nếu có filter theo course instance, kiểm tra
+                    if (courseInstanceId.HasValue && assignment.CourseInstanceId != courseInstanceId.Value)
+                        continue;
+
+                    // Kiểm tra deadline review
+                    if (ra.Deadline < DateTime.UtcNow && ra.Status != "Completed")
+                    {
+                        ra.Status = "Overdue";
+                        await _reviewAssignmentRepository.UpdateAsync(ra);
+                    }
+
+                    var response = await MapToStudentReviewResponse(ra);
+                    responses.Add(response);
+                }
+
+                return new BaseResponse<List<ReviewAssignmentResponse>>(
+                    "Success",
+                    StatusCodeEnum.OK_200,
+                    responses);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<List<ReviewAssignmentResponse>>(
+                    $"Error retrieving pending reviews: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
+            }
+        }
+
+        private async Task<ReviewAssignmentResponse> MapToStudentReviewResponse(ReviewAssignment reviewAssignment)
+        {
+            var submission = await _submissionRepository.GetByIdAsync(reviewAssignment.SubmissionId);
+            var assignment = submission != null ? await _assignmentRepository.GetByIdAsync(submission.AssignmentId) : null;
+            var courseInstance = assignment != null ? await _courseInstanceRepository.GetByIdAsync(assignment.CourseInstanceId) : null;
+
+            // Ẩn danh thông tin người nộp bài
+            var studentName = "Anonymous";
+            var studentCode = "Anonymous";
+
+            return new ReviewAssignmentResponse
+            {
+                ReviewAssignmentId = reviewAssignment.ReviewAssignmentId,
+                SubmissionId = reviewAssignment.SubmissionId,
+                ReviewerUserId = reviewAssignment.ReviewerUserId,
+                Status = reviewAssignment.Status,
+                AssignedAt = reviewAssignment.AssignedAt,
+                Deadline = reviewAssignment.Deadline,
+                IsAIReview = reviewAssignment.IsAIReview,
+
+                // Thông tin assignment
+                AssignmentTitle = assignment?.Title ?? string.Empty,
+                AssignmentDescription = assignment?.Description ?? string.Empty, // Sửa lỗi chính tả
+                AssignmentDeadline = assignment?.Deadline ?? DateTime.MinValue,
+
+                // Thông tin course
+                CourseName = courseInstance?.Course?.CourseName ?? string.Empty,
+                CourseCode = courseInstance?.Course?.CourseCode ?? string.Empty,
+                SectionCode = courseInstance?.SectionCode ?? string.Empty,
+
+                // Thông tin submission (ẩn danh)
+                StudentName = studentName,
+                StudentCode = studentCode,
+                FileUrl = submission?.FileUrl ?? string.Empty,
+                FileName = submission?.FileName ?? string.Empty,
+                Keywords = submission?.Keywords ?? string.Empty,
+                SubmittedAt = submission?.SubmittedAt ?? DateTime.MinValue
+            };
+        }
+
+        public async Task<BaseResponse<ReviewAssignmentDetailResponse>> GetReviewAssignmentDetailsAsync(int reviewAssignmentId)
+        {
+            try
+            {
+                var reviewAssignment = await _reviewAssignmentRepository.GetByIdAsync(reviewAssignmentId);
+                if (reviewAssignment == null)
+                {
+                    return new BaseResponse<ReviewAssignmentDetailResponse>(
+                        "Review assignment not found",
+                        StatusCodeEnum.NotFound_404,
+                        null);
+                }
+
+                var submission = await _submissionRepository.GetByIdAsync(reviewAssignment.SubmissionId);
+                var assignment = submission != null ? await _assignmentRepository.GetByIdAsync(submission.AssignmentId) : null;
+
+                // Lấy rubric
+                RubricResponse rubricResponse = null;
+                if (assignment?.RubricId.HasValue == true)
+                {
+                    var rubric = await _rubricRepository.GetByIdAsync(assignment.RubricId.Value);
+                    if (rubric != null)
+                    {
+                        var criteria = await _criteriaRepository.GetByRubricIdAsync(rubric.RubricId);
+                        rubricResponse = new RubricResponse
+                        {
+                            RubricId = rubric.RubricId,
+                            Title = rubric.Title,
+                            Description = rubric.Description,
+                            Criteria = criteria.Select(c => new CriteriaResponse
+                            {
+                                CriteriaId = c.CriteriaId,
+                                Title = c.Title,
+                                Description = c.Description,
+                                MaxScore = c.MaxScore,
+                                Weight = c.Weight
+                            }).ToList()
+                        };
+                    }
+                }
+
+                var response = new ReviewAssignmentDetailResponse
+                {
+                    ReviewAssignmentId = reviewAssignment.ReviewAssignmentId,
+                    SubmissionId = reviewAssignment.SubmissionId,
+                    AssignmentId = assignment?.AssignmentId ?? 0,
+                    Status = reviewAssignment.Status,
+                    AssignedAt = reviewAssignment.AssignedAt,
+                    Deadline = reviewAssignment.Deadline,
+                    AssignmentTitle = assignment?.Title ?? string.Empty,
+                    StudentName = "Anonymous", // Luôn ẩn danh
+                    FileUrl = submission?.FileUrl ?? string.Empty,
+                    FileName = submission?.FileName ?? string.Empty,
+                    Rubric = rubricResponse
+                };
+
+                return new BaseResponse<ReviewAssignmentDetailResponse>(
+                    "Success",
+                    StatusCodeEnum.OK_200,
+                    response);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<ReviewAssignmentDetailResponse>(
+                    $"Error retrieving review assignment details: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
+            }
+        }
         private async Task<ReviewAssignmentResponse> MapToResponse(ReviewAssignment reviewAssignment)
         {
             var submission = await _submissionRepository.GetByIdAsync(reviewAssignment.SubmissionId);

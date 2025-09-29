@@ -7,6 +7,7 @@ using Service.IService;
 using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Enums;
 using Service.RequestAndResponse.Request.CourseStudent;
+using Service.RequestAndResponse.Response.CourseInstance;
 using Service.RequestAndResponse.Response.CourseStudent;
 using System;
 using System.Collections.Generic;
@@ -463,6 +464,46 @@ namespace Service.Service
             {
                 return new BaseResponse<List<CourseStudentResponse>>(
                     $"Error retrieving students: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
+            }
+        }
+        public async Task<BaseResponse<List<CourseInstanceResponse>>> GetStudentCoursesAsync(int studentId)
+        {
+            try
+            {
+                var courseStudents = await _courseStudentRepository.GetByUserIdAsync(studentId);
+                var responses = new List<CourseInstanceResponse>();
+
+                foreach (var cs in courseStudents.Where(cs => cs.Status == "Enrolled"))
+                {
+                    var courseInstance = await _courseInstanceRepository.GetByIdAsync(cs.CourseInstanceId);
+                    if (courseInstance != null)
+                    {
+                        var response = new CourseInstanceResponse
+                        {
+                            CourseInstanceId = courseInstance.CourseInstanceId,
+                            CourseId = courseInstance.CourseId,
+                            SectionCode = courseInstance.SectionCode,
+                            CourseName = courseInstance.Course?.CourseName ?? string.Empty,
+                            CourseCode = courseInstance.Course?.CourseCode ?? string.Empty,
+                            SemesterName = courseInstance.Semester?.Name ?? string.Empty,
+                            CampusName = courseInstance.Campus?.CampusName ?? string.Empty,
+                            EnrollmentPassword = courseInstance.EnrollmentPassword
+                        };
+                        responses.Add(response);
+                    }
+                }
+
+                return new BaseResponse<List<CourseInstanceResponse>>(
+                    "Success",
+                    StatusCodeEnum.OK_200,
+                    responses);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<List<CourseInstanceResponse>>(
+                    $"Error retrieving student courses: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
                     null);
             }
