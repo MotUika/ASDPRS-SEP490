@@ -4,6 +4,7 @@ using Repository.IRepository;
 using Service.IService;
 using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Enums;
+using Service.RequestAndResponse.Request.CourseStudent;
 using Service.RequestAndResponse.Request.Review;
 using Service.RequestAndResponse.Response.CriteriaFeedback;
 using Service.RequestAndResponse.Response.Review;
@@ -359,6 +360,97 @@ namespace Service.Service
             {
                 return new BaseResponse<ReviewResponse>(
                     $"Error creating AI review: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
+            }
+        }
+        public async Task<BaseResponse<ReviewResponse>> SubmitStudentReviewAsync(SubmitStudentReviewRequest request)
+        {
+            try
+            {
+                // Kiểm tra review assignment tồn tại và thuộc về sinh viên này
+                var reviewAssignment = await _reviewAssignmentRepository.GetByIdAsync(request.ReviewAssignmentId);
+                if (reviewAssignment == null || reviewAssignment.ReviewerUserId != request.ReviewerUserId)
+                {
+                    return new BaseResponse<ReviewResponse>(
+                        "Review assignment not found or access denied",
+                        StatusCodeEnum.NotFound_404,
+                        null);
+                }
+
+                // Kiểm tra chưa review
+                var existingReviews = await _reviewRepository.GetByReviewAssignmentIdAsync(request.ReviewAssignmentId);
+                if (existingReviews.Any(r => r.ReviewType == "Peer" && r.FeedbackSource == "Student"))
+                {
+                    return new BaseResponse<ReviewResponse>(
+                        "You have already reviewed this submission",
+                        StatusCodeEnum.Conflict_409,
+                        null);
+                }
+
+                // Tính điểm tổng
+                decimal? overallScore = null;
+                if (request.CriteriaFeedbacks != null && request.CriteriaFeedbacks.Any(cf => cf.Score.HasValue))
+                {
+                    var validScores = request.CriteriaFeedbacks
+                        .Where(cf => cf.Score.HasValue)
+                        .Select(cf => cf.Score.Value)
+                        .ToList();
+
+                    if (validScores.Any())
+                    {
+                        overallScore = Math.Round(validScores.Average(), 2);
+                    }
+                }
+
+                // Tạo review
+                var review = new Review
+                {
+                    ReviewAssignmentId = request.ReviewAssignmentId,
+                    OverallScore = overallScore,
+                    GeneralFeedback = request.GeneralFeedback,
+                    ReviewedAt = DateTime.UtcNow,
+                    ReviewType = "Peer",
+                    FeedbackSource = "Student"
+                };
+
+                await _reviewRepository.AddAsync(review);
+
+                // Tạo criteria feedbacks
+                if (request.CriteriaFeedbacks != null && request.CriteriaFeedbacks.Any())
+                {
+                    foreach (var cfRequest in request.CriteriaFeedbacks)
+                    {
+                        var criteria = await _criteriaRepository.GetByIdAsync(cfRequest.CriteriaId);
+                        if (criteria == null) continue;
+
+                        var criteriaFeedback = new CriteriaFeedback
+                        {
+                            ReviewId = review.ReviewId,
+                            CriteriaId = cfRequest.CriteriaId,
+                            ScoreAwarded = cfRequest.Score,
+                            Feedback = cfRequest.Feedback,
+                            FeedbackSource = "Student"
+                        };
+
+                        await _criteriaFeedbackRepository.AddAsync(criteriaFeedback);
+                    }
+                }
+
+                // Cập nhật review assignment status
+                reviewAssignment.Status = "Completed";
+                await _reviewAssignmentRepository.UpdateAsync(reviewAssignment);
+
+                var response = await MapToResponse(review);
+                return new BaseResponse<ReviewResponse>(
+                    "Review submitted successfully",
+                    StatusCodeEnum.Created_201,
+                    response);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<ReviewResponse>(
+                    $"Error submitting review: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
                     null);
             }

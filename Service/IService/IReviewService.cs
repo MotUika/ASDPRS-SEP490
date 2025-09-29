@@ -1,4 +1,5 @@
 ﻿using Service.RequestAndResponse.BaseResponse;
+using Service.RequestAndResponse.Request.CourseStudent;
 using Service.RequestAndResponse.Request.Review;
 using Service.RequestAndResponse.Response.Review;
 using System.Collections.Generic;
@@ -17,5 +18,6 @@ namespace Service.IService
         Task<BaseResponse<List<ReviewResponse>>> GetReviewsByReviewerIdAsync(int reviewerId);
         Task<BaseResponse<List<ReviewResponse>>> GetReviewsByAssignmentIdAsync(int assignmentId);
         Task<BaseResponse<ReviewResponse>> CreateAIReviewAsync(CreateReviewRequest request);
+        Task<BaseResponse<ReviewResponse>> SubmitStudentReviewAsync(SubmitStudentReviewRequest request);
     }
 }

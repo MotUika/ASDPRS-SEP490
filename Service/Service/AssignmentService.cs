@@ -1,10 +1,12 @@
 ﻿using BussinessObject.Models;
 using Repository.IRepository;
+using Repository.Repository;
 using Service.IService;
 using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Enums;
 using Service.RequestAndResponse.Request.Assignment;
 using Service.RequestAndResponse.Response.Assignment;
+using Service.RequestAndResponse.Response.Criteria;
 using Service.RequestAndResponse.Response.Rubric;
 using System;
 using System.Collections.Generic;
@@ -22,6 +24,8 @@ namespace Service.Service
         private readonly IReviewRepository _reviewRepository;
         private readonly ICourseInstructorRepository _courseInstructorRepository;
         private readonly ICourseStudentRepository _courseStudentRepository;
+        private readonly ICriteriaRepository _criteriaRepository;
+        private readonly IReviewAssignmentRepository _reviewAssignmentRepository;
 
         public AssignmentService(
             IAssignmentRepository assignmentRepository,
@@ -30,7 +34,9 @@ namespace Service.Service
             ISubmissionRepository submissionRepository,
             IReviewRepository reviewRepository,
             ICourseInstructorRepository courseInstructorRepository,
-            ICourseStudentRepository courseStudentRepository)
+            ICourseStudentRepository courseStudentRepository,
+            ICriteriaRepository criteriaRepository,
+            IReviewAssignmentRepository reviewAssignmentRepository)
         {
             _assignmentRepository = assignmentRepository;
             _courseInstanceRepository = courseInstanceRepository;
@@ -39,6 +45,8 @@ namespace Service.Service
             _reviewRepository = reviewRepository;
             _courseInstructorRepository = courseInstructorRepository;
             _courseStudentRepository = courseStudentRepository;
+            _criteriaRepository = criteriaRepository;
+            _reviewAssignmentRepository = reviewAssignmentRepository;
         }
 
         public async Task<BaseResponse<AssignmentResponse>> CreateAssignmentAsync(CreateAssignmentRequest request)
@@ -551,6 +559,123 @@ namespace Service.Service
             {
                 return new BaseResponse<AssignmentStatsResponse>(
                     $"Error retrieving assignment statistics: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
+            }
+        }
+        public async Task<BaseResponse<RubricResponse>> GetAssignmentRubricForReviewAsync(int assignmentId)
+        {
+            try
+            {
+                var assignment = await _assignmentRepository.GetByIdAsync(assignmentId);
+                if (assignment == null)
+                {
+                    return new BaseResponse<RubricResponse>(
+                        "Assignment not found",
+                        StatusCodeEnum.NotFound_404,
+                        null);
+                }
+
+                if (!assignment.RubricId.HasValue)
+                {
+                    return new BaseResponse<RubricResponse>(
+                        "Assignment does not have a rubric",
+                        StatusCodeEnum.NotFound_404,
+                        null);
+                }
+
+                var rubric = await _rubricRepository.GetByIdAsync(assignment.RubricId.Value);
+                if (rubric == null)
+                {
+                    return new BaseResponse<RubricResponse>(
+                        "Rubric not found",
+                        StatusCodeEnum.NotFound_404,
+                        null);
+                }
+
+                // Lấy criteria của rubric
+                var criteria = await _criteriaRepository.GetByRubricIdAsync(rubric.RubricId);
+                var criteriaResponses = criteria.Select(c => new CriteriaResponse
+                {
+                    CriteriaId = c.CriteriaId,
+                    Title = c.Title,
+                    Description = c.Description,
+                    MaxScore = c.MaxScore,
+                    Weight = c.Weight
+                }).ToList();
+
+                var response = new RubricResponse
+                {
+                    RubricId = rubric.RubricId,
+                    Title = rubric.Title,
+                    Description = rubric.Description,
+                    Criteria = criteriaResponses
+                };
+
+                return new BaseResponse<RubricResponse>(
+                    "Success",
+                    StatusCodeEnum.OK_200,
+                    response);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<RubricResponse>(
+                    $"Error retrieving assignment rubric: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
+            }
+        }
+        public async Task<BaseResponse<List<AssignmentBasicResponse>>> GetAssignmentsByCourseInstanceBasicAsync(int courseInstanceId, int studentId)
+        {
+            try
+            {
+                var assignments = await _assignmentRepository.GetByCourseInstanceIdAsync(courseInstanceId);
+                var responses = new List<AssignmentBasicResponse>();
+
+                foreach (var assignment in assignments)
+                {
+                    // Đếm số bài review pending và completed
+                    var pendingCount = 0;
+                    var completedCount = 0;
+
+                    // Lấy tất cả submissions của assignment này
+                    var submissions = await _submissionRepository.GetByAssignmentIdAsync(assignment.AssignmentId);
+
+                    // Đếm review assignments của sinh viên hiện tại
+                    foreach (var submission in submissions)
+                    {
+                        var reviewAssignments = await _reviewAssignmentRepository.GetBySubmissionIdAsync(submission.SubmissionId);
+                        var studentReviews = reviewAssignments.Where(ra => ra.ReviewerUserId == studentId);
+
+                        pendingCount += studentReviews.Count(ra => ra.Status != "Completed");
+                        completedCount += studentReviews.Count(ra => ra.Status == "Completed");
+                    }
+
+                    responses.Add(new AssignmentBasicResponse
+                    {
+                        AssignmentId = assignment.AssignmentId,
+                        Title = assignment.Title,
+                        Description = assignment.Description,
+                        Guidelines = assignment.Guidelines,
+                        CreatedAt = assignment.CreatedAt,
+                        StartDate = assignment.StartDate ?? DateTime.MinValue,
+                        Deadline = assignment.Deadline,
+                        ReviewDeadline = assignment.ReviewDeadline ?? DateTime.MinValue,
+                        NumPeerReviewsRequired = assignment.NumPeerReviewsRequired,
+                        PendingReviewsCount = pendingCount,
+                        CompletedReviewsCount = completedCount
+                    });
+                }
+
+                return new BaseResponse<List<AssignmentBasicResponse>>(
+                    "Success",
+                    StatusCodeEnum.OK_200,
+                    responses);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<List<AssignmentBasicResponse>>(
+                    $"Error retrieving assignments: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
                     null);
             }

@@ -1,6 +1,7 @@
 ﻿using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Request.Assignment;
 using Service.RequestAndResponse.Response.Assignment;
+using Service.RequestAndResponse.Response.Rubric;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -21,5 +22,7 @@ namespace Service.IService
         Task<BaseResponse<bool>> ExtendDeadlineAsync(int assignmentId, DateTime newDeadline);
         Task<BaseResponse<bool>> UpdateRubricAsync(int assignmentId, int rubricId);
         Task<BaseResponse<AssignmentStatsResponse>> GetAssignmentStatisticsAsync(int assignmentId);
+        Task<BaseResponse<RubricResponse>> GetAssignmentRubricForReviewAsync(int assignmentId);
+        Task<BaseResponse<List<AssignmentBasicResponse>>> GetAssignmentsByCourseInstanceBasicAsync(int courseInstanceId, int studentId);
     }
 }
