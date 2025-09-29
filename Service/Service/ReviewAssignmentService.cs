@@ -387,7 +387,7 @@ namespace Service.Service
             {
                 var reviewAssignments = await _reviewAssignmentRepository.GetByReviewerIdAsync(reviewerId);
                 var pendingAssignments = reviewAssignments
-                    .Where(ra => ra.Status == "Assigned" || ra.Status == "In Progress")
+                    .Where(ra => ra.Status == "Pending" || ra.Status == "Assigned" || ra.Status == "In Progress")
                     .ToList();
 
                 var responses = new List<ReviewAssignmentResponse>();

@@ -56,6 +56,11 @@ namespace Service
             services.AddScoped<IAISummaryService, AISummaryService>();
             services.AddScoped<ISubmissionService, SubmissionService>();
             services.AddScoped<IRegradeRequestService, RegradeRequestService>();
+            services.AddScoped<IReviewAssignmentService, ReviewAssignmentService>();
+            services.AddScoped<ICourseInstanceService, CourseInstanceService>();
+            services.AddScoped<ICourseInstructorService,CourseInstructorService>();
+            services.AddScoped<ICourseStudentService, CourseStudentService>();
+
 
             // Add UserService and other dependencies if needed
             services.AddScoped<IUserService, UserService>();
