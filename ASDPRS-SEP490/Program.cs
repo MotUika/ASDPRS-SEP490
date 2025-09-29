@@ -1,6 +1,7 @@
 ﻿using BussinessObject.Models;
 using DataAccessLayer;
 using DataAccessLayer.BaseDAO;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -12,6 +13,8 @@ using Repository.IBaseRepository;
 using Service;
 using Service.IService;
 using Service.Service;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -55,41 +58,46 @@ builder.Services.AddDbContext<ASDPRSContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DbConnection"),
         sqlOptions => sqlOptions.MigrationsAssembly("DataAccessLayer")));
 
-// Configure JWT Authentication
-builder.Services.AddAuthentication(options =>
-{
-    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-}).AddJwtBearer(options =>
-{
-    options.TokenValidationParameters = new TokenValidationParameters
-    {
-        ValidateIssuer = true,
-        ValidIssuer = builder.Configuration["JWT:Issuer"],
-        ValidateAudience = true,
-        ValidAudience = builder.Configuration["JWT:Audience"],
-        ValidateIssuerSigningKey = true,
-        IssuerSigningKey = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes(builder.Configuration["JWT:SigningKey"])
-        ),
-        ValidateLifetime = true
-    };
-})
-.AddGoogle(options =>
-{
-    options.ClientId = builder.Configuration["Authentication:Google:ClientId"];
-    options.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"];
-});
+// Keep claim mapping cleared (recommended)
+JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
 
 // Add Identity
 builder.Services.AddIdentity<User, IdentityRole<int>>(options =>
 {
     options.Password.RequireDigit = true;
     options.Password.RequiredLength = 6;
+    options.SignIn.RequireConfirmedAccount = false;
 })
-.AddEntityFrameworkStores<ASDPRSContext>()
-.AddDefaultTokenProviders();
+    .AddEntityFrameworkStores<ASDPRSContext>()
+    .AddDefaultTokenProviders();
 
+// Configure cookie redirects (API -> trả 401/403, không redirect)
+builder.Services.ConfigureApplicationCookie(options =>
+{
+    options.Events.OnRedirectToLogin = ctx =>
+    {
+        if (ctx.Request.Path.StartsWithSegments("/api") || ctx.Request.Path.StartsWithSegments("/swagger"))
+        {
+            ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return Task.CompletedTask;
+        }
+        ctx.Response.Redirect(ctx.RedirectUri);
+        return Task.CompletedTask;
+    };
+
+    options.Events.OnRedirectToAccessDenied = ctx =>
+    {
+        if (ctx.Request.Path.StartsWithSegments("/api") || ctx.Request.Path.StartsWithSegments("/swagger"))
+        {
+            ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
+            return Task.CompletedTask;
+        }
+        ctx.Response.Redirect(ctx.RedirectUri);
+        return Task.CompletedTask;
+    };
+});
+
+// Register DAO/Repository
 builder.Services.AddScoped(typeof(BaseDAO<>), typeof(EfBaseDAO<>));
 builder.Services.AddScoped(typeof(IBaseRepository<>), typeof(BaseRepository<>));
 
@@ -99,7 +107,7 @@ builder.Services.AddControllers().AddNewtonsoftJson(options =>
     options.SerializerSettings.ReferenceLoopHandling = Newtonsoft.Json.ReferenceLoopHandling.Ignore;
 });
 
-// Đăng ký Repository + Service
+// Register Repository + Service
 builder.Services.ConfigureRepositoryService(builder.Configuration);
 builder.Services.ConfigureServiceService(builder.Configuration);
 builder.Services.AddScoped(typeof(IBaseRepository<>), typeof(BaseRepository<>));
@@ -112,6 +120,43 @@ builder.Services.AddCors(options =>
         builder.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
     });
 });
+
+// Authentication & Authorization (JwtBearer + Cookie + Google)
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.RequireHttpsMetadata = false; // dev only
+    options.SaveToken = true;
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidIssuer = builder.Configuration["JWT:Issuer"],
+        ValidateAudience = true,
+        ValidAudience = builder.Configuration["JWT:Audience"],
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["JWT:SigningKey"])),
+        ValidateLifetime = true,
+        ClockSkew = TimeSpan.Zero,
+        // use standard claim types so [Authorize(Roles = "...")] works
+        RoleClaimType = ClaimTypes.Role,
+        NameClaimType = ClaimTypes.Name
+    };
+})
+.AddCookie(CookieAuthenticationDefaults.AuthenticationScheme)
+.AddGoogle(googleOptions =>
+{
+    googleOptions.ClientId = builder.Configuration["Authentication:Google:ClientId"];
+    googleOptions.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"];
+    // Use cookies for the external sign-in flow
+    googleOptions.SignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+});
+
+builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
@@ -132,37 +177,10 @@ else
 }
 
 app.UseCors("AllowAll");
-app.Use(async (context, next) =>
-{
-    // giữ original stream
-    var originalBodyStream = context.Response.Body;
 
-    try
-    {
-        using var memStream = new MemoryStream();
-        context.Response.Body = memStream;
-
-        await next(); // chạy tiếp pipeline
-
-        memStream.Seek(0, SeekOrigin.Begin);
-        var responseBody = await new StreamReader(memStream).ReadToEndAsync();
-
-        // Log ra console / file
-        Console.WriteLine("===== RESPONSE BODY (final) =====");
-        Console.WriteLine(responseBody);
-        Console.WriteLine("=================================");
-
-        // copy lại vào original stream
-        memStream.Seek(0, SeekOrigin.Begin);
-        await memStream.CopyToAsync(originalBodyStream);
-    }
-    finally
-    {
-        context.Response.Body = originalBodyStream;
-    }
-});
 app.UseAuthentication();
 app.UseAuthorization();
+
 app.MapControllers();
 
 // Default route

@@ -31,6 +31,14 @@ namespace Repository.BaseRepository
 
         public async Task<TokenModel> CreateToken(User user)
         {
+            // ở constructor hoặc trước khi tạo token
+            var keyFromRepo = _config["JWT:SigningKey"] ?? "<null>";
+            using (var sha = System.Security.Cryptography.SHA256.Create())
+            {
+                var hash = Convert.ToBase64String(sha.ComputeHash(Encoding.UTF8.GetBytes(keyFromRepo)));
+                Console.WriteLine($"[DEBUG] (TokenRepository) SigningKey SHA256: {hash} (len={keyFromRepo.Length})");
+            }
+
             var userRoles = await _dbContext.UserRoles
                 .Where(ur => ur.UserId == user.Id)
                 .Join(_dbContext.Roles,
@@ -39,21 +47,28 @@ namespace Repository.BaseRepository
                     (ur, r) => r.Name)
                 .ToListAsync();
 
+            var jti = Guid.NewGuid().ToString();
+
             var claims = new List<Claim>
     {
+        new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+        new Claim(JwtRegisteredClaimNames.UniqueName, user.UserName ?? string.Empty),
         new Claim(JwtRegisteredClaimNames.Email, user.Email ?? string.Empty),
-        new Claim(JwtRegisteredClaimNames.Sub, user.Email ?? string.Empty),
-        new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-        new Claim(JwtRegisteredClaimNames.GivenName, (user.FirstName + " " + user.LastName).Trim()),
+        new Claim(JwtRegisteredClaimNames.GivenName, user.FirstName ?? string.Empty),
+        new Claim(JwtRegisteredClaimNames.FamilyName, user.LastName ?? string.Empty),
+        new Claim(JwtRegisteredClaimNames.Jti, jti),
+        
         new Claim("userId", user.Id.ToString()),
-        new Claim("studentCode", user.StudentCode ?? string.Empty)
+        new Claim("studentCode", user.StudentCode ?? string.Empty),
+        new Claim("fullName", $"{user.FirstName} {user.LastName}")
     };
 
-            // Add role claims
             foreach (var role in userRoles)
             {
+                claims.Add(new Claim("role", role));
                 claims.Add(new Claim(ClaimTypes.Role, role));
             }
+
 
             var creds = new SigningCredentials(_key, SecurityAlgorithms.HmacSha512Signature);
 
@@ -72,11 +87,11 @@ namespace Repository.BaseRepository
             var accessToken = tokenHandler.WriteToken(token);
             var refreshToken = GenerateRefreshToken();
 
-            // Save refresh token to database
+            // Save refresh token
             var refreshTokenEntity = new RefreshToken
             {
                 Id = Guid.NewGuid(),
-                JwtId = token.Id,
+                JwtId = jti,
                 UserId = user.Id,
                 Token = refreshToken,
                 IsUsed = false,
@@ -94,8 +109,6 @@ namespace Repository.BaseRepository
                 RefreshToken = refreshToken
             };
         }
-
-
         private static string GenerateRefreshToken()
         {
             var randomNumber = new byte[32];
@@ -117,74 +130,58 @@ namespace Repository.BaseRepository
                 ValidAudience = _config["JWT:Audience"],
                 ValidateIssuerSigningKey = true,
                 IssuerSigningKey = _key,
-                ValidateLifetime = false
+                ValidateLifetime = false,
+                RoleClaimType = ClaimTypes.Role,
+                NameClaimType = ClaimTypes.NameIdentifier 
             };
 
             try
             {
-                // Check if AccessToken is valid
                 var tokenInVerification = tokenHandler.ValidateToken(model.AccessToken, tokenValidateParam, out var validatedToken);
 
                 if (validatedToken is not JwtSecurityToken jwtSecurityToken)
                 {
-                    return new ApiResponse
-                    {
-                        Success = false,
-                        Message = "Invalid token format"
-                    };
+                    return new ApiResponse { Success = false, Message = "Invalid token format" };
                 }
 
-                // Check if access token has expired
-                var utcExpireDate = long.Parse(tokenInVerification.Claims.FirstOrDefault(x => x.Type == JwtRegisteredClaimNames.Exp).Value);
+                
+                var jti = tokenInVerification.Claims.FirstOrDefault(x => x.Type == JwtRegisteredClaimNames.Jti)?.Value;
+                if (string.IsNullOrEmpty(jti))
+                {
+                    return new ApiResponse { Success = false, Message = "JwtId (JTI) not found in token" };
+                }
+
+                
+                var utcExpireDate = long.Parse(tokenInVerification.Claims.FirstOrDefault(x => x.Type == JwtRegisteredClaimNames.Exp)?.Value ?? "0");
                 var expireDate = ConvertUnixTimeToDateTime(utcExpireDate);
+
                 if (expireDate > DateTime.UtcNow)
                 {
-                    return new ApiResponse
-                    {
-                        Success = false,
-                        Message = "Access token has not yet expired"
-                    };
+                    return new ApiResponse { Success = false, Message = "Access token has not yet expired" };
                 }
 
-                // Check if refresh token exists in DB
+                
                 var storedToken = await _dbContext.RefreshTokens.FirstOrDefaultAsync(x => x.Token == model.RefreshToken);
                 if (storedToken == null)
                 {
-                    return new ApiResponse
-                    {
-                        Success = false,
-                        Message = "Refresh token does not exist"
-                    };
+                    return new ApiResponse { Success = false, Message = "Refresh token does not exist" };
                 }
 
-                // Check if refresh token is used/revoked
+                
                 if (storedToken.IsUsed)
                 {
-                    return new ApiResponse
-                    {
-                        Success = false,
-                        Message = "Refresh token has been used"
-                    };
+                    return new ApiResponse { Success = false, Message = "Refresh token has been used" };
                 }
 
                 if (storedToken.IsRevoked)
                 {
-                    return new ApiResponse
-                    {
-                        Success = false,
-                        Message = "Refresh token has been revoked"
-                    };
+                    return new ApiResponse { Success = false, Message = "Refresh token has been revoked" };
                 }
 
-                // Check if AccessToken id matches JwtId in RefreshToken
-                var jti = tokenInVerification.Claims.FirstOrDefault(x => x.Type == JwtRegisteredClaimNames.Jti).Value;
+                
                 if (storedToken.JwtId != jti)
                 {
-                    return new ApiResponse
-                    {
-                        Success = false,
-                        Message = "Token doesn't match"
-                    };
+                    return new ApiResponse { Success = false, Message = "Token doesn't match" };
                 }
 
                 // Update token as used
