@@ -47,7 +47,8 @@ public class StudentReviewController : ControllerBase
     [HttpGet("review-assignment/{reviewAssignmentId}/details")]
     public async Task<IActionResult> GetReviewAssignmentDetails(int reviewAssignmentId)
     {
-        var result = await _reviewAssignmentService.GetReviewAssignmentDetailsAsync(reviewAssignmentId);
+        var studentId = GetCurrentStudentId();
+        var result = await _reviewAssignmentService.GetReviewAssignmentDetailsAsync(reviewAssignmentId, studentId);
         return StatusCode((int)result.StatusCode, result);
     }
 
@@ -61,7 +62,20 @@ public class StudentReviewController : ControllerBase
     [HttpPost("submit-review")]
     public async Task<IActionResult> SubmitStudentReview([FromBody] SubmitStudentReviewRequest request)
     {
+        var studentId = GetCurrentStudentId();
+        request.ReviewerUserId = studentId;
+
         var result = await _reviewService.SubmitStudentReviewAsync(request);
         return StatusCode((int)result.StatusCode, result);
+    }
+
+    private int GetCurrentStudentId()
+    {
+        var userIdClaim = User.FindFirst("userId");
+        if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int studentId))
+        {
+            throw new UnauthorizedAccessException("Invalid user token");
+        }
+        return studentId;
     }
 }

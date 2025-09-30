@@ -778,7 +778,7 @@ namespace Service.Service
             };
         }
 
-        public async Task<BaseResponse<ReviewAssignmentDetailResponse>> GetReviewAssignmentDetailsAsync(int reviewAssignmentId)
+        public async Task<BaseResponse<ReviewAssignmentDetailResponse>> GetReviewAssignmentDetailsAsync(int reviewAssignmentId, int studentId)
         {
             try
             {
@@ -791,8 +791,33 @@ namespace Service.Service
                         null);
                 }
 
+                // KIỂM TRA QUAN TRỌNG: Sinh viên chỉ được xem review assignment của chính mình
+                if (reviewAssignment.ReviewerUserId != studentId)
+                {
+                    return new BaseResponse<ReviewAssignmentDetailResponse>(
+                        "Access denied: This review assignment does not belong to you",
+                        StatusCodeEnum.Forbidden_403,
+                        null);
+                }
+
+                // Kiểm tra thêm: Sinh viên phải thuộc lớp của assignment này
                 var submission = await _submissionRepository.GetByIdAsync(reviewAssignment.SubmissionId);
-                var assignment = submission != null ? await _assignmentRepository.GetByIdAsync(submission.AssignmentId) : null;
+                if (submission == null)
+                {
+                    return new BaseResponse<ReviewAssignmentDetailResponse>(
+                        "Submission not found",
+                        StatusCodeEnum.NotFound_404,
+                        null);
+                }
+
+                var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
+                if (assignment == null)
+                {
+                    return new BaseResponse<ReviewAssignmentDetailResponse>(
+                        "Assignment not found",
+                        StatusCodeEnum.NotFound_404,
+                        null);
+                }
 
                 // Lấy rubric
                 RubricResponse rubricResponse = null;

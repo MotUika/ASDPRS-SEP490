@@ -21,5 +21,6 @@ namespace Service.IService
         Task<BaseResponse<CourseStudentResponse>> EnrollStudentAsync(int courseInstanceId, int studentUserId, string enrollKey);
         Task<BaseResponse<List<CourseStudentResponse>>> ImportStudentsFromExcelAsync(int courseInstanceId, Stream excelStream, int? changedByUserId);
         Task<BaseResponse<List<CourseInstanceResponse>>> GetStudentCoursesAsync(int studentId);
+
     }
 }

@@ -23,7 +23,7 @@ namespace Service.RequestAndResponse.Request.Review
         public string FeedbackSource { get; set; }
 
 
-        public string generalFeedback { get; set; }
+        public string AdditionalFeedback { get; set; }
 
         public List<CriteriaFeedbackRequest> CriteriaFeedbacks { get; set; } = new List<CriteriaFeedbackRequest>();
     }
