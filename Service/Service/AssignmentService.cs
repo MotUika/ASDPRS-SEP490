@@ -1,4 +1,6 @@
 ﻿using BussinessObject.Models;
+using DataAccessLayer;
+using Microsoft.EntityFrameworkCore;
 using Repository.IRepository;
 using Repository.Repository;
 using Service.IService;
@@ -8,6 +10,7 @@ using Service.RequestAndResponse.Request.Assignment;
 using Service.RequestAndResponse.Response.Assignment;
 using Service.RequestAndResponse.Response.Criteria;
 using Service.RequestAndResponse.Response.Rubric;
+using AutoMapper;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -26,6 +29,7 @@ namespace Service.Service
         private readonly ICourseStudentRepository _courseStudentRepository;
         private readonly ICriteriaRepository _criteriaRepository;
         private readonly IReviewAssignmentRepository _reviewAssignmentRepository;
+        private readonly ASDPRSContext _context;
 
         public AssignmentService(
             IAssignmentRepository assignmentRepository,
@@ -36,7 +40,8 @@ namespace Service.Service
             ICourseInstructorRepository courseInstructorRepository,
             ICourseStudentRepository courseStudentRepository,
             ICriteriaRepository criteriaRepository,
-            IReviewAssignmentRepository reviewAssignmentRepository)
+            IReviewAssignmentRepository reviewAssignmentRepository,
+            ASDPRSContext context)
         {
             _assignmentRepository = assignmentRepository;
             _courseInstanceRepository = courseInstanceRepository;
@@ -47,6 +52,7 @@ namespace Service.Service
             _courseStudentRepository = courseStudentRepository;
             _criteriaRepository = criteriaRepository;
             _reviewAssignmentRepository = reviewAssignmentRepository;
+            _context = context;
         }
 
         public async Task<BaseResponse<AssignmentResponse>> CreateAssignmentAsync(CreateAssignmentRequest request)
@@ -819,6 +825,245 @@ namespace Service.Service
             }
 
             return distribution;
+        }
+        // Helper method để tính toán trạng thái assignment dựa trên timeline
+        private string CalculateAssignmentStatus(Assignment assignment)
+        {
+            var now = DateTime.UtcNow;
+
+            if (assignment.StartDate.HasValue && now < assignment.StartDate.Value)
+                return "Scheduled";
+            if (now <= assignment.Deadline)
+                return "Active";
+            if (assignment.FinalDeadline.HasValue && now <= assignment.FinalDeadline.Value)
+                return "LateSubmission"; // Cho phép nộp muộn với penalty
+            return "Closed";
+        }
+
+        public async Task<BaseResponse<IEnumerable<AssignmentResponse>>> GetActiveAssignmentsByCourseInstanceAsync(int courseInstanceId, int? studentId = null)
+        {
+            try
+            {
+                var assignments = await _context.Assignments
+                    .Where(a => a.CourseInstanceId == courseInstanceId &&
+                               a.Status != "Draft" &&
+                               a.Status != "Archived")
+                    .Include(a => a.CourseInstance)
+                    .Include(a => a.Rubric)
+                    .ToListAsync();
+
+                // Filter assignments based on timeline và trạng thái
+                var now = DateTime.UtcNow;
+                var activeAssignments = assignments
+                    .Where(a =>
+                        (a.StartDate == null || a.StartDate <= now) &&
+                        (a.FinalDeadline == null || now <= a.FinalDeadline)
+                    )
+                    .ToList();
+
+                // Cập nhật trạng thái real-time
+                foreach (var assignment in activeAssignments)
+                {
+                    assignment.Status = CalculateAssignmentStatus(assignment);
+                }
+
+                List<AssignmentResponse> response = new List<AssignmentResponse>();
+                foreach (var assignment in activeAssignments)
+                {
+                    var assignmentResponse = await MapToResponse(assignment);
+                    response.Add(assignmentResponse);
+                }
+                return new BaseResponse<IEnumerable<AssignmentResponse>>(
+                    "Active assignments retrieved successfully",
+                    StatusCodeEnum.OK_200,
+                    response);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<IEnumerable<AssignmentResponse>>(
+                    $"Error retrieving active assignments: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
+            }
+        }
+
+        public async Task<BaseResponse<AssignmentResponse>> CloneAssignmentAsync(int sourceAssignmentId, int targetCourseInstanceId, CloneAssignmentRequest request)
+        {
+            try
+            {
+                var sourceAssignment = await _context.Assignments
+                    .Include(a => a.Rubric)
+                        .ThenInclude(r => r.Criteria)
+                    .FirstOrDefaultAsync(a => a.AssignmentId == sourceAssignmentId);
+
+                if (sourceAssignment == null)
+                {
+                    return new BaseResponse<AssignmentResponse>("Source assignment not found", StatusCodeEnum.NotFound_404, null);
+                }
+
+                var targetCourseInstance = await _courseInstanceRepository.GetByIdAsync(targetCourseInstanceId);
+                if (targetCourseInstance == null)
+                {
+                    return new BaseResponse<AssignmentResponse>("Target course instance not found", StatusCodeEnum.NotFound_404, null);
+                }
+
+                // Clone assignment
+                var clonedAssignment = new Assignment
+                {
+                    CourseInstanceId = targetCourseInstanceId,
+                    Title = request.NewTitle ?? $"{sourceAssignment.Title} (Clone)",
+                    Description = sourceAssignment.Description,
+                    Guidelines = sourceAssignment.Guidelines,
+                    StartDate = request.NewStartDate ?? sourceAssignment.StartDate,
+                    Deadline = request.NewDeadline ?? sourceAssignment.Deadline,
+                    FinalDeadline = request.NewFinalDeadline ?? sourceAssignment.FinalDeadline,
+                    ReviewDeadline = request.NewReviewDeadline ?? sourceAssignment.ReviewDeadline,
+                    NumPeerReviewsRequired = sourceAssignment.NumPeerReviewsRequired,
+                    AllowCrossClass = sourceAssignment.AllowCrossClass,
+                    IsBlindReview = sourceAssignment.IsBlindReview,
+                    InstructorWeight = sourceAssignment.InstructorWeight,
+                    PeerWeight = sourceAssignment.PeerWeight,
+                    IncludeAIScore = sourceAssignment.IncludeAIScore,
+                    Status = "Draft",
+                    ClonedFromAssignmentId = sourceAssignmentId,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                // Clone rubric nếu có
+                if (sourceAssignment.Rubric != null)
+                {
+                    var clonedRubric = new Rubric
+                    {
+                        Title = sourceAssignment.Rubric.Title,
+                        Description = sourceAssignment.Rubric.Description,
+                        TemplateId = sourceAssignment.Rubric.TemplateId,
+                        IsModified = sourceAssignment.Rubric.IsModified
+                    };
+
+                    _context.Rubrics.Add(clonedRubric);
+                    await _context.SaveChangesAsync(); // Save để lấy RubricId
+
+                    // Clone criteria
+                    foreach (var criteria in sourceAssignment.Rubric.Criteria)
+                    {
+                        var clonedCriteria = new Criteria
+                        {
+                            RubricId = clonedRubric.RubricId,
+                            CriteriaTemplateId = criteria.CriteriaTemplateId,
+                            Title = criteria.Title,
+                            Description = criteria.Description,
+                            Weight = criteria.Weight,
+                            MaxScore = criteria.MaxScore,
+                            ScoringType = criteria.ScoringType,
+                            ScoreLabel = criteria.ScoreLabel,
+                            IsModified = criteria.IsModified
+                        };
+                        _context.Criteria.Add(clonedCriteria);
+                    }
+
+                    clonedAssignment.RubricId = clonedRubric.RubricId;
+                }
+
+                _context.Assignments.Add(clonedAssignment);
+                await _context.SaveChangesAsync();
+
+                var response = await MapToResponse(clonedAssignment);
+                return new BaseResponse<AssignmentResponse>(
+                    "Assignment cloned successfully",
+                    StatusCodeEnum.Created_201,
+                    response);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<AssignmentResponse>(
+                    $"Error cloning assignment: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
+            }
+        }
+
+        public async Task<BaseResponse<AssignmentResponse>> UpdateAssignmentTimelineAsync(int assignmentId, UpdateAssignmentTimelineRequest request)
+        {
+            try
+            {
+                var assignment = await _assignmentRepository.GetByIdAsync(assignmentId);
+                if (assignment == null)
+                {
+                    return new BaseResponse<AssignmentResponse>("Assignment not found", StatusCodeEnum.NotFound_404, null);
+                }
+
+                // Validate timeline: StartDate <= Deadline <= FinalDeadline
+                if (request.StartDate.HasValue && request.Deadline.HasValue &&
+                    request.StartDate.Value > request.Deadline.Value)
+                {
+                    return new BaseResponse<AssignmentResponse>("Start date must be before deadline", StatusCodeEnum.BadRequest_400, null);
+                }
+
+                if (request.Deadline.HasValue && request.FinalDeadline.HasValue &&
+                    request.Deadline.Value > request.FinalDeadline.Value)
+                {
+                    return new BaseResponse<AssignmentResponse>("Deadline must be before final deadline", StatusCodeEnum.BadRequest_400, null);
+                }
+
+                // Cập nhật timeline
+                if (request.StartDate.HasValue) assignment.StartDate = request.StartDate.Value;
+                if (request.Deadline.HasValue) assignment.Deadline = request.Deadline.Value;
+                if (request.FinalDeadline.HasValue) assignment.FinalDeadline = request.FinalDeadline.Value;
+                if (request.ReviewDeadline.HasValue) assignment.ReviewDeadline = request.ReviewDeadline.Value;
+
+                // Cập nhật trạng thái
+                assignment.Status = CalculateAssignmentStatus(assignment);
+
+                await _assignmentRepository.UpdateAsync(assignment);
+                var response = await MapToResponse(assignment);
+
+                return new BaseResponse<AssignmentResponse>(
+                    "Assignment timeline updated successfully",
+                    StatusCodeEnum.OK_200,
+                    response);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<AssignmentResponse>(
+                    $"Error updating assignment timeline: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
+            }
+        }
+
+        // Lấy assignment status summary
+        public async Task<BaseResponse<AssignmentStatusSummaryResponse>> GetAssignmentStatusSummaryAsync(int courseInstanceId)
+        {
+            try
+            {
+                var assignments = await _context.Assignments
+                    .Where(a => a.CourseInstanceId == courseInstanceId)
+                    .ToListAsync();
+
+                var now = DateTime.UtcNow;
+                var summary = new AssignmentStatusSummaryResponse
+                {
+                    TotalAssignments = assignments.Count,
+                    DraftCount = assignments.Count(a => a.Status == "Draft"),
+                    ScheduledCount = assignments.Count(a => a.Status == "Scheduled"),
+                    ActiveCount = assignments.Count(a => a.Status == "Active"),
+                    LateSubmissionCount = assignments.Count(a => a.Status == "LateSubmission"),
+                    ClosedCount = assignments.Count(a => a.Status == "Closed"),
+                    ArchivedCount = assignments.Count(a => a.Status == "Archived")
+                };
+
+                return new BaseResponse<AssignmentStatusSummaryResponse>(
+                    "Assignment status summary retrieved successfully",
+                    StatusCodeEnum.OK_200,
+                    summary);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<AssignmentStatusSummaryResponse>(
+                    $"Error retrieving assignment status summary: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
+            }
         }
     }
 }

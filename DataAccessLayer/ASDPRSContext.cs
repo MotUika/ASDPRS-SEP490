@@ -41,10 +41,7 @@ namespace DataAccessLayer
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            base.OnModelCreating(modelBuilder); // Call IdentityDbContext's configuration
-
-            // Remove conflicting User and UserRole configurations
-            // IdentityDbContext already configures AspNetUsers and AspNetUserRoles
+            base.OnModelCreating(modelBuilder);
 
             // Configure non-Identity relationships
             modelBuilder.Entity<Campus>()
@@ -131,19 +128,6 @@ namespace DataAccessLayer
                 .HasForeignKey(rr => rr.ReviewedByInstructorId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // Role and UserRole configurations are handled by IdentityDbContext
-            // Remove these to avoid conflicts:
-            /*
-            modelBuilder.Entity<Role>()
-                .HasMany(r => r.UserRoles)
-                .WithOne(ur => ur.Role)
-                .HasForeignKey(ur => ur.RoleId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            modelBuilder.Entity<UserRole>()
-                .HasKey(ur => ur.UserRoleId);
-            */
-
             // AcademicYear
             modelBuilder.Entity<AcademicYear>()
                 .HasMany(ay => ay.Semesters)
@@ -209,7 +193,7 @@ namespace DataAccessLayer
                 .HasForeignKey(sc => sc.UpdatedByUserId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // Assignment
+            // Assignment - UPDATED WITH NEW FIELDS AND RELATIONSHIPS
             modelBuilder.Entity<Assignment>()
                 .HasOne(a => a.Rubric)
                 .WithOne(r => r.Assignment)
@@ -227,6 +211,29 @@ namespace DataAccessLayer
                 .WithOne(n => n.Assignment)
                 .HasForeignKey(n => n.AssignmentId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // Self-referencing relationship for cloning
+            modelBuilder.Entity<Assignment>()
+                .HasOne(a => a.ClonedFromAssignment)
+                .WithMany(a => a.ClonedAssignments)
+                .HasForeignKey(a => a.ClonedFromAssignmentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Indexes for performance
+            modelBuilder.Entity<Assignment>()
+                .HasIndex(a => a.Status);
+
+            modelBuilder.Entity<Assignment>()
+                .HasIndex(a => a.StartDate);
+
+            modelBuilder.Entity<Assignment>()
+                .HasIndex(a => a.Deadline);
+
+            modelBuilder.Entity<Assignment>()
+                .HasIndex(a => a.FinalDeadline);
+
+            modelBuilder.Entity<Assignment>()
+                .HasIndex(a => new { a.CourseInstanceId, a.Status });
 
             // Rubric
             modelBuilder.Entity<Rubric>()
@@ -351,6 +358,47 @@ namespace DataAccessLayer
                 .WithMany()
                 .HasForeignKey(rt => rt.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+            // Seed Campuses
+            modelBuilder.Entity<Campus>().HasData(
+                new Campus { CampusId = 1, CampusName = "Hồ Chí Minh", Address = "7 Đ. D1, Long Thạnh Mỹ, Thủ Đức, Hồ Chí Minh" },
+                new Campus { CampusId = 2, CampusName = "Hà Nội", Address = "Khu Công Nghệ Cao Hòa Lạc, km 29, Đại lộ, Thăng Long, Hà Nội" }
+            );
+
+            // Seed Roles
+            modelBuilder.Entity<IdentityRole<int>>().HasData(
+                new IdentityRole<int> { Id = 1, Name = "Admin", NormalizedName = "ADMIN" },
+                new IdentityRole<int> { Id = 2, Name = "Student", NormalizedName = "STUDENT" },
+                new IdentityRole<int> { Id = 3, Name = "Instructor", NormalizedName = "INSTRUCTOR" }
+            );
+
+            // Seed Admin User
+            modelBuilder.Entity<User>().HasData(
+                new User
+                {
+                    Id = 1,
+                    CampusId = 1,
+                    FirstName = "Admin",
+                    LastName = "User",
+                    StudentCode = "ADMIN001",
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow,
+                    UserName = "admin",
+                    NormalizedUserName = "ADMIN",
+                    Email = "admin@example.com",
+                    NormalizedEmail = "ADMIN@EXAMPLE.COM",
+                    EmailConfirmed = true,
+                    PasswordHash = "AQAAAAIAAYagAAAAEK95SlxvEPzqxJyTxIof0ufhmHVKdEGcuw7MxCBj92JUehpXlaMI0F4RrX3mzLDNzA==",
+                    SecurityStamp = Guid.NewGuid().ToString(),
+                    ConcurrencyStamp = Guid.NewGuid().ToString(),
+                    LockoutEnabled = true,
+                    AccessFailedCount = 0
+                }
+            );
+
+            // Seed UserRoles
+            modelBuilder.Entity<IdentityUserRole<int>>().HasData(
+                new IdentityUserRole<int> { UserId = 1, RoleId = 1 }
+            );
         }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)

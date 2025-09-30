@@ -103,7 +103,7 @@ namespace Service.Service
             try
             {
                 var courseInstance = _mapper.Map<CourseInstance>(request);
-                courseInstance.EnrollmentPassword = GenerateEnrollKey();  // Tạo key tự động
+                courseInstance.EnrollmentPassword = GenerateEnrollKey();
                 var created = await _courseInstanceRepository.AddAsync(courseInstance);
                 var response = _mapper.Map<CourseInstanceResponse>(created);
                 return new BaseResponse<CourseInstanceResponse>("Lớp tạo thành công với key: " + courseInstance.EnrollmentPassword, StatusCodeEnum.Created_201, response);
@@ -123,7 +123,7 @@ namespace Service.Service
                 {
                     return new BaseResponse<string>("Không tìm thấy lớp", StatusCodeEnum.NotFound_404, null);
                 }
-                courseInstance.EnrollmentPassword = newKey;  // Cập nhật key
+                courseInstance.EnrollmentPassword = newKey;
                 await _courseInstanceRepository.UpdateAsync(courseInstance);
                 return new BaseResponse<string>("Key lớp cập nhật thành công", StatusCodeEnum.OK_200, newKey);
             }
