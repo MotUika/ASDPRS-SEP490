@@ -40,5 +40,10 @@ namespace Repository.Repository
                 .Where(cs => cs.UserId == userId)
                 .ToListAsync();
         }
+        public async Task<CourseStudent> GetByCourseInstanceAndUserAsync(int courseInstanceId, int userId)
+        {
+            return await _context.CourseStudents
+                .FirstOrDefaultAsync(cs => cs.CourseInstanceId == courseInstanceId && cs.UserId == userId);
+        }
     }
 }

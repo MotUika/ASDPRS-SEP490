@@ -1,6 +1,7 @@
 ﻿using BussinessObject.Models;
 using Microsoft.EntityFrameworkCore;
 using Repository.IRepository;
+using Repository.Repository;
 using Service.IService;
 using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Enums;
@@ -24,6 +25,7 @@ namespace Service.Service
         private readonly IUserRepository _userRepository;
         private readonly ISubmissionRepository _submissionRepository;
         private readonly IAssignmentRepository _assignmentRepository;
+        private readonly ICourseStudentRepository _courseStudentRepository;
 
         public ReviewService(
             IReviewRepository reviewRepository,
@@ -32,7 +34,8 @@ namespace Service.Service
             ICriteriaRepository criteriaRepository,
             IUserRepository userRepository,
             ISubmissionRepository submissionRepository,
-            IAssignmentRepository assignmentRepository)
+            IAssignmentRepository assignmentRepository,
+            ICourseStudentRepository courseStudentRepository)
         {
             _reviewRepository = reviewRepository;
             _reviewAssignmentRepository = reviewAssignmentRepository;
@@ -41,6 +44,7 @@ namespace Service.Service
             _userRepository = userRepository;
             _submissionRepository = submissionRepository;
             _assignmentRepository = assignmentRepository;
+            _courseStudentRepository = courseStudentRepository;
         }
 
         public async Task<BaseResponse<ReviewResponse>> CreateReviewAsync(CreateReviewRequest request)
@@ -378,12 +382,40 @@ namespace Service.Service
                         null);
                 }
 
-                // Kiểm tra chưa review
-                var existingReviews = await _reviewRepository.GetByReviewAssignmentIdAsync(request.ReviewAssignmentId);
-                if (existingReviews.Any(r => r.ReviewType == "Peer" && r.FeedbackSource == "Student"))
+                // Kiểm tra thêm: Sinh viên có quyền review bài này không
+                var submission = await _submissionRepository.GetByIdAsync(reviewAssignment.SubmissionId);
+                if (submission == null)
                 {
                     return new BaseResponse<ReviewResponse>(
-                        "You have already reviewed this submission",
+                        "Submission not found",
+                        StatusCodeEnum.NotFound_404,
+                        null);
+                }
+
+                var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
+                if (assignment == null)
+                {
+                    return new BaseResponse<ReviewResponse>(
+                        "Assignment not found",
+                        StatusCodeEnum.NotFound_404,
+                        null);
+                }
+
+                // Kiểm tra sinh viên có trong lớp và có quyền review
+                var courseStudent = await _courseStudentRepository.GetByCourseInstanceAndUserAsync(assignment.CourseInstanceId, request.ReviewerUserId);
+                if (courseStudent == null || (courseStudent.Status != "Enrolled" && !courseStudent.IsPassed))
+                {
+                    return new BaseResponse<ReviewResponse>(
+                        "Access denied: You do not have permission to review this assignment",
+                        StatusCodeEnum.Forbidden_403,
+                        null);
+                }
+
+                // Kiểm tra review assignment chưa hoàn thành
+                if (reviewAssignment.Status == "Completed")
+                {
+                    return new BaseResponse<ReviewResponse>(
+                        "This review assignment has already been completed",
                         StatusCodeEnum.Conflict_409,
                         null);
                 }
