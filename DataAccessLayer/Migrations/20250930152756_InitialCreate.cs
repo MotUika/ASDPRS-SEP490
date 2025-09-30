@@ -3,6 +3,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
+#pragma warning disable CA1814 // Prefer jagged arrays over multidimensional
+
 namespace DataAccessLayer.Migrations
 {
     /// <inheritdoc />
@@ -464,17 +466,26 @@ namespace DataAccessLayer.Migrations
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
                     StartDate = table.Column<DateTime>(type: "datetime2", nullable: true),
                     Deadline = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    FinalDeadline = table.Column<DateTime>(type: "datetime2", nullable: true),
                     ReviewDeadline = table.Column<DateTime>(type: "datetime2", nullable: true),
                     NumPeerReviewsRequired = table.Column<int>(type: "int", nullable: false),
                     AllowCrossClass = table.Column<bool>(type: "bit", nullable: false),
                     IsBlindReview = table.Column<bool>(type: "bit", nullable: false),
                     InstructorWeight = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
                     PeerWeight = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
-                    IncludeAIScore = table.Column<bool>(type: "bit", nullable: false)
+                    IncludeAIScore = table.Column<bool>(type: "bit", nullable: false),
+                    Status = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    ClonedFromAssignmentId = table.Column<int>(type: "int", nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Assignments", x => x.AssignmentId);
+                    table.ForeignKey(
+                        name: "FK_Assignments_Assignments_ClonedFromAssignmentId",
+                        column: x => x.ClonedFromAssignmentId,
+                        principalTable: "Assignments",
+                        principalColumn: "AssignmentId",
+                        onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "FK_Assignments_CourseInstances_CourseInstanceId",
                         column: x => x.CourseInstanceId,
@@ -877,6 +888,35 @@ namespace DataAccessLayer.Migrations
                         onDelete: ReferentialAction.Restrict);
                 });
 
+            migrationBuilder.InsertData(
+                table: "AspNetRoles",
+                columns: new[] { "Id", "ConcurrencyStamp", "Name", "NormalizedName" },
+                values: new object[,]
+                {
+                    { 1, null, "Admin", "ADMIN" },
+                    { 2, null, "Student", "STUDENT" },
+                    { 3, null, "Instructor", "INSTRUCTOR" }
+                });
+
+            migrationBuilder.InsertData(
+                table: "Campuses",
+                columns: new[] { "CampusId", "Address", "CampusName" },
+                values: new object[,]
+                {
+                    { 1, "7 Đ. D1, Long Thạnh Mỹ, Thủ Đức, Hồ Chí Minh", "Hồ Chí Minh" },
+                    { 2, "Khu Công Nghệ Cao Hòa Lạc, km 29, Đại lộ, Thăng Long, Hà Nội", "Hà Nội" }
+                });
+
+            migrationBuilder.InsertData(
+                table: "AspNetUsers",
+                columns: new[] { "Id", "AccessFailedCount", "AvatarUrl", "CampusId", "ConcurrencyStamp", "CreatedAt", "Email", "EmailConfirmed", "FirstName", "IsActive", "LastName", "LockoutEnabled", "LockoutEnd", "NormalizedEmail", "NormalizedUserName", "PasswordHash", "PhoneNumber", "PhoneNumberConfirmed", "SecurityStamp", "StudentCode", "TwoFactorEnabled", "UserName" },
+                values: new object[] { 1, 0, null, 1, "b1325cd5-aefe-44e9-8977-4cf75ad07d63", new DateTime(2025, 9, 30, 15, 27, 56, 415, DateTimeKind.Utc).AddTicks(1333), "admin@example.com", true, "Admin", true, "User", true, null, "ADMIN@EXAMPLE.COM", "ADMIN", "AQAAAAIAAYagAAAAEK95SlxvEPzqxJyTxIof0ufhmHVKdEGcuw7MxCBj92JUehpXlaMI0F4RrX3mzLDNzA==", null, false, "5369f353-da04-42b7-9038-731528a38841", "ADMIN001", false, "admin" });
+
+            migrationBuilder.InsertData(
+                table: "AspNetUserRoles",
+                columns: new[] { "RoleId", "UserId" },
+                values: new object[] { 1, 1 });
+
             migrationBuilder.CreateIndex(
                 name: "IX_AcademicYears_CampusId",
                 table: "AcademicYears",
@@ -932,9 +972,34 @@ namespace DataAccessLayer.Migrations
                 filter: "[NormalizedUserName] IS NOT NULL");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Assignments_CourseInstanceId",
+                name: "IX_Assignments_ClonedFromAssignmentId",
                 table: "Assignments",
-                column: "CourseInstanceId");
+                column: "ClonedFromAssignmentId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Assignments_CourseInstanceId_Status",
+                table: "Assignments",
+                columns: new[] { "CourseInstanceId", "Status" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Assignments_Deadline",
+                table: "Assignments",
+                column: "Deadline");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Assignments_FinalDeadline",
+                table: "Assignments",
+                column: "FinalDeadline");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Assignments_StartDate",
+                table: "Assignments",
+                column: "StartDate");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Assignments_Status",
+                table: "Assignments",
+                column: "Status");
 
             migrationBuilder.CreateIndex(
                 name: "IX_CourseInstances_CampusId",
@@ -1133,37 +1198,6 @@ namespace DataAccessLayer.Migrations
                 name: "IX_UserRole_UserId",
                 table: "UserRole",
                 column: "UserId");
-            // Insert Campus for FK
-            migrationBuilder.InsertData(
-                table: "Campuses",
-                columns: new[] { "CampusId", "CampusName", "Address" },
-                values: new object[,] { 
-                    {1, "Hồ Chí Minh", "7 Đ. D1, Long Thạnh Mỹ, Thủ Đức, Hồ Chí Minh" },
-                    {2, "Hà Nội", "Khu Công Nghệ Cao Hòa Lạc, km 29, Đại lộ, Thăng Long, Hà Nội" }
-                });
-
-            // Insert Roles
-            migrationBuilder.InsertData(
-                table: "AspNetRoles",
-                columns: new[] { "Id", "Name", "NormalizedName", "ConcurrencyStamp" },
-                values: new object[,]
-                {
-                    { 1, "Admin", "ADMIN", null },
-                    { 2, "Student", "STUDENT", null },
-                    { 3, "Instructor", "INSTRUCTOR", null }
-                });
-
-            // Insert Admin User
-            migrationBuilder.InsertData(
-                table: "AspNetUsers",
-                columns: new[] { "Id", "CampusId", "FirstName", "LastName", "StudentCode", "AvatarUrl", "IsActive", "CreatedAt", "UserName", "NormalizedUserName", "Email", "NormalizedEmail", "EmailConfirmed", "PasswordHash", "SecurityStamp", "ConcurrencyStamp", "PhoneNumber", "PhoneNumberConfirmed", "TwoFactorEnabled", "LockoutEnd", "LockoutEnabled", "AccessFailedCount" },
-                values: new object[] { 1, 1, "Admin", "User", "ADMIN001", null, true, DateTime.UtcNow, "admin", "ADMIN", "admin@example.com", "ADMIN@EXAMPLE.COM", true, "AQAAAAIAAYagAAAAEK95SlxvEPzqxJyTxIof0ufhmHVKdEGcuw7MxCBj92JUehpXlaMI0F4RrX3mzLDNzA==", Guid.NewGuid().ToString(), Guid.NewGuid().ToString(), null, false, false, null, true, 0 });
-
-            // Assign Admin Role to User
-            migrationBuilder.InsertData(
-                table: "AspNetUserRoles",
-                columns: new[] { "UserId", "RoleId" },
-                values: new object[] { 1, 1 });
         }
 
         /// <inheritdoc />

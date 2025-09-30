@@ -22,6 +22,93 @@ namespace DataAccessLayer.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("Assignment", b =>
+                {
+                    b.Property<int>("AssignmentId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("AssignmentId"));
+
+                    b.Property<bool>("AllowCrossClass")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("ClonedFromAssignmentId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CourseInstanceId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("Deadline")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("FinalDeadline")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Guidelines")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<bool>("IncludeAIScore")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal>("InstructorWeight")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool>("IsBlindReview")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("NumPeerReviewsRequired")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("PeerWeight")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("ReviewDeadline")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("RubricId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("StartDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("AssignmentId");
+
+                    b.HasIndex("ClonedFromAssignmentId");
+
+                    b.HasIndex("Deadline");
+
+                    b.HasIndex("FinalDeadline");
+
+                    b.HasIndex("StartDate");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("CourseInstanceId", "Status");
+
+                    b.ToTable("Assignments");
+                });
+
             modelBuilder.Entity("BussinessObject.Models.AISummary", b =>
                 {
                     b.Property<int>("SummaryId")
@@ -82,72 +169,6 @@ namespace DataAccessLayer.Migrations
                     b.ToTable("AcademicYears");
                 });
 
-            modelBuilder.Entity("BussinessObject.Models.Assignment", b =>
-                {
-                    b.Property<int>("AssignmentId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("AssignmentId"));
-
-                    b.Property<bool>("AllowCrossClass")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("CourseInstanceId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime>("Deadline")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<string>("Guidelines")
-                        .IsRequired()
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<bool>("IncludeAIScore")
-                        .HasColumnType("bit");
-
-                    b.Property<decimal>("InstructorWeight")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<bool>("IsBlindReview")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("NumPeerReviewsRequired")
-                        .HasColumnType("int");
-
-                    b.Property<decimal>("PeerWeight")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<DateTime?>("ReviewDeadline")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int?>("RubricId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime?>("StartDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.HasKey("AssignmentId");
-
-                    b.HasIndex("CourseInstanceId");
-
-                    b.ToTable("Assignments");
-                });
-
             modelBuilder.Entity("BussinessObject.Models.Campus", b =>
                 {
                     b.Property<int>("CampusId")
@@ -169,6 +190,20 @@ namespace DataAccessLayer.Migrations
                     b.HasKey("CampusId");
 
                     b.ToTable("Campuses");
+
+                    b.HasData(
+                        new
+                        {
+                            CampusId = 1,
+                            Address = "7 Đ. D1, Long Thạnh Mỹ, Thủ Đức, Hồ Chí Minh",
+                            CampusName = "Hồ Chí Minh"
+                        },
+                        new
+                        {
+                            CampusId = 2,
+                            Address = "Khu Công Nghệ Cao Hòa Lạc, km 29, Đại lộ, Thăng Long, Hà Nội",
+                            CampusName = "Hà Nội"
+                        });
                 });
 
             modelBuilder.Entity("BussinessObject.Models.Course", b =>
@@ -1050,6 +1085,30 @@ namespace DataAccessLayer.Migrations
                         .HasFilter("[NormalizedUserName] IS NOT NULL");
 
                     b.ToTable("AspNetUsers", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            AccessFailedCount = 0,
+                            CampusId = 1,
+                            ConcurrencyStamp = "b1325cd5-aefe-44e9-8977-4cf75ad07d63",
+                            CreatedAt = new DateTime(2025, 9, 30, 15, 27, 56, 415, DateTimeKind.Utc).AddTicks(1333),
+                            Email = "admin@example.com",
+                            EmailConfirmed = true,
+                            FirstName = "Admin",
+                            IsActive = true,
+                            LastName = "User",
+                            LockoutEnabled = true,
+                            NormalizedEmail = "ADMIN@EXAMPLE.COM",
+                            NormalizedUserName = "ADMIN",
+                            PasswordHash = "AQAAAAIAAYagAAAAEK95SlxvEPzqxJyTxIof0ufhmHVKdEGcuw7MxCBj92JUehpXlaMI0F4RrX3mzLDNzA==",
+                            PhoneNumberConfirmed = false,
+                            SecurityStamp = "5369f353-da04-42b7-9038-731528a38841",
+                            StudentCode = "ADMIN001",
+                            TwoFactorEnabled = false,
+                            UserName = "admin"
+                        });
                 });
 
             modelBuilder.Entity("BussinessObject.Models.UserRole", b =>
@@ -1106,6 +1165,26 @@ namespace DataAccessLayer.Migrations
                         .HasFilter("[NormalizedName] IS NOT NULL");
 
                     b.ToTable("AspNetRoles", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Name = "Admin",
+                            NormalizedName = "ADMIN"
+                        },
+                        new
+                        {
+                            Id = 2,
+                            Name = "Student",
+                            NormalizedName = "STUDENT"
+                        },
+                        new
+                        {
+                            Id = 3,
+                            Name = "Instructor",
+                            NormalizedName = "INSTRUCTOR"
+                        });
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<int>", b =>
@@ -1190,6 +1269,13 @@ namespace DataAccessLayer.Migrations
                     b.HasIndex("RoleId");
 
                     b.ToTable("AspNetUserRoles", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            UserId = 1,
+                            RoleId = 1
+                        });
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserToken<int>", b =>
@@ -1209,6 +1295,24 @@ namespace DataAccessLayer.Migrations
                     b.HasKey("UserId", "LoginProvider", "Name");
 
                     b.ToTable("AspNetUserTokens", (string)null);
+                });
+
+            modelBuilder.Entity("Assignment", b =>
+                {
+                    b.HasOne("Assignment", "ClonedFromAssignment")
+                        .WithMany("ClonedAssignments")
+                        .HasForeignKey("ClonedFromAssignmentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BussinessObject.Models.CourseInstance", "CourseInstance")
+                        .WithMany("Assignments")
+                        .HasForeignKey("CourseInstanceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ClonedFromAssignment");
+
+                    b.Navigation("CourseInstance");
                 });
 
             modelBuilder.Entity("BussinessObject.Models.AISummary", b =>
@@ -1231,17 +1335,6 @@ namespace DataAccessLayer.Migrations
                         .IsRequired();
 
                     b.Navigation("Campus");
-                });
-
-            modelBuilder.Entity("BussinessObject.Models.Assignment", b =>
-                {
-                    b.HasOne("BussinessObject.Models.CourseInstance", "CourseInstance")
-                        .WithMany("Assignments")
-                        .HasForeignKey("CourseInstanceId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("CourseInstance");
                 });
 
             modelBuilder.Entity("BussinessObject.Models.Course", b =>
@@ -1412,7 +1505,7 @@ namespace DataAccessLayer.Migrations
 
             modelBuilder.Entity("BussinessObject.Models.Notification", b =>
                 {
-                    b.HasOne("BussinessObject.Models.Assignment", "Assignment")
+                    b.HasOne("Assignment", "Assignment")
                         .WithMany("Notifications")
                         .HasForeignKey("AssignmentId")
                         .OnDelete(DeleteBehavior.Cascade);
@@ -1521,7 +1614,7 @@ namespace DataAccessLayer.Migrations
 
             modelBuilder.Entity("BussinessObject.Models.Rubric", b =>
                 {
-                    b.HasOne("BussinessObject.Models.Assignment", "Assignment")
+                    b.HasOne("Assignment", "Assignment")
                         .WithOne("Rubric")
                         .HasForeignKey("BussinessObject.Models.Rubric", "AssignmentId")
                         .OnDelete(DeleteBehavior.Cascade);
@@ -1560,7 +1653,7 @@ namespace DataAccessLayer.Migrations
 
             modelBuilder.Entity("BussinessObject.Models.Submission", b =>
                 {
-                    b.HasOne("BussinessObject.Models.Assignment", "Assignment")
+                    b.HasOne("Assignment", "Assignment")
                         .WithMany("Submissions")
                         .HasForeignKey("AssignmentId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -1669,6 +1762,18 @@ namespace DataAccessLayer.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Assignment", b =>
+                {
+                    b.Navigation("ClonedAssignments");
+
+                    b.Navigation("Notifications");
+
+                    b.Navigation("Rubric")
+                        .IsRequired();
+
+                    b.Navigation("Submissions");
+                });
+
             modelBuilder.Entity("BussinessObject.Models.AISummary", b =>
                 {
                     b.Navigation("DocumentEmbeddings");
@@ -1677,16 +1782,6 @@ namespace DataAccessLayer.Migrations
             modelBuilder.Entity("BussinessObject.Models.AcademicYear", b =>
                 {
                     b.Navigation("Semesters");
-                });
-
-            modelBuilder.Entity("BussinessObject.Models.Assignment", b =>
-                {
-                    b.Navigation("Notifications");
-
-                    b.Navigation("Rubric")
-                        .IsRequired();
-
-                    b.Navigation("Submissions");
                 });
 
             modelBuilder.Entity("BussinessObject.Models.Campus", b =>
