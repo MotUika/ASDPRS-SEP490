@@ -2,7 +2,10 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Service.IService;
+using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Request.User;
+using Service.RequestAndResponse.Response.User;
+using Swashbuckle.AspNetCore.Annotations;
 using System.Security.Claims;
 using System.Threading.Tasks;
 
@@ -10,6 +13,8 @@ namespace ASDPRS_SEP490.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Produces("application/json")]
+    [SwaggerTag("Quản lý người dùng hệ thống: CRUD, tìm kiếm, thống kê tài khoản")]
     public class UsersController : ControllerBase
     {
         private readonly IUserService _userService;
@@ -20,7 +25,12 @@ namespace ASDPRS_SEP490.Controllers
         }
 
         [HttpGet("{id}")]
-        /*[Authorize]*/
+        [SwaggerOperation(
+        Summary = "Lấy thông tin người dùng theo ID",
+        Description = "Trả về thông tin chi tiết của người dùng dựa trên ID được cung cấp"
+    )]
+        [SwaggerResponse(200, "Thành công", typeof(BaseResponse<UserResponse>))]
+        [SwaggerResponse(404, "Không tìm thấy người dùng")]
         public async Task<IActionResult> GetUser(int id)
         {
             var result = await _userService.GetUserByIdAsync(id);
@@ -28,7 +38,13 @@ namespace ASDPRS_SEP490.Controllers
         }
 
         [HttpGet]
-        /*[Authorize(Roles = "Admin")]*/
+        [Authorize(Roles = "Admin")]
+        [SwaggerOperation(
+        Summary = "Lấy danh sách tất cả người dùng",
+        Description = "Trả về danh sách toàn bộ người dùng trong hệ thống (chỉ dành cho Admin)"
+    )]
+        [SwaggerResponse(200, "Thành công", typeof(BaseResponse<IEnumerable<UserResponse>>))]
+        [SwaggerResponse(403, "Không có quyền truy cập")]
         public async Task<IActionResult> GetAllUsers()
         {
             var result = await _userService.GetAllUsersAsync();
@@ -37,6 +53,13 @@ namespace ASDPRS_SEP490.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Admin")]
+        [SwaggerOperation(
+        Summary = "Tạo người dùng mới",
+        Description = "Tạo tài khoản người dùng mới với vai trò được chỉ định. Mật khẩu sẽ được gửi qua email nếu không được cung cấp"
+    )]
+        [SwaggerResponse(201, "Tạo thành công", typeof(BaseResponse<UserResponse>))]
+        [SwaggerResponse(400, "Dữ liệu không hợp lệ")]
+        [SwaggerResponse(409, "Email hoặc username đã tồn tại")]
         public async Task<IActionResult> CreateUser([FromBody] CreateUserRequest request)
         {
             var result = await _userService.CreateUserAsync(request);
@@ -45,6 +68,13 @@ namespace ASDPRS_SEP490.Controllers
 
         [HttpPut("{id}")]
         [Authorize]
+        [SwaggerOperation(
+        Summary = "Cập nhật thông tin người dùng",
+        Description = "Cập nhật thông tin cá nhân của người dùng. Người dùng chỉ có thể cập nhật thông tin của chính mình, trừ khi là Admin"
+    )]
+        [SwaggerResponse(200, "Cập nhật thành công", typeof(BaseResponse<UserResponse>))]
+        [SwaggerResponse(400, "Dữ liệu không hợp lệ hoặc ID không khớp")]
+        [SwaggerResponse(404, "Không tìm thấy người dùng")]
         public async Task<IActionResult> UpdateUser(int id, [FromBody] UpdateUserRequest request)
         {
             if (id != request.UserId)
@@ -56,6 +86,12 @@ namespace ASDPRS_SEP490.Controllers
 
         [HttpDelete("{id}")]
         [Authorize(Roles = "Admin")]
+        [SwaggerOperation(
+        Summary = "Xóa người dùng (không khuyến khích xài)",
+        Description = "Xóa vĩnh viễn người dùng khỏi hệ thống (chỉ dành cho Admin)"
+    )]
+        [SwaggerResponse(200, "Xóa thành công", typeof(BaseResponse<bool>))]
+        [SwaggerResponse(404, "Không tìm thấy người dùng")]
         public async Task<IActionResult> DeleteUser(int id)
         {
             var result = await _userService.DeleteUserAsync(id);
@@ -64,6 +100,12 @@ namespace ASDPRS_SEP490.Controllers
 
         [HttpGet("email/{email}")]
         [Authorize]
+        [SwaggerOperation(
+        Summary = "Tìm người dùng theo email",
+        Description = "Tìm kiếm thông tin người dùng dựa trên địa chỉ email"
+    )]
+        [SwaggerResponse(200, "Thành công", typeof(BaseResponse<UserResponse>))]
+        [SwaggerResponse(404, "Không tìm thấy người dùng")]
         public async Task<IActionResult> GetUserByEmail(string email)
         {
             var result = await _userService.GetUserByEmailAsync(email);
@@ -72,6 +114,12 @@ namespace ASDPRS_SEP490.Controllers
 
         [HttpGet("username/{username}")]
         [Authorize]
+        [SwaggerOperation(
+        Summary = "Tìm người dùng theo username",
+        Description = "Tìm kiếm thông tin người dùng dựa trên username"
+    )]
+        [SwaggerResponse(200, "Thành công", typeof(BaseResponse<UserResponse>))]
+        [SwaggerResponse(404, "Không tìm thấy người dùng")]
         public async Task<IActionResult> GetUserByUsername(string username)
         {
             var result = await _userService.GetUserByUsernameAsync(username);
@@ -80,6 +128,11 @@ namespace ASDPRS_SEP490.Controllers
 
         [HttpGet("role/{roleName}")]
         [Authorize(Roles = "Admin")]
+        [SwaggerOperation(
+        Summary = "Lấy danh sách người dùng theo vai trò",
+        Description = "Trả về danh sách tất cả người dùng có vai trò được chỉ định"
+    )]
+        [SwaggerResponse(200, "Thành công", typeof(BaseResponse<IEnumerable<UserResponse>>))]
         public async Task<IActionResult> GetUsersByRole(string roleName)
         {
             var result = await _userService.GetUsersByRoleAsync(roleName);
@@ -88,6 +141,11 @@ namespace ASDPRS_SEP490.Controllers
 
         [HttpGet("campus/{campusId}")]
         [Authorize(Roles = "Admin")]
+        [SwaggerOperation(
+        Summary = "Lấy danh sách người dùng theo campus",
+        Description = "Trả về danh sách người dùng thuộc campus được chỉ định"
+    )]
+        [SwaggerResponse(200, "Thành công", typeof(BaseResponse<IEnumerable<UserResponse>>))]
         public async Task<IActionResult> GetUsersByCampus(int campusId)
         {
             var result = await _userService.GetUsersByCampusAsync(campusId);
@@ -96,6 +154,14 @@ namespace ASDPRS_SEP490.Controllers
 
         [HttpPut("{id}/avatar")]
         [Authorize]
+        [Authorize]
+        [SwaggerOperation(
+        Summary = "Cập nhật avatar người dùng",
+        Description = "Cập nhật URL avatar cho người dùng"
+    )]
+        [SwaggerResponse(200, "Cập nhật thành công", typeof(BaseResponse<string>))]
+        [SwaggerResponse(400, "URL avatar không hợp lệ")]
+        [SwaggerResponse(404, "Không tìm thấy người dùng")]
         public async Task<IActionResult> UpdateAvatar(int id, [FromBody] string avatarUrl)
         {
             var request = new UpdateUserAvatarRequest
@@ -110,6 +176,12 @@ namespace ASDPRS_SEP490.Controllers
 
         [HttpPut("{id}/password")]
         [Authorize]
+        [SwaggerOperation(
+        Summary = "Đổi mật khẩu người dùng",
+        Description = "Đổi mật khẩu cho người dùng (cần xác thực mật khẩu hiện tại)"
+    )]
+        [SwaggerResponse(200, "Đổi mật khẩu thành công", typeof(BaseResponse<bool>))]
+        [SwaggerResponse(400, "Mật khẩu hiện tại không đúng")]
         public async Task<IActionResult> ChangePassword(int id, [FromBody] ChangePasswordRequest request)
         {
             request.UserId = id;
@@ -119,6 +191,12 @@ namespace ASDPRS_SEP490.Controllers
 
         [HttpPut("{id}/deactivate")]
         [Authorize(Roles = "Admin")]
+        [SwaggerOperation(
+        Summary = "Vô hiệu hóa tài khoản người dùng (khuyến khích xài)",
+        Description = "Vô hiệu hóa tài khoản người dùng, ngăn không cho đăng nhập"
+    )]
+        [SwaggerResponse(200, "Vô hiệu hóa thành công", typeof(BaseResponse<bool>))]
+        [SwaggerResponse(404, "Không tìm thấy người dùng")]
         public async Task<IActionResult> DeactivateUser(int id)
         {
             var result = await _userService.DeactivateUserAsync(id);
@@ -127,6 +205,12 @@ namespace ASDPRS_SEP490.Controllers
 
         [HttpPut("{id}/activate")]
         [Authorize(Roles = "Admin")]
+        [SwaggerOperation(
+        Summary = "Kích hoạt tài khoản người dùng (Khuyến khích xài)",
+        Description = "Kích hoạt lại tài khoản người dùng đã bị vô hiệu hóa"
+    )]
+        [SwaggerResponse(200, "Kích hoạt thành công", typeof(BaseResponse<bool>))]
+        [SwaggerResponse(404, "Không tìm thấy người dùng")]
         public async Task<IActionResult> ActivateUser(int id)
         {
             var result = await _userService.ActivateUserAsync(id);
@@ -135,6 +219,10 @@ namespace ASDPRS_SEP490.Controllers
 
         [HttpGet("statistics")]
         [Authorize(Roles = "Admin")]
+        [SwaggerOperation(
+        Summary = "Thống kê tài khoản",
+        Description = "Lấy số liệu thống kê về tổng số tài khoản theo từng vai trò"
+    )]
         public async Task<IActionResult> GetAccountStatistics()
         {
             var result = await _userService.GetTotalAccountsAsync();
@@ -142,11 +230,11 @@ namespace ASDPRS_SEP490.Controllers
         }
 
         [HttpPost("instructor-email")]
-        [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> AddInstructorEmail([FromBody] string email)
+        [SwaggerOperation(
+        Summary = "Thêm instructor bằng email",
+        Description = "Tạo tài khoản instructor mới bằng địa chỉ email (mật khẩu mặc định sẽ được gửi qua email)")]
+        public async Task<IActionResult> AddInstructorEmail([FromBody] string email, string firstName, string LastName, int campus)
         {
-            if (!email.EndsWith("@fpt.edu.vn"))
-                return BadRequest(new { message = "Only @fpt.edu.vn emails are allowed" });
 
             var existingUser = await _userService.GetUserByEmailAsync(email);
             if (existingUser.StatusCode.ToString().StartsWith("2"))
@@ -154,60 +242,18 @@ namespace ASDPRS_SEP490.Controllers
 
             var createRequest = new CreateUserRequest
             {
+                Password = "123456789BCDAaA@",
                 Email = email,
                 Username = email.Split('@')[0],
-                FirstName = "Instructor",
-                LastName = "FPT",
-                CampusId = 1,
+                FirstName = firstName,
+                LastName = LastName,
+                CampusId = campus,
                 IsActive = true,
                 Role = "Instructor"
             };
 
             var result = await _userService.CreateUserAsync(createRequest);
             return StatusCode((int)result.StatusCode, result);
-        }
-        [HttpGet("test-auth")]
-        [Authorize] // Chỉ cần authenticated
-        public IActionResult TestAuth()
-        {
-            var userInfo = new
-            {
-                IsAuthenticated = User.Identity.IsAuthenticated,
-                UserId = User.FindFirst("userId")?.Value,
-                UserName = User.Identity.Name,
-                // ✅ SỬA: Dùng "role" thay vì ClaimTypes.Role
-                Roles = User.Claims.Where(c => c.Type == "role").Select(c => c.Value).ToList(),
-                AllClaims = User.Claims.Select(c => new { c.Type, c.Value }).ToList()
-            };
-
-            return Ok(userInfo);
-        }
-
-        [HttpGet("test-admin")]
-        [Authorize(Roles = "Admin")] // Sẽ tìm claim với type "role" và value "Admin"
-        public IActionResult TestAdmin()
-        {
-            return Ok("Admin access successful!");
-        }
-
-        [HttpGet("test-roles")]
-        public IActionResult TestRoles()
-        {
-            // Kiểm tra tất cả các cách để lấy roles
-            var roleClaims1 = User.Claims.Where(c => c.Type == "role").Select(c => c.Value).ToList();
-            var roleClaims2 = User.Claims.Where(c => c.Type == ClaimTypes.Role).Select(c => c.Value).ToList();
-            var roleClaims3 = User.Claims.Where(c => c.Type.EndsWith("role")).Select(c => c.Value).ToList();
-
-            var isInRoleAdmin = User.IsInRole("Admin");
-
-            return Ok(new
-            {
-                RolesFromRoleClaim = roleClaims1,
-                RolesFromClaimTypesRole = roleClaims2,
-                RolesFromAnyRole = roleClaims3,
-                IsInRoleAdmin = isInRoleAdmin,
-                AllClaims = User.Claims.Select(c => new { Type = c.Type, Value = c.Value })
-            });
         }
     }
 }

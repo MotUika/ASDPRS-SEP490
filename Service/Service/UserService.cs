@@ -373,24 +373,50 @@ namespace Service.Service
             }
         }
 
-        private async Task<bool> SendWelcomeEmail(User user, string password)
+        private async Task<bool> SendWelcomeEmail(User user, string password, string role)
         {
             try
             {
-                var subject = "Welcome to ASDPRS System - Your Account Credentials";
-                var htmlContent = $@"
-            <html>
-            <body>
-                <h2>Welcome to ASDPRS System</h2>
-                <p>Dear {user.FirstName} {user.LastName},</p>
-                <p>Your account has been successfully created by the administrator.</p>
-                <p><strong>Username:</strong> {user.UserName}</p>
-                <p><strong>Password:</strong> {password}</p>
-                <p>Please log in and change your password as soon as possible for security reasons.</p>
-                <br>
-                <p>Best regards,<br>ASDPRS Team</p>
-            </body>
-            </html>";
+                string subject;
+                string htmlContent;
+
+                if (role == "Instructor")
+                {
+                    subject = "Welcome to ASDPRS System - Instructor Account Created";
+                    htmlContent = $@"
+                <html>
+                <body>
+                    <h2>Welcome to ASDPRS System</h2>
+                    <p>Dear {user.FirstName} {user.LastName},</p>
+                    <p>Your instructor account has been successfully created in the ASDPRS system.</p>
+                    <p><strong>You can now login using Google authentication with your email:</strong> {user.Email}</p>
+                    <p>Simply click on the Google login button on the login page and use your Google account associated with this email.</p>
+                    <br>
+                    <p><strong>No password is required for Google login.</strong></p>
+                    <br>
+                    <p>If you have any issues, please contact the system administrator.</p>
+                    <br>
+                    <p>Best regards,<br>ASDPRS Team</p>
+                </body>
+                </html>";
+                }
+                else
+                {
+                    subject = "Welcome to ASDPRS System - Your Account Credentials";
+                    htmlContent = $@"
+                <html>
+                <body>
+                    <h2>Welcome to ASDPRS System</h2>
+                    <p>Dear {user.FirstName} {user.LastName},</p>
+                    <p>Your account has been successfully created by the administrator.</p>
+                    <p><strong>Username:</strong> {user.UserName}</p>
+                    <p><strong>Password:</strong> {password}</p>
+                    <p>Please log in and change your password as soon as possible for security reasons.</p>
+                    <br>
+                    <p>Best regards,<br>ASDPRS Team</p>
+                </body>
+                </html>";
+                }
 
                 return await _emailService.SendEmail(user.Email, subject, htmlContent);
             }
@@ -428,9 +454,18 @@ namespace Service.Service
                 {
                     var existingStudent = await _context.Users.FirstOrDefaultAsync(u => u.StudentCode == request.StudentCode);
                     if (existingStudent != null)
-                    {
-                        return new BaseResponse<UserResponse>("A user with this StudentCode already exists", StatusCodeEnum.Conflict_409, null);
-                    }
+                        if (request.Role == "Instructor")
+                        {
+                            request.StudentCode = $"INS_{DateTime.Now:yyyyMMddHHmmssfff}";
+                        }
+                        else if (request.Role == "Student")
+                        {
+                            return new BaseResponse<UserResponse>("A user with this StudentCode already exists", StatusCodeEnum.Conflict_409, null);
+                        }
+                        else
+                        {
+                            return new BaseResponse<UserResponse>("StudentCode is required for students", StatusCodeEnum.BadRequest_400, null);
+                        }
                 }
 
                 var user = _mapper.Map<User>(request);
@@ -460,8 +495,8 @@ namespace Service.Service
                     return new BaseResponse<UserResponse>($"Error assigning role: {string.Join(", ", roleResult.Errors.Select(e => e.Description))}", StatusCodeEnum.BadRequest_400, null);
                 }
 
-                // Send welcome email
-                await SendWelcomeEmail(user, password);
+                // Send welcome email với role
+                await SendWelcomeEmail(user, password, request.Role);
 
                 var response = _mapper.Map<UserResponse>(user);
                 return new BaseResponse<UserResponse>("User created successfully", StatusCodeEnum.Created_201, response);
