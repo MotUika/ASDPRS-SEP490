@@ -16,7 +16,7 @@ namespace BussinessObject.Models
         public string LastName { get; set; }
 
         [StringLength(50)]
-        public string StudentCode { get; set; }
+        public string? StudentCode { get; set; }
 
         public string? AvatarUrl { get; set; }
 

@@ -1,7 +1,9 @@
 ﻿using BussinessObject.Models;
 using DataAccessLayer;
 using DataAccessLayer.BaseDAO;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -72,7 +74,7 @@ builder.Services.AddIdentity<User, IdentityRole<int>>(options =>
     .AddEntityFrameworkStores<ASDPRSContext>()
     .AddDefaultTokenProviders();
 
-// Configure cookie redirects (API -> trả 401/403, không redirect)
+// Application cookie (Identity)
 builder.Services.ConfigureApplicationCookie(options =>
 {
     options.Events.OnRedirectToLogin = ctx =>
@@ -96,6 +98,16 @@ builder.Services.ConfigureApplicationCookie(options =>
         ctx.Response.Redirect(ctx.RedirectUri);
         return Task.CompletedTask;
     };
+
+    options.Cookie.SameSite = SameSiteMode.None;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always; // TEMP DEBUG
+
+});
+// External cookie used by Identity when handling external logins
+builder.Services.ConfigureExternalCookie(options =>
+{
+    options.Cookie.SameSite = SameSiteMode.None;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always; // TEMP DEBUG
 });
 
 // Register DAO/Repository
@@ -122,16 +134,16 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Authentication & Authorization (JwtBearer + Cookie + Google)
+// Authentication config
 builder.Services.AddAuthentication(options =>
 {
-    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = GoogleDefaults.AuthenticationScheme;
 })
 .AddJwtBearer(options =>
 {
-    options.RequireHttpsMetadata = false; // dev only
+    // giữ nguyên cấu hình JWT của bạn
+    options.RequireHttpsMetadata = false;
     options.SaveToken = true;
     options.TokenValidationParameters = new TokenValidationParameters
     {
@@ -143,20 +155,54 @@ builder.Services.AddAuthentication(options =>
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["JWT:SigningKey"])),
         ValidateLifetime = true,
         ClockSkew = TimeSpan.Zero,
-        // use standard claim types so [Authorize(Roles = "...")] works
         RoleClaimType = ClaimTypes.Role,
         NameClaimType = ClaimTypes.Name
     };
 })
-.AddCookie(CookieAuthenticationDefaults.AuthenticationScheme)
+.AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, options =>
+{
+    options.LoginPath = "/api/account/google-login";
+    options.LogoutPath = "/api/account/logout";
+    options.ExpireTimeSpan = TimeSpan.FromDays(7);
+    options.Cookie.SameSite = SameSiteMode.None;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+})
 .AddGoogle(googleOptions =>
 {
     googleOptions.ClientId = builder.Configuration["Authentication:Google:ClientId"];
     googleOptions.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"];
-    // Use cookies for the external sign-in flow
-    googleOptions.SignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-});
+    googleOptions.CallbackPath = "/signin-google";
 
+    googleOptions.Scope.Add("profile");
+    googleOptions.Scope.Add("email");
+
+    googleOptions.SaveTokens = true;
+
+    // Map extras if needed
+    googleOptions.ClaimActions.MapJsonKey("picture", "picture");
+    googleOptions.ClaimActions.MapJsonKey("email_verified", "email_verified");
+
+    // Use Identity external sign-in scheme so Identity stores external auth in Identity.External
+    googleOptions.SignInScheme = IdentityConstants.ExternalScheme;
+
+    googleOptions.CorrelationCookie.SameSite = SameSiteMode.None;
+    googleOptions.CorrelationCookie.SecurePolicy = CookieSecurePolicy.Always; // TEMP DEBUG
+});
+// Configure CORS - use a named policy for frontend
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        policy.WithOrigins("https://localhost:5173")   // <- FE origin (update if needed)
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
+    });
+});
+builder.Services.AddSwaggerGen(c =>
+{
+    c.EnableAnnotations();
+});
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
@@ -177,8 +223,9 @@ else
     });
 }
 
-app.UseCors("AllowAll");
 
+
+app.UseCors("AllowFrontend");
 app.UseAuthentication();
 app.UseAuthorization();
 
