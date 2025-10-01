@@ -43,6 +43,21 @@ namespace DataAccessLayer.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "Majors",
+                columns: table => new
+                {
+                    MajorId = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    MajorName = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    MajorCode = table.Column<string>(type: "nvarchar(10)", maxLength: 10, nullable: false),
+                    IsActive = table.Column<bool>(type: "bit", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Majors", x => x.MajorId);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Role",
                 columns: table => new
                 {
@@ -108,7 +123,7 @@ namespace DataAccessLayer.Migrations
                     CampusId = table.Column<int>(type: "int", nullable: false),
                     FirstName = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
                     LastName = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
-                    StudentCode = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    StudentCode = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
                     AvatarUrl = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     IsActive = table.Column<bool>(type: "bit", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
@@ -145,9 +160,10 @@ namespace DataAccessLayer.Migrations
                     CurriculumId = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
                     CampusId = table.Column<int>(type: "int", nullable: false),
-                    MajorCode = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
-                    MajorName = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
-                    Description = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
+                    MajorId = table.Column<int>(type: "int", nullable: false),
+                    CurriculumName = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    CurriculumCode = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    TotalCredits = table.Column<int>(type: "int", nullable: false),
                     IsActive = table.Column<bool>(type: "bit", nullable: false)
                 },
                 constraints: table =>
@@ -158,6 +174,12 @@ namespace DataAccessLayer.Migrations
                         column: x => x.CampusId,
                         principalTable: "Campuses",
                         principalColumn: "CampusId",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_Curriculums_Majors_MajorId",
+                        column: x => x.MajorId,
+                        principalTable: "Majors",
+                        principalColumn: "MajorId",
                         onDelete: ReferentialAction.Restrict);
                 });
 
@@ -299,7 +321,6 @@ namespace DataAccessLayer.Migrations
                     TemplateId = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
                     Title = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    Description = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     IsPublic = table.Column<bool>(type: "bit", nullable: false),
                     CreatedByUserId = table.Column<int>(type: "int", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
@@ -374,7 +395,6 @@ namespace DataAccessLayer.Migrations
                     CurriculumId = table.Column<int>(type: "int", nullable: false),
                     CourseCode = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
                     CourseName = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
-                    Description = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
                     Credits = table.Column<int>(type: "int", nullable: false),
                     IsActive = table.Column<bool>(type: "bit", nullable: false)
                 },
@@ -425,7 +445,6 @@ namespace DataAccessLayer.Migrations
                     CampusId = table.Column<int>(type: "int", nullable: false),
                     SectionCode = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
                     EnrollmentPassword = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
-                    MaxStudents = table.Column<int>(type: "int", nullable: false),
                     RequiresApproval = table.Column<bool>(type: "bit", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
                 },
@@ -567,7 +586,6 @@ namespace DataAccessLayer.Migrations
                     TemplateId = table.Column<int>(type: "int", nullable: true),
                     AssignmentId = table.Column<int>(type: "int", nullable: true),
                     Title = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
-                    Description = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
                     IsModified = table.Column<bool>(type: "bit", nullable: false)
                 },
                 constraints: table =>
@@ -908,9 +926,19 @@ namespace DataAccessLayer.Migrations
                 });
 
             migrationBuilder.InsertData(
+                table: "Majors",
+                columns: new[] { "MajorId", "IsActive", "MajorCode", "MajorName" },
+                values: new object[,]
+                {
+                    { 1, true, "SE", "Software Engineering" },
+                    { 2, true, "CS", "Computer Science" },
+                    { 3, true, "IT", "Information Technology" }
+                });
+
+            migrationBuilder.InsertData(
                 table: "AspNetUsers",
                 columns: new[] { "Id", "AccessFailedCount", "AvatarUrl", "CampusId", "ConcurrencyStamp", "CreatedAt", "Email", "EmailConfirmed", "FirstName", "IsActive", "LastName", "LockoutEnabled", "LockoutEnd", "NormalizedEmail", "NormalizedUserName", "PasswordHash", "PhoneNumber", "PhoneNumberConfirmed", "SecurityStamp", "StudentCode", "TwoFactorEnabled", "UserName" },
-                values: new object[] { 1, 0, null, 1, "b1325cd5-aefe-44e9-8977-4cf75ad07d63", new DateTime(2025, 9, 30, 15, 27, 56, 415, DateTimeKind.Utc).AddTicks(1333), "admin@example.com", true, "Admin", true, "User", true, null, "ADMIN@EXAMPLE.COM", "ADMIN", "AQAAAAIAAYagAAAAEK95SlxvEPzqxJyTxIof0ufhmHVKdEGcuw7MxCBj92JUehpXlaMI0F4RrX3mzLDNzA==", null, false, "5369f353-da04-42b7-9038-731528a38841", "ADMIN001", false, "admin" });
+                values: new object[] { 1, 0, null, 1, "ec7fce3e-11d6-45d5-900a-671b26f6a4f4", new DateTime(2025, 10, 1, 10, 32, 24, 122, DateTimeKind.Utc).AddTicks(8414), "admin@example.com", true, "Admin", true, "User", true, null, "ADMIN@EXAMPLE.COM", "ADMIN", "AQAAAAIAAYagAAAAEK95SlxvEPzqxJyTxIof0ufhmHVKdEGcuw7MxCBj92JUehpXlaMI0F4RrX3mzLDNzA==", null, false, "3e33511f-469a-4ceb-bcac-e2900f9d079d", "ADMIN001", false, "admin" });
 
             migrationBuilder.InsertData(
                 table: "AspNetUserRoles",
@@ -1075,6 +1103,11 @@ namespace DataAccessLayer.Migrations
                 name: "IX_Curriculums_CampusId",
                 table: "Curriculums",
                 column: "CampusId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Curriculums_MajorId",
+                table: "Curriculums",
+                column: "MajorId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_DocumentEmbeddings_SourceId",
@@ -1295,6 +1328,9 @@ namespace DataAccessLayer.Migrations
 
             migrationBuilder.DropTable(
                 name: "AcademicYears");
+
+            migrationBuilder.DropTable(
+                name: "Majors");
 
             migrationBuilder.DropTable(
                 name: "Campuses");

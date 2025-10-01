@@ -43,7 +43,7 @@ namespace Service.Service
                 }
                 var response = _mapper.Map<CourseResponse>(course);
                 response.CourseInstanceCount = course.CourseInstances?.Count ?? 0;
-                response.MajorName = course.Curriculum?.MajorName;
+                response.MajorName = course.Curriculum?.Major?.MajorName;
 
                 return new BaseResponse<CourseResponse>("Course retrieved successfully", StatusCodeEnum.OK_200, response);
             }
@@ -66,7 +66,7 @@ namespace Service.Service
                 {
                     var courseResponse = _mapper.Map<CourseResponse>(c);
                     courseResponse.CourseInstanceCount = c.CourseInstances?.Count ?? 0;
-                    courseResponse.MajorName = c.Curriculum?.MajorName;
+                    courseResponse.MajorName = c.Curriculum?.Major?.MajorName;
                     return courseResponse;
                 });
 

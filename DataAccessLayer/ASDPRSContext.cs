@@ -38,6 +38,8 @@ namespace DataAccessLayer
         public DbSet<Notification> Notifications { get; set; }
         public DbSet<DocumentEmbedding> DocumentEmbeddings { get; set; }
         public DbSet<RefreshToken> RefreshTokens { get; set; }
+        public DbSet<Major> Majors { get; set; }
+
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -358,6 +360,31 @@ namespace DataAccessLayer
                 .WithMany()
                 .HasForeignKey(rt => rt.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Major>()
+                .HasMany(m => m.Curriculums)
+                .WithOne(c => c.Major)
+                .HasForeignKey(c => c.MajorId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Curriculum>()
+                .HasOne(c => c.Major)
+                .WithMany(m => m.Curriculums)
+                .HasForeignKey(c => c.MajorId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Curriculum>()
+                .HasOne(c => c.Campus)
+                .WithMany(c => c.Curriculums)
+                .HasForeignKey(c => c.CampusId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Seed Majors
+            modelBuilder.Entity<Major>().HasData(
+                new Major { MajorId = 1, MajorName = "Software Engineering", MajorCode = "SE" },
+                new Major { MajorId = 2, MajorName = "Computer Science", MajorCode = "CS" },
+                new Major { MajorId = 3, MajorName = "Information Technology", MajorCode = "IT" }
+            );
             // Seed Campuses
             modelBuilder.Entity<Campus>().HasData(
                 new Campus { CampusId = 1, CampusName = "Hồ Chí Minh", Address = "7 Đ. D1, Long Thạnh Mỹ, Thủ Đức, Hồ Chí Minh" },

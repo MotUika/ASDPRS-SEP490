@@ -831,7 +831,6 @@ namespace Service.Service
                         {
                             RubricId = rubric.RubricId,
                             Title = rubric.Title,
-                            Description = rubric.Description,
                             Criteria = criteria.Select(c => new CriteriaResponse
                             {
                                 CriteriaId = c.CriteriaId,
