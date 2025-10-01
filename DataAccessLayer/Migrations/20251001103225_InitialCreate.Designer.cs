@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DataAccessLayer.Migrations
 {
     [DbContext(typeof(ASDPRSContext))]
-    [Migration("20250930152756_InitialCreate")]
+    [Migration("20251001103225_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -209,45 +209,6 @@ namespace DataAccessLayer.Migrations
                         });
                 });
 
-            modelBuilder.Entity("BussinessObject.Models.Course", b =>
-                {
-                    b.Property<int>("CourseId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("CourseId"));
-
-                    b.Property<string>("CourseCode")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<string>("CourseName")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<int>("Credits")
-                        .HasColumnType("int");
-
-                    b.Property<int>("CurriculumId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.HasKey("CourseId");
-
-                    b.HasIndex("CurriculumId");
-
-                    b.ToTable("Courses");
-                });
-
             modelBuilder.Entity("BussinessObject.Models.CourseInstance", b =>
                 {
                     b.Property<int>("CourseInstanceId")
@@ -269,9 +230,6 @@ namespace DataAccessLayer.Migrations
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
-
-                    b.Property<int>("MaxStudents")
-                        .HasColumnType("int");
 
                     b.Property<bool>("RequiresApproval")
                         .HasColumnType("bit");
@@ -505,27 +463,30 @@ namespace DataAccessLayer.Migrations
                     b.Property<int>("CampusId")
                         .HasColumnType("int");
 
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("MajorCode")
+                    b.Property<string>("CurriculumCode")
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
-                    b.Property<string>("MajorName")
+                    b.Property<string>("CurriculumName")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("MajorId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TotalCredits")
+                        .HasColumnType("int");
+
                     b.HasKey("CurriculumId");
 
                     b.HasIndex("CampusId");
+
+                    b.HasIndex("MajorId");
 
                     b.ToTable("Curriculums");
                 });
@@ -566,6 +527,55 @@ namespace DataAccessLayer.Migrations
                         .IsUnique();
 
                     b.ToTable("DocumentEmbeddings");
+                });
+
+            modelBuilder.Entity("BussinessObject.Models.Major", b =>
+                {
+                    b.Property<int>("MajorId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("MajorId"));
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("MajorCode")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("MajorName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("MajorId");
+
+                    b.ToTable("Majors");
+
+                    b.HasData(
+                        new
+                        {
+                            MajorId = 1,
+                            IsActive = true,
+                            MajorCode = "SE",
+                            MajorName = "Software Engineering"
+                        },
+                        new
+                        {
+                            MajorId = 2,
+                            IsActive = true,
+                            MajorCode = "CS",
+                            MajorName = "Computer Science"
+                        },
+                        new
+                        {
+                            MajorId = 3,
+                            IsActive = true,
+                            MajorCode = "IT",
+                            MajorName = "Information Technology"
+                        });
                 });
 
             modelBuilder.Entity("BussinessObject.Models.Notification", b =>
@@ -809,76 +819,6 @@ namespace DataAccessLayer.Migrations
                     b.ToTable("Role");
                 });
 
-            modelBuilder.Entity("BussinessObject.Models.Rubric", b =>
-                {
-                    b.Property<int>("RubricId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("RubricId"));
-
-                    b.Property<int?>("AssignmentId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<bool>("IsModified")
-                        .HasColumnType("bit");
-
-                    b.Property<int?>("TemplateId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.HasKey("RubricId");
-
-                    b.HasIndex("AssignmentId")
-                        .IsUnique()
-                        .HasFilter("[AssignmentId] IS NOT NULL");
-
-                    b.HasIndex("TemplateId");
-
-                    b.ToTable("Rubrics");
-                });
-
-            modelBuilder.Entity("BussinessObject.Models.RubricTemplate", b =>
-                {
-                    b.Property<int>("TemplateId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("TemplateId"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("CreatedByUserId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool>("IsPublic")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("TemplateId");
-
-                    b.HasIndex("CreatedByUserId");
-
-                    b.ToTable("RubricTemplates");
-                });
-
             modelBuilder.Entity("BussinessObject.Models.Semester", b =>
                 {
                     b.Property<int>("SemesterId")
@@ -1064,7 +1004,6 @@ namespace DataAccessLayer.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("StudentCode")
-                        .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
@@ -1095,8 +1034,8 @@ namespace DataAccessLayer.Migrations
                             Id = 1,
                             AccessFailedCount = 0,
                             CampusId = 1,
-                            ConcurrencyStamp = "b1325cd5-aefe-44e9-8977-4cf75ad07d63",
-                            CreatedAt = new DateTime(2025, 9, 30, 15, 27, 56, 415, DateTimeKind.Utc).AddTicks(1333),
+                            ConcurrencyStamp = "ec7fce3e-11d6-45d5-900a-671b26f6a4f4",
+                            CreatedAt = new DateTime(2025, 10, 1, 10, 32, 24, 122, DateTimeKind.Utc).AddTicks(8414),
                             Email = "admin@example.com",
                             EmailConfirmed = true,
                             FirstName = "Admin",
@@ -1107,7 +1046,7 @@ namespace DataAccessLayer.Migrations
                             NormalizedUserName = "ADMIN",
                             PasswordHash = "AQAAAAIAAYagAAAAEK95SlxvEPzqxJyTxIof0ufhmHVKdEGcuw7MxCBj92JUehpXlaMI0F4RrX3mzLDNzA==",
                             PhoneNumberConfirmed = false,
-                            SecurityStamp = "5369f353-da04-42b7-9038-731528a38841",
+                            SecurityStamp = "3e33511f-469a-4ceb-bcac-e2900f9d079d",
                             StudentCode = "ADMIN001",
                             TwoFactorEnabled = false,
                             UserName = "admin"
@@ -1138,6 +1077,40 @@ namespace DataAccessLayer.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("UserRole");
+                });
+
+            modelBuilder.Entity("Course", b =>
+                {
+                    b.Property<int>("CourseId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("CourseId"));
+
+                    b.Property<string>("CourseCode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("CourseName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("Credits")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CurriculumId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.HasKey("CourseId");
+
+                    b.HasIndex("CurriculumId");
+
+                    b.ToTable("Courses");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole<int>", b =>
@@ -1300,6 +1273,67 @@ namespace DataAccessLayer.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("Rubric", b =>
+                {
+                    b.Property<int>("RubricId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("RubricId"));
+
+                    b.Property<int?>("AssignmentId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsModified")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("TemplateId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("RubricId");
+
+                    b.HasIndex("AssignmentId")
+                        .IsUnique()
+                        .HasFilter("[AssignmentId] IS NOT NULL");
+
+                    b.HasIndex("TemplateId");
+
+                    b.ToTable("Rubrics");
+                });
+
+            modelBuilder.Entity("RubricTemplate", b =>
+                {
+                    b.Property<int>("TemplateId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("TemplateId"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsPublic")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("TemplateId");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.ToTable("RubricTemplates");
+                });
+
             modelBuilder.Entity("Assignment", b =>
                 {
                     b.HasOne("Assignment", "ClonedFromAssignment")
@@ -1340,17 +1374,6 @@ namespace DataAccessLayer.Migrations
                     b.Navigation("Campus");
                 });
 
-            modelBuilder.Entity("BussinessObject.Models.Course", b =>
-                {
-                    b.HasOne("BussinessObject.Models.Curriculum", "Curriculum")
-                        .WithMany("Courses")
-                        .HasForeignKey("CurriculumId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Curriculum");
-                });
-
             modelBuilder.Entity("BussinessObject.Models.CourseInstance", b =>
                 {
                     b.HasOne("BussinessObject.Models.Campus", "Campus")
@@ -1359,7 +1382,7 @@ namespace DataAccessLayer.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("BussinessObject.Models.Course", "Course")
+                    b.HasOne("Course", "Course")
                         .WithMany("CourseInstances")
                         .HasForeignKey("CourseId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -1430,7 +1453,7 @@ namespace DataAccessLayer.Migrations
                         .HasForeignKey("CriteriaTemplateId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("BussinessObject.Models.Rubric", "Rubric")
+                    b.HasOne("Rubric", "Rubric")
                         .WithMany("Criteria")
                         .HasForeignKey("RubricId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -1462,7 +1485,7 @@ namespace DataAccessLayer.Migrations
 
             modelBuilder.Entity("BussinessObject.Models.CriteriaTemplate", b =>
                 {
-                    b.HasOne("BussinessObject.Models.RubricTemplate", "Template")
+                    b.HasOne("RubricTemplate", "Template")
                         .WithMany("CriteriaTemplates")
                         .HasForeignKey("TemplateId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -1479,7 +1502,15 @@ namespace DataAccessLayer.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("BussinessObject.Models.Major", "Major")
+                        .WithMany("Curriculums")
+                        .HasForeignKey("MajorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("Campus");
+
+                    b.Navigation("Major");
                 });
 
             modelBuilder.Entity("BussinessObject.Models.DocumentEmbedding", b =>
@@ -1615,34 +1646,6 @@ namespace DataAccessLayer.Migrations
                     b.Navigation("Submission");
                 });
 
-            modelBuilder.Entity("BussinessObject.Models.Rubric", b =>
-                {
-                    b.HasOne("Assignment", "Assignment")
-                        .WithOne("Rubric")
-                        .HasForeignKey("BussinessObject.Models.Rubric", "AssignmentId")
-                        .OnDelete(DeleteBehavior.Cascade);
-
-                    b.HasOne("BussinessObject.Models.RubricTemplate", "Template")
-                        .WithMany("Rubrics")
-                        .HasForeignKey("TemplateId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.Navigation("Assignment");
-
-                    b.Navigation("Template");
-                });
-
-            modelBuilder.Entity("BussinessObject.Models.RubricTemplate", b =>
-                {
-                    b.HasOne("BussinessObject.Models.User", "CreatedByUser")
-                        .WithMany("CreatedRubricTemplates")
-                        .HasForeignKey("CreatedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("CreatedByUser");
-                });
-
             modelBuilder.Entity("BussinessObject.Models.Semester", b =>
                 {
                     b.HasOne("BussinessObject.Models.AcademicYear", "AcademicYear")
@@ -1714,6 +1717,17 @@ namespace DataAccessLayer.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("Course", b =>
+                {
+                    b.HasOne("BussinessObject.Models.Curriculum", "Curriculum")
+                        .WithMany("Courses")
+                        .HasForeignKey("CurriculumId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Curriculum");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<int>", b =>
                 {
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole<int>", null)
@@ -1765,6 +1779,34 @@ namespace DataAccessLayer.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Rubric", b =>
+                {
+                    b.HasOne("Assignment", "Assignment")
+                        .WithOne("Rubric")
+                        .HasForeignKey("Rubric", "AssignmentId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("RubricTemplate", "Template")
+                        .WithMany("Rubrics")
+                        .HasForeignKey("TemplateId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Assignment");
+
+                    b.Navigation("Template");
+                });
+
+            modelBuilder.Entity("RubricTemplate", b =>
+                {
+                    b.HasOne("BussinessObject.Models.User", "CreatedByUser")
+                        .WithMany("CreatedRubricTemplates")
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CreatedByUser");
+                });
+
             modelBuilder.Entity("Assignment", b =>
                 {
                     b.Navigation("ClonedAssignments");
@@ -1798,11 +1840,6 @@ namespace DataAccessLayer.Migrations
                     b.Navigation("Users");
                 });
 
-            modelBuilder.Entity("BussinessObject.Models.Course", b =>
-                {
-                    b.Navigation("CourseInstances");
-                });
-
             modelBuilder.Entity("BussinessObject.Models.CourseInstance", b =>
                 {
                     b.Navigation("Assignments");
@@ -1832,6 +1869,11 @@ namespace DataAccessLayer.Migrations
                     b.Navigation("Courses");
                 });
 
+            modelBuilder.Entity("BussinessObject.Models.Major", b =>
+                {
+                    b.Navigation("Curriculums");
+                });
+
             modelBuilder.Entity("BussinessObject.Models.Review", b =>
                 {
                     b.Navigation("CriteriaFeedbacks");
@@ -1849,18 +1891,6 @@ namespace DataAccessLayer.Migrations
             modelBuilder.Entity("BussinessObject.Models.Role", b =>
                 {
                     b.Navigation("UserRoles");
-                });
-
-            modelBuilder.Entity("BussinessObject.Models.Rubric", b =>
-                {
-                    b.Navigation("Criteria");
-                });
-
-            modelBuilder.Entity("BussinessObject.Models.RubricTemplate", b =>
-                {
-                    b.Navigation("CriteriaTemplates");
-
-                    b.Navigation("Rubrics");
                 });
 
             modelBuilder.Entity("BussinessObject.Models.Semester", b =>
@@ -1904,6 +1934,23 @@ namespace DataAccessLayer.Migrations
                     b.Navigation("SystemConfigs");
 
                     b.Navigation("UserRoles");
+                });
+
+            modelBuilder.Entity("Course", b =>
+                {
+                    b.Navigation("CourseInstances");
+                });
+
+            modelBuilder.Entity("Rubric", b =>
+                {
+                    b.Navigation("Criteria");
+                });
+
+            modelBuilder.Entity("RubricTemplate", b =>
+                {
+                    b.Navigation("CriteriaTemplates");
+
+                    b.Navigation("Rubrics");
                 });
 #pragma warning restore 612, 618
         }

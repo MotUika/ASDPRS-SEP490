@@ -1,10 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace BussinessObject.Models
 {
@@ -17,21 +13,26 @@ namespace BussinessObject.Models
         public int CampusId { get; set; }
 
         [Required]
-        [StringLength(20)]
-        public string MajorCode { get; set; }
+        public int MajorId { get; set; }
 
         [Required]
         [StringLength(100)]
-        public string MajorName { get; set; }
+        public string CurriculumName { get; set; }
 
-        [StringLength(500)]
-        public string Description { get; set; }
+        [Required]
+        [StringLength(20)]
+        public string CurriculumCode { get; set; }
+
+        public int TotalCredits { get; set; }
 
         [Required]
         public bool IsActive { get; set; } = true;
 
         [ForeignKey(nameof(CampusId))]
         public virtual Campus Campus { get; set; }
+
+        [ForeignKey(nameof(MajorId))]
+        public virtual Major Major { get; set; }
 
         // Navigation properties
         public virtual ICollection<Course> Courses { get; set; } = new List<Course>();

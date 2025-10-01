@@ -614,7 +614,6 @@ namespace Service.Service
                 {
                     RubricId = rubric.RubricId,
                     Title = rubric.Title,
-                    Description = rubric.Description,
                     Criteria = criteriaResponses
                 };
 
@@ -702,7 +701,6 @@ namespace Service.Service
                     {
                         RubricId = rubric.RubricId,
                         Title = rubric.Title,
-                        Description = rubric.Description
                         // Add other rubric properties as needed
                     };
                 }
@@ -935,7 +933,6 @@ namespace Service.Service
                     var clonedRubric = new Rubric
                     {
                         Title = sourceAssignment.Rubric.Title,
-                        Description = sourceAssignment.Rubric.Description,
                         TemplateId = sourceAssignment.Rubric.TemplateId,
                         IsModified = sourceAssignment.Rubric.IsModified
                     };

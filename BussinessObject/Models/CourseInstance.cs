@@ -2,9 +2,6 @@
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace BussinessObject.Models
 {
@@ -29,8 +26,7 @@ namespace BussinessObject.Models
         [StringLength(50)]
         public string EnrollmentPassword { get; set; }
 
-        public int MaxStudents { get; set; }
-
+        // REMOVED: MaxStudents field
         [Required]
         public bool RequiresApproval { get; set; } = false;
 
