@@ -30,6 +30,7 @@ namespace Service.Service
         private readonly ICriteriaRepository _criteriaRepository;
         private readonly IReviewAssignmentRepository _reviewAssignmentRepository;
         private readonly ASDPRSContext _context;
+        private readonly INotificationService _notificationService;
 
         public AssignmentService(
             IAssignmentRepository assignmentRepository,
@@ -41,7 +42,8 @@ namespace Service.Service
             ICourseStudentRepository courseStudentRepository,
             ICriteriaRepository criteriaRepository,
             IReviewAssignmentRepository reviewAssignmentRepository,
-            ASDPRSContext context)
+            ASDPRSContext context,
+            INotificationService notificationService)
         {
             _assignmentRepository = assignmentRepository;
             _courseInstanceRepository = courseInstanceRepository;
@@ -53,6 +55,7 @@ namespace Service.Service
             _criteriaRepository = criteriaRepository;
             _reviewAssignmentRepository = reviewAssignmentRepository;
             _context = context;
+            _notificationService = notificationService;
         }
 
         public async Task<BaseResponse<AssignmentResponse>> CreateAssignmentAsync(CreateAssignmentRequest request)
@@ -107,11 +110,13 @@ namespace Service.Service
                     IsBlindReview = request.IsBlindReview,
                     InstructorWeight = request.InstructorWeight,
                     PeerWeight = request.PeerWeight,
+                    GradingScale = request.GradingScale,
+                    Weight = request.Weight,
                     IncludeAIScore = request.IncludeAIScore
                 };
 
                 await _assignmentRepository.AddAsync(assignment);
-
+                await _notificationService.SendNewAssignmentNotificationAsync(assignment.AssignmentId, assignment.CourseInstanceId);
                 var response = await MapToResponse(assignment);
                 return new BaseResponse<AssignmentResponse>(
                     "Assignment created successfully",
@@ -200,6 +205,11 @@ namespace Service.Service
                     assignment.InstructorWeight = request.InstructorWeight.Value;
                     assignment.PeerWeight = request.PeerWeight.Value;
                 }
+                if (request.GradingScale != null)
+                    assignment.GradingScale = request.GradingScale;
+
+                if (request.Weight.HasValue)
+                    assignment.Weight = request.Weight.Value;
 
                 if (request.IncludeAIScore.HasValue)
                     assignment.IncludeAIScore = request.IncludeAIScore.Value;

@@ -60,6 +60,7 @@ namespace Service
             services.AddScoped<ICourseInstanceService, CourseInstanceService>();
             services.AddScoped<ICourseInstructorService,CourseInstructorService>();
             services.AddScoped<ICourseStudentService, CourseStudentService>();
+            services.AddScoped<INotificationService, NotificationService>();
 
 
             // Add UserService and other dependencies if needed

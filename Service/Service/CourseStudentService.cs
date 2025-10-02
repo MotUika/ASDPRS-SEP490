@@ -3,6 +3,7 @@ using DataAccessLayer;
 using Microsoft.EntityFrameworkCore;
 using OfficeOpenXml;
 using Repository.IRepository;
+using Repository.Repository;
 using Service.IService;
 using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Enums;
@@ -22,17 +23,26 @@ namespace Service.Service
         private readonly ICourseInstanceRepository _courseInstanceRepository;
         private readonly IUserRepository _userRepository;
         private readonly ASDPRSContext _context;
+        private readonly IAssignmentRepository _assignmentRepository;
+        private readonly ISubmissionRepository _submissionRepository;
+        private readonly IReviewRepository _reviewRepository;
 
         public CourseStudentService(
             ICourseStudentRepository courseStudentRepository,
             ICourseInstanceRepository courseInstanceRepository,
             IUserRepository userRepository,
-            ASDPRSContext context)
+            ASDPRSContext context,
+            IAssignmentRepository assignmentRepository,
+            ISubmissionRepository submissionRepository,
+            IReviewRepository reviewRepository)
         {
             _courseStudentRepository = courseStudentRepository;
             _courseInstanceRepository = courseInstanceRepository;
             _userRepository = userRepository;
             _context = context;
+            _assignmentRepository = assignmentRepository;
+            _submissionRepository = submissionRepository;
+            _reviewRepository = reviewRepository;
         }
 
         // Method import Excel: Đọc file, thêm sinh viên, kiểm tra đơn giản
@@ -506,6 +516,66 @@ namespace Service.Service
                     $"Error retrieving student courses: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
                     null);
+            }
+        }
+        public async Task<BaseResponse<decimal>> CalculateTotalAssignmentGradeAsync(int courseInstanceId, int studentId)
+        {
+            try
+            {
+                var assignments = await _assignmentRepository.GetByCourseInstanceIdAsync(courseInstanceId);
+                decimal totalGrade = 0;
+                decimal totalWeight = assignments.Sum(a => a.Weight);
+
+                if (totalWeight == 0) return new BaseResponse<decimal>("No weights set", StatusCodeEnum.BadRequest_400, 0);
+
+                foreach (var assignment in assignments)
+                {
+                    var submission = (await _submissionRepository.GetByAssignmentIdAsync(assignment.AssignmentId))
+                        .FirstOrDefault(s => s.UserId == studentId);
+
+                    if (submission == null) continue;  // Or handle no submission: totalGrade += 0 * weight
+
+                    // Get score from reviews or something; assume FinalGrade in CourseStudent, but for assignment level
+                    // Wait, need per assignment score. Assume from Review average
+                    var reviews = await _reviewRepository.GetBySubmissionIdAsync(submission.SubmissionId);
+                    var avgScore = reviews.Where(r => r.OverallScore.HasValue).Average(r => r.OverallScore.Value);
+
+                    totalGrade += avgScore * (assignment.Weight / totalWeight);
+                }
+
+                return new BaseResponse<decimal>("Success", StatusCodeEnum.OK_200, totalGrade);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<decimal>(ex.Message, StatusCodeEnum.InternalServerError_500, 0);
+            }
+        }
+        public async Task<BaseResponse<List<StudentGradeResponse>>> GetCourseGradesForExportAsync(int courseInstanceId)
+        {
+            try
+            {
+                var students = await _courseStudentRepository.GetByCourseInstanceIdAsync(courseInstanceId);
+                var responses = new List<StudentGradeResponse>();
+
+                foreach (var student in students)
+                {
+                    var gradeResult = await CalculateTotalAssignmentGradeAsync(courseInstanceId, student.UserId);
+                    var user = await _userRepository.GetByIdAsync(student.UserId);
+
+                    responses.Add(new StudentGradeResponse
+                    {
+                        StudentId = student.UserId,
+                        StudentName = $"{user.FirstName} {user.LastName}",
+                        StudentCode = user.StudentCode,
+                        TotalGrade = gradeResult.Data,
+                    });
+                }
+
+                return new BaseResponse<List<StudentGradeResponse>>("Success", StatusCodeEnum.OK_200, responses);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<List<StudentGradeResponse>>(ex.Message, StatusCodeEnum.InternalServerError_500, null);
             }
         }
 

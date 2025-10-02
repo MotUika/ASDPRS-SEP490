@@ -44,6 +44,8 @@ namespace Service.RequestAndResponse.Request.Assignment
         [Required]
         [Range(0, 100)]
         public decimal PeerWeight { get; set; } = 0;
+        public string GradingScale { get; set; } = "Scale10";
+        public decimal Weight { get; set; } = 0;
 
         [Required]
         public bool IncludeAIScore { get; set; } = false;
