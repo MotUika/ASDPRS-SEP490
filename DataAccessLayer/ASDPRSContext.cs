@@ -214,6 +214,14 @@ namespace DataAccessLayer
                 .HasForeignKey(n => n.AssignmentId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            modelBuilder.Entity<Assignment>()
+                .Property(a => a.GradingScale)
+                .HasMaxLength(50);
+
+            modelBuilder.Entity<Assignment>()
+                .Property(a => a.Weight)
+                .HasPrecision(5, 2);
+
             // Self-referencing relationship for cloning
             modelBuilder.Entity<Assignment>()
                 .HasOne(a => a.ClonedFromAssignment)

@@ -46,6 +46,12 @@ public class Assignment
     public decimal InstructorWeight { get; set; } = 0;
 
     [Required]
+    public string GradingScale { get; set; } = "Scale10";  // "PassFail" or "Scale10"
+
+    [Required]
+    public decimal Weight { get; set; } = 0;  // Percentage weight in course (0-100)
+
+    [Required]
     public decimal PeerWeight { get; set; } = 0;
 
     [Required]

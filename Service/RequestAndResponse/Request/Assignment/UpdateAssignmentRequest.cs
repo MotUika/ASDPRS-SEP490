@@ -37,7 +37,8 @@ namespace Service.RequestAndResponse.Request.Assignment
 
         [Range(0, 100)]
         public decimal? PeerWeight { get; set; }
-
+        public string? GradingScale { get; set; }
+        public decimal? Weight { get; set; }
         public bool? IncludeAIScore { get; set; }
     }
 }
