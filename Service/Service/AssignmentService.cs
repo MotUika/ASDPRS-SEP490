@@ -931,6 +931,8 @@ namespace Service.Service
                     IsBlindReview = sourceAssignment.IsBlindReview,
                     InstructorWeight = sourceAssignment.InstructorWeight,
                     PeerWeight = sourceAssignment.PeerWeight,
+                    GradingScale = sourceAssignment.GradingScale,
+                    Weight = sourceAssignment.Weight,
                     IncludeAIScore = sourceAssignment.IncludeAIScore,
                     Status = "Draft",
                     ClonedFromAssignmentId = sourceAssignmentId,
