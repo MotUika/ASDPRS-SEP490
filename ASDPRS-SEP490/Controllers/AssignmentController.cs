@@ -1,7 +1,10 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Service.IService;
-using Service.RequestAndResponse.Request.Assignment;
+using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Enums;
+using Service.RequestAndResponse.Request.Assignment;
+using Service.RequestAndResponse.Response.Assignment;
+using Swashbuckle.AspNetCore.Annotations;
 using System;
 using System.Threading.Tasks;
 
@@ -9,6 +12,8 @@ namespace ASDPRS_SEP490.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Produces("application/json")]
+    [SwaggerTag("Quản lý bài tập: CRUD, thống kê, gia hạn deadline, quản lý rubric")]
     public class AssignmentController : ControllerBase
     {
         private readonly IAssignmentService _assignmentService;
@@ -20,6 +25,13 @@ namespace ASDPRS_SEP490.Controllers
 
         // Lấy assignment theo Id
         [HttpGet("{id}")]
+        [SwaggerOperation(
+            Summary = "Lấy thông tin bài tập theo ID",
+            Description = "Trả về thông tin chi tiết của bài tập dựa trên ID"
+        )]
+        [SwaggerResponse(200, "Thành công", typeof(BaseResponse<AssignmentResponse>))]
+        [SwaggerResponse(404, "Không tìm thấy bài tập")]
+        [SwaggerResponse(500, "Lỗi server")]
         public async Task<IActionResult> GetAssignmentById(int id)
         {
             var result = await _assignmentService.GetAssignmentByIdAsync(id);
@@ -33,6 +45,13 @@ namespace ASDPRS_SEP490.Controllers
 
         // Lấy assignment kèm rubric/details
         [HttpGet("{id}/details")]
+        [SwaggerOperation(
+            Summary = "Lấy thông tin bài tập chi tiết kèm rubric",
+            Description = "Trả về thông tin đầy đủ của bài tập bao gồm rubric và các chi tiết đánh giá"
+        )]
+        [SwaggerResponse(200, "Thành công", typeof(BaseResponse<AssignmentResponse>))]
+        [SwaggerResponse(404, "Không tìm thấy bài tập")]
+        [SwaggerResponse(500, "Lỗi server")]
         public async Task<IActionResult> GetAssignmentWithDetails(int id)
         {
             var result = await _assignmentService.GetAssignmentWithDetailsAsync(id);
@@ -46,6 +65,12 @@ namespace ASDPRS_SEP490.Controllers
 
         // Lấy assignment theo lớp học phần
         [HttpGet("course-instance/{courseInstanceId}")]
+        [SwaggerOperation(
+            Summary = "Lấy danh sách bài tập theo lớp học",
+            Description = "Trả về tất cả bài tập thuộc một lớp học cụ thể"
+        )]
+        [SwaggerResponse(200, "Thành công", typeof(BaseResponse<List<AssignmentResponse>>))]
+        [SwaggerResponse(500, "Lỗi server")]
         public async Task<IActionResult> GetAssignmentsByCourseInstance(int courseInstanceId)
         {
             var result = await _assignmentService.GetAssignmentsByCourseInstanceAsync(courseInstanceId);
@@ -58,6 +83,12 @@ namespace ASDPRS_SEP490.Controllers
 
         // Lấy assignment theo instructor
         [HttpGet("instructor/{instructorId}")]
+        [SwaggerOperation(
+            Summary = "Lấy danh sách bài tập theo giảng viên",
+            Description = "Trả về tất cả bài tập được tạo bởi một giảng viên cụ thể"
+        )]
+        [SwaggerResponse(200, "Thành công", typeof(BaseResponse<List<AssignmentSummaryResponse>>))]
+        [SwaggerResponse(500, "Lỗi server")]
         public async Task<IActionResult> GetAssignmentsByInstructor(int instructorId)
         {
             var result = await _assignmentService.GetAssignmentsByInstructorAsync(instructorId);
@@ -70,6 +101,12 @@ namespace ASDPRS_SEP490.Controllers
 
         // Lấy assignment theo student
         [HttpGet("student/{studentId}")]
+        [SwaggerOperation(
+            Summary = "Lấy danh sách bài tập theo sinh viên",
+            Description = "Trả về tất cả bài tập mà sinh viên cần thực hiện (dựa trên các lớp đã đăng ký)"
+        )]
+        [SwaggerResponse(200, "Thành công", typeof(BaseResponse<List<AssignmentSummaryResponse>>))]
+        [SwaggerResponse(500, "Lỗi server")]
         public async Task<IActionResult> GetAssignmentsByStudent(int studentId)
         {
             var result = await _assignmentService.GetAssignmentsByStudentAsync(studentId);
