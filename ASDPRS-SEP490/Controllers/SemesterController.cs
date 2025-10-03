@@ -85,7 +85,7 @@ namespace ASDPRS_SEP490.Controllers
             };
         }
 
-        // Xóa semester
+        // Xóa semester (theo id)
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteSemester(int id)
         {
