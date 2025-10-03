@@ -1,5 +1,4 @@
-﻿```csharp
-using BussinessObject.Models;
+﻿using BussinessObject.Models;
 using DataAccessLayer;
 using Microsoft.EntityFrameworkCore;
 using Repository.IRepository;
@@ -115,7 +114,6 @@ namespace Service.Service
                 else if (!string.IsNullOrEmpty(request.Content))
                     documentEmbedding.ContentVector = GeneratePlaceholderVector(request.Content);
 
-                documentEmbedding.UpdatedAt = DateTime.UtcNow;
 
                 await _documentEmbeddingRepository.UpdateAsync(documentEmbedding);
 
@@ -480,7 +478,6 @@ namespace Service.Service
                 Content = documentEmbedding.Content,
                 ContentVector = documentEmbedding.ContentVector,
                 CreatedAt = documentEmbedding.CreatedAt,
-                UpdatedAt = documentEmbedding.UpdatedAt
             };
 
             (response.SourceTitle, response.SourceDescription) = await GetSourceInfoAsync(documentEmbedding.SourceType, documentEmbedding.SourceId);
@@ -522,10 +519,10 @@ namespace Service.Service
                         string penaltyNote = string.Empty;
                         if (reviewAssignment?.Status != "Completed")
                         {
-                            var submission = await _submissionRepository.GetByIdAsync(reviewAssignment.SubmissionId);
-                            if (submission != null)
+                            var submissionId = await _submissionRepository.GetByIdAsync(reviewAssignment.SubmissionId);
+                            if (submissionId != null)
                             {
-                                var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
+                                var assignment = await _assignmentRepository.GetByIdAsync(submissionId.AssignmentId);
                                 if (assignment != null)
                                 {
                                     var missPenaltyStr = await GetAssignmentConfig(assignment.AssignmentId, "MissingReviewPenalty");
