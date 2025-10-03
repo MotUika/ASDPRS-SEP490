@@ -1,10 +1,12 @@
 ﻿using BussinessObject.Models;
 using DataAccessLayer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Repository.IRepository;
 using Service.IService;
 using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Enums;
+using Service.RequestAndResponse.Request.Notification;
 using Service.RequestAndResponse.Request.ReviewAssignment;
 using Service.RequestAndResponse.Response.Criteria;
 using Service.RequestAndResponse.Response.Review;
@@ -29,6 +31,9 @@ namespace Service.Service
         private readonly ICriteriaRepository _criteriaRepository;
         private readonly IRubricRepository _rubricRepository;
         private readonly ASDPRSContext _context;
+        private readonly INotificationService _notificationService;
+        private readonly IEmailService _emailService;
+        private readonly ILogger<ReviewAssignmentService> _logger;
 
         public ReviewAssignmentService(
             IReviewAssignmentRepository reviewAssignmentRepository,
@@ -40,7 +45,10 @@ namespace Service.Service
             ICourseInstanceRepository courseInstanceRepository,
             ICriteriaRepository criteriaRepository,
             IRubricRepository rubricRepository,
-            ASDPRSContext context)
+            ASDPRSContext context,
+            INotificationService notificationService,
+            IEmailService emailService,
+            ILogger<ReviewAssignmentService> logger)
         {
             _reviewAssignmentRepository = reviewAssignmentRepository;
             _submissionRepository = submissionRepository;
@@ -52,6 +60,9 @@ namespace Service.Service
             _criteriaRepository = criteriaRepository;
             _rubricRepository = rubricRepository;
             _context = context;
+            _notificationService = notificationService;
+            _emailService = emailService;
+            _logger = logger;
         }
 
         public async Task<BaseResponse<ReviewAssignmentResponse>> CreateReviewAssignmentAsync(CreateReviewAssignmentRequest request)
@@ -91,7 +102,7 @@ namespace Service.Service
                 {
                     SubmissionId = request.SubmissionId,
                     ReviewerUserId = request.ReviewerUserId,
-                    Status = request.Status ?? "Assigned",
+                    Status = request.Status,
                     AssignedAt = DateTime.UtcNow,
                     Deadline = request.Deadline,
                     IsAIReview = request.IsAIReview
@@ -107,6 +118,7 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error creating review assignment");
                 return new BaseResponse<ReviewAssignmentResponse>(
                     $"Error creating review assignment: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
@@ -162,6 +174,7 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error creating bulk review assignments");
                 return new BaseResponse<List<ReviewAssignmentResponse>>(
                     $"Error creating bulk review assignments: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
@@ -201,6 +214,7 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error updating review assignment");
                 return new BaseResponse<ReviewAssignmentResponse>(
                     $"Error updating review assignment: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
@@ -235,6 +249,7 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error deleting review assignment");
                 return new BaseResponse<bool>(
                     $"Error deleting review assignment: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
@@ -263,6 +278,7 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error retrieving review assignment");
                 return new BaseResponse<ReviewAssignmentResponse>(
                     $"Error retrieving review assignment: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
@@ -289,6 +305,7 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error retrieving review assignments by submission");
                 return new BaseResponse<List<ReviewAssignmentResponse>>(
                     $"Error retrieving review assignments: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
@@ -315,6 +332,7 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error retrieving review assignments by reviewer");
                 return new BaseResponse<List<ReviewAssignmentResponse>>(
                     $"Error retrieving review assignments: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
@@ -345,6 +363,7 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error retrieving review assignments by assignment");
                 return new BaseResponse<List<ReviewAssignmentResponse>>(
                     $"Error retrieving review assignments: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
@@ -376,6 +395,7 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error retrieving overdue review assignments");
                 return new BaseResponse<List<ReviewAssignmentResponse>>(
                     $"Error retrieving overdue review assignments: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
@@ -416,6 +436,7 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error retrieving pending review assignments");
                 return new BaseResponse<List<ReviewAssignmentResponse>>(
                     $"Error retrieving pending review assignments: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
@@ -425,6 +446,7 @@ namespace Service.Service
 
         public async Task<BaseResponse<bool>> AssignPeerReviewsAutomaticallyAsync(int assignmentId, int reviewsPerSubmission)
         {
+            using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
                 var assignment = await _assignmentRepository.GetByIdAsync(assignmentId);
@@ -564,6 +586,7 @@ namespace Service.Service
                         if (decimal.TryParse(assignmentPenalty, out decimal missPenalty))
                         {
                             // Log penalty application (actual grade adjustment handled in CourseStudentService)
+                            _logger.LogInformation($"Submission {submissionId} has insufficient reviews. Penalty: {missPenalty}%");
                         }
                     }
                 }
@@ -584,6 +607,8 @@ namespace Service.Service
                                   .Select(kv => kv.Key));
                 }
 
+                await transaction.CommitAsync();
+
                 return new BaseResponse<bool>(
                     message,
                     StatusCodeEnum.OK_200,
@@ -591,6 +616,8 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
+                await transaction.RollbackAsync();
+                _logger.LogError(ex, "Error assigning peer reviews automatically");
                 return new BaseResponse<bool>(
                     $"Error assigning peer reviews automatically: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
@@ -666,6 +693,7 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error retrieving peer review statistics");
                 return new BaseResponse<PeerReviewStatsResponse>(
                     $"Error retrieving peer review statistics: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
@@ -716,6 +744,7 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error retrieving pending reviews");
                 return new BaseResponse<List<ReviewAssignmentResponse>>(
                     $"Error retrieving pending reviews: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
@@ -817,6 +846,7 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error retrieving review assignment details");
                 return new BaseResponse<ReviewAssignmentDetailResponse>(
                     $"Error retrieving review assignment details: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
@@ -832,7 +862,7 @@ namespace Service.Service
                 ReviewerUserId = reviewerId,
                 Status = "Assigned",
                 AssignedAt = DateTime.UtcNow,
-                Deadline = assignment.ReviewDeadline ?? assignment.Deadline,
+                Deadline = assignment.ReviewDeadline ?? assignment.Deadline.AddDays(7),
                 IsAIReview = false
             };
 
