@@ -1,13 +1,15 @@
 ﻿using AutoMapper;
 using BussinessObject.Models;
+using DataAccessLayer;
 using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Repository.IRepository;
 using Service.Interface;
-using Service.RequestAndResponse.Request.Submission;
-using Service.RequestAndResponse.Response.Submission;
 using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Enums;
+using Service.RequestAndResponse.Request.Submission;
+using Service.RequestAndResponse.Response.Submission;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -27,6 +29,7 @@ namespace Service.Service
         private readonly IMapper _mapper;
         private readonly ILogger<SubmissionService> _logger;
         private readonly IFileStorageService _fileStorageService;
+        private readonly ASDPRSContext _context; // Assuming you have a DbContext for SystemConfig
 
         public SubmissionService(
             ISubmissionRepository submissionRepository,
@@ -37,7 +40,8 @@ namespace Service.Service
             IRegradeRequestRepository regradeRequestRepository,
             IMapper mapper,
             ILogger<SubmissionService> logger,
-            IFileStorageService fileStorageService)
+            IFileStorageService fileStorageService,
+            ASDPRSContext context)
         {
             _submissionRepository = submissionRepository;
             _assignmentRepository = assignmentRepository;
@@ -48,6 +52,7 @@ namespace Service.Service
             _mapper = mapper;
             _logger = logger;
             _fileStorageService = fileStorageService;
+            _context = context;
         }
 
         public async Task<BaseResponse<SubmissionResponse>> CreateSubmissionAsync(CreateSubmissionRequest request)
@@ -112,7 +117,12 @@ namespace Service.Service
                 var response = await MapToSubmissionResponse(createdSubmission);
 
                 _logger.LogInformation($"Submission created successfully. SubmissionId: {createdSubmission.SubmissionId}");
-
+                // Check for late submission
+                if (submission.SubmittedAt > assignment.Deadline && submission.SubmittedAt <= (assignment.FinalDeadline ?? DateTime.MaxValue))
+                {
+                    submission.Status = "Late";
+                    await _submissionRepository.UpdateAsync(submission);
+                }
                 return new BaseResponse<SubmissionResponse>(
                     "Submission created successfully",
                     StatusCodeEnum.Created_201,
@@ -141,6 +151,42 @@ namespace Service.Service
             };
 
             return await CreateSubmissionAsync(createRequest);
+        }
+        public async Task<BaseResponse<bool>> ExtendStudentDeadlineAsync(int submissionId, DateTime newDeadline)
+        {
+            var submission = await _submissionRepository.GetByIdAsync(submissionId);
+            if (submission == null) return new BaseResponse<bool>("Not found", StatusCodeEnum.NotFound_404, false);
+
+            // Perhaps add ExtensionDeadline field? But no DB change: Use SystemConfig "ExtensionDeadline_SubmissionId"
+            await SaveSubmissionConfig(submission.SubmissionId, "ExtensionDeadline", newDeadline.ToString("o"));
+
+            return new BaseResponse<bool>("Extended", StatusCodeEnum.OK_200, true);
+        }
+        private async Task SaveSubmissionConfig(int submissionId, string key, string value)
+        {
+            var configKey = $"{key}_{submissionId}";
+            var config = await _context.SystemConfigs.FirstOrDefaultAsync(sc => sc.ConfigKey == configKey);
+
+            if (config == null)
+            {
+                config = new SystemConfig
+                {
+                    ConfigKey = configKey,
+                    ConfigValue = value,
+                    Description = "Submission config",
+                    UpdatedAt = DateTime.UtcNow,
+                    UpdatedByUserId = 1  // Assume, or pass
+                };
+                _context.SystemConfigs.Add(config);
+            }
+            else
+            {
+                config.ConfigValue = value;
+                config.UpdatedAt = DateTime.UtcNow;
+                // UpdatedBy
+            }
+
+            await _context.SaveChangesAsync();
         }
 
         public async Task<BaseResponse<SubmissionResponse>> GetSubmissionByIdAsync(GetSubmissionByIdRequest request)

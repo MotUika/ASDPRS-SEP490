@@ -39,6 +39,8 @@ namespace Service.RequestAndResponse.Request.Assignment
         public decimal? PeerWeight { get; set; }
         public string? GradingScale { get; set; }
         public decimal? Weight { get; set; }
+        public decimal? LateSubmissionPenalty { get; set; }
+        public decimal? MissingReviewPenalty { get; set; }
         public bool? IncludeAIScore { get; set; }
     }
 }

@@ -12,5 +12,6 @@ namespace Repository.IRepository
         Task AddAsync(ReviewAssignment reviewAssignment);
         Task UpdateAsync(ReviewAssignment reviewAssignment);
         Task DeleteAsync(ReviewAssignment reviewAssignment);
+        Task<IEnumerable<ReviewAssignment>> GetOverdueAsync(DateTime currentTime);
     }
 }
