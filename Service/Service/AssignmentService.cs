@@ -116,6 +116,8 @@ namespace Service.Service
                 };
 
                 await _assignmentRepository.AddAsync(assignment);
+                await SaveAssignmentConfigs(assignment.AssignmentId, "LateSubmissionPenalty", "0");  // Default 0%
+                await SaveAssignmentConfigs(assignment.AssignmentId, "MissingReviewPenalty", "0");
                 await _notificationService.SendNewAssignmentNotificationAsync(assignment.AssignmentId, assignment.CourseInstanceId);
                 var response = await MapToResponse(assignment);
                 return new BaseResponse<AssignmentResponse>(
@@ -130,6 +132,31 @@ namespace Service.Service
                     StatusCodeEnum.InternalServerError_500,
                     null);
             }
+        }
+        private async Task SaveAssignmentConfigs(int assignmentId, string key, string value)
+        {
+            var configKey = $"{key}_{assignmentId}";
+            var config = await _context.SystemConfigs.FirstOrDefaultAsync(sc => sc.ConfigKey == configKey);
+
+            if (config == null)
+            {
+                config = new SystemConfig
+                {
+                    ConfigKey = configKey,
+                    ConfigValue = value,
+                    Description = "Assignment config",
+                    UpdatedAt = DateTime.UtcNow,
+                    UpdatedByUserId = 1
+                };
+                _context.SystemConfigs.Add(config);
+            }
+            else
+            {
+                config.ConfigValue = value;
+                config.UpdatedAt = DateTime.UtcNow;
+            }
+
+            await _context.SaveChangesAsync();
         }
 
         public async Task<BaseResponse<AssignmentResponse>> UpdateAssignmentAsync(UpdateAssignmentRequest request)
@@ -210,6 +237,12 @@ namespace Service.Service
 
                 if (request.Weight.HasValue)
                     assignment.Weight = request.Weight.Value;
+
+                if (request.LateSubmissionPenalty.HasValue)
+                    await SaveAssignmentConfigs(assignment.AssignmentId, "LateSubmissionPenalty", request.LateSubmissionPenalty.Value.ToString());
+
+                if (request.MissingReviewPenalty.HasValue)
+                    await SaveAssignmentConfigs(assignment.AssignmentId, "MissingReviewPenalty", request.MissingReviewPenalty.Value.ToString());
 
                 if (request.IncludeAIScore.HasValue)
                     assignment.IncludeAIScore = request.IncludeAIScore.Value;
@@ -975,6 +1008,13 @@ namespace Service.Service
 
                 _context.Assignments.Add(clonedAssignment);
                 await _context.SaveChangesAsync();
+                // Copy penalties from source assignment
+                var sourceLatePenalty = await GetAssignmentConfig(sourceAssignmentId, "LateSubmissionPenalty");
+                var sourceMissingReviewPenalty = await GetAssignmentConfig(sourceAssignmentId, "MissingReviewPenalty");
+
+                // Use request values if provided, otherwise use source values or default to 0
+                var latePenalty = request.LateSubmissionPenalty?.ToString() ?? sourceLatePenalty ?? "0";
+                var missingReviewPenalty = request.MissingReviewPenalty?.ToString() ?? sourceMissingReviewPenalty ?? "0";
 
                 var response = await MapToResponse(clonedAssignment);
                 return new BaseResponse<AssignmentResponse>(
@@ -989,6 +1029,13 @@ namespace Service.Service
                     StatusCodeEnum.InternalServerError_500,
                     null);
             }
+        }
+
+        private async Task<string> GetAssignmentConfig(int assignmentId, string key)
+        {
+            var configKey = $"{key}_{assignmentId}";
+            var config = await _context.SystemConfigs.FirstOrDefaultAsync(sc => sc.ConfigKey == configKey);
+            return config?.ConfigValue;
         }
 
         public async Task<BaseResponse<AssignmentResponse>> UpdateAssignmentTimelineAsync(int assignmentId, UpdateAssignmentTimelineRequest request)

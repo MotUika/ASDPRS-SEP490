@@ -5,6 +5,7 @@ using Service.IService;
 using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Request.User;
 using Service.RequestAndResponse.Response.User;
+using Service.RequestAndResponse.Response.User.Service.RequestAndResponse.Response.User;
 using Swashbuckle.AspNetCore.Annotations;
 using System.Security.Claims;
 using System.Threading.Tasks;
@@ -206,9 +207,9 @@ namespace ASDPRS_SEP490.Controllers
         [HttpPut("{id}/activate")]
         [Authorize(Roles = "Admin")]
         [SwaggerOperation(
-        Summary = "Kích hoạt tài khoản người dùng (Khuyến khích xài)",
-        Description = "Kích hoạt lại tài khoản người dùng đã bị vô hiệu hóa"
-    )]
+            Summary = "Kích hoạt tài khoản người dùng",
+            Description = "Kích hoạt lại tài khoản người dùng đã bị vô hiệu hóa"
+        )]
         [SwaggerResponse(200, "Kích hoạt thành công", typeof(BaseResponse<bool>))]
         [SwaggerResponse(404, "Không tìm thấy người dùng")]
         public async Task<IActionResult> ActivateUser(int id)
@@ -220,9 +221,10 @@ namespace ASDPRS_SEP490.Controllers
         [HttpGet("statistics")]
         [Authorize(Roles = "Admin")]
         [SwaggerOperation(
-        Summary = "Thống kê tài khoản",
-        Description = "Lấy số liệu thống kê về tổng số tài khoản theo từng vai trò"
-    )]
+            Summary = "Thống kê tài khoản",
+            Description = "Lấy số liệu thống kê về tổng số tài khoản theo từng vai trò"
+        )]
+        [SwaggerResponse(200, "Thành công", typeof(BaseResponse<AccountStatisticsResponse>))]
         public async Task<IActionResult> GetAccountStatistics()
         {
             var result = await _userService.GetTotalAccountsAsync();
@@ -231,8 +233,12 @@ namespace ASDPRS_SEP490.Controllers
 
         [HttpPost("instructor-email")]
         [SwaggerOperation(
-        Summary = "Thêm instructor bằng email",
-        Description = "Tạo tài khoản instructor mới bằng địa chỉ email (mật khẩu mặc định sẽ được gửi qua email)")]
+            Summary = "Thêm instructor bằng email",
+            Description = "Tạo tài khoản instructor mới bằng địa chỉ email (mật khẩu mặc định sẽ được gửi qua email)"
+        )]
+        [SwaggerResponse(201, "Tạo thành công", typeof(BaseResponse<UserResponse>))]
+        [SwaggerResponse(400, "Email đã tồn tại trong hệ thống")]
+        [SwaggerResponse(409, "Xung đột dữ liệu")]
         public async Task<IActionResult> AddInstructorEmail([FromBody] string email, string firstName, string LastName, int campus)
         {
 
@@ -253,6 +259,35 @@ namespace ASDPRS_SEP490.Controllers
             };
 
             var result = await _userService.CreateUserAsync(createRequest);
+            return StatusCode((int)result.StatusCode, result);
+        }
+
+        [HttpPost("{id}/roles")]
+        [Authorize(Roles = "Admin")]
+        [SwaggerOperation(
+            Summary = "Gán vai trò cho người dùng",
+            Description = "Gán các vai trò mới cho người dùng (sẽ ghi đè lên các vai trò cũ)"
+        )]
+        [SwaggerResponse(200, "Gán vai trò thành công", typeof(BaseResponse<bool>))]
+        [SwaggerResponse(404, "Không tìm thấy người dùng")]
+        public async Task<IActionResult> AssignRoles(int id, [FromBody] AssignRoleRequest request)
+        {
+            request.UserId = id;
+            var result = await _userService.AssignRolesAsync(request);
+            return StatusCode((int)result.StatusCode, result);
+        }
+
+        [HttpGet("{id}/roles")]
+        [Authorize]
+        [SwaggerOperation(
+            Summary = "Lấy danh sách vai trò của người dùng",
+            Description = "Trả về danh sách các vai trò của người dùng theo ID"
+        )]
+        [SwaggerResponse(200, "Thành công", typeof(BaseResponse<IEnumerable<string>>))]
+        [SwaggerResponse(404, "Không tìm thấy người dùng")]
+        public async Task<IActionResult> GetUserRoles(int id)
+        {
+            var result = await _userService.GetUserRolesAsync(id);
             return StatusCode((int)result.StatusCode, result);
         }
     }

@@ -1,4 +1,7 @@
-﻿using BussinessObject.Models;
+﻿```csharp
+using BussinessObject.Models;
+using DataAccessLayer;
+using Microsoft.EntityFrameworkCore;
 using Repository.IRepository;
 using Service.IService;
 using Service.RequestAndResponse.BaseResponse;
@@ -20,6 +23,8 @@ namespace Service.Service
         private readonly IAISummaryRepository _aiSummaryRepository;
         private readonly IAssignmentRepository _assignmentRepository;
         private readonly IUserRepository _userRepository;
+        private readonly IReviewAssignmentRepository _reviewAssignmentRepository;
+        private readonly ASDPRSContext _context;
 
         public DocumentEmbeddingService(
             IDocumentEmbeddingRepository documentEmbeddingRepository,
@@ -27,7 +32,9 @@ namespace Service.Service
             IReviewRepository reviewRepository,
             IAISummaryRepository aiSummaryRepository,
             IAssignmentRepository assignmentRepository,
-            IUserRepository userRepository)
+            IUserRepository userRepository,
+            IReviewAssignmentRepository reviewAssignmentRepository,
+            ASDPRSContext context)
         {
             _documentEmbeddingRepository = documentEmbeddingRepository;
             _submissionRepository = submissionRepository;
@@ -35,13 +42,14 @@ namespace Service.Service
             _aiSummaryRepository = aiSummaryRepository;
             _assignmentRepository = assignmentRepository;
             _userRepository = userRepository;
+            _reviewAssignmentRepository = reviewAssignmentRepository;
+            _context = context;
         }
 
         public async Task<BaseResponse<DocumentEmbeddingResponse>> CreateDocumentEmbeddingAsync(CreateDocumentEmbeddingRequest request)
         {
             try
             {
-                // Validate source exists based on source type
                 var sourceExists = await ValidateSourceExistsAsync(request.SourceType, request.SourceId);
                 if (!sourceExists)
                 {
@@ -51,7 +59,6 @@ namespace Service.Service
                         null);
                 }
 
-                // Check if embedding already exists for this source
                 var existing = await _documentEmbeddingRepository.ExistsAsync(request.SourceType, request.SourceId);
                 if (existing)
                 {
@@ -66,13 +73,13 @@ namespace Service.Service
                     SourceType = request.SourceType,
                     SourceId = request.SourceId,
                     Content = request.Content,
-                    ContentVector = request.ContentVector,
+                    ContentVector = request.ContentVector ?? GeneratePlaceholderVector(request.Content),
                     CreatedAt = DateTime.UtcNow
                 };
 
                 await _documentEmbeddingRepository.AddAsync(documentEmbedding);
 
-                var response = await MapToResponse(documentEmbedding);
+                var response = await MapToResponseAsync(documentEmbedding);
                 return new BaseResponse<DocumentEmbeddingResponse>(
                     "Document embedding created successfully",
                     StatusCodeEnum.Created_201,
@@ -100,16 +107,19 @@ namespace Service.Service
                         null);
                 }
 
-                // Update fields if provided
                 if (!string.IsNullOrEmpty(request.Content))
                     documentEmbedding.Content = request.Content;
 
                 if (request.ContentVector != null)
                     documentEmbedding.ContentVector = request.ContentVector;
+                else if (!string.IsNullOrEmpty(request.Content))
+                    documentEmbedding.ContentVector = GeneratePlaceholderVector(request.Content);
+
+                documentEmbedding.UpdatedAt = DateTime.UtcNow;
 
                 await _documentEmbeddingRepository.UpdateAsync(documentEmbedding);
 
-                var response = await MapToResponse(documentEmbedding);
+                var response = await MapToResponseAsync(documentEmbedding);
                 return new BaseResponse<DocumentEmbeddingResponse>(
                     "Document embedding updated successfully",
                     StatusCodeEnum.OK_200,
@@ -165,7 +175,7 @@ namespace Service.Service
                         null);
                 }
 
-                var response = await MapToResponse(documentEmbedding);
+                var response = await MapToResponseAsync(documentEmbedding);
                 return new BaseResponse<DocumentEmbeddingResponse>(
                     "Success",
                     StatusCodeEnum.OK_200,
@@ -189,7 +199,7 @@ namespace Service.Service
 
                 foreach (var de in documentEmbeddings)
                 {
-                    responses.Add(await MapToResponse(de));
+                    responses.Add(await MapToResponseAsync(de));
                 }
 
                 return new BaseResponse<List<DocumentEmbeddingResponse>>(
@@ -215,7 +225,7 @@ namespace Service.Service
 
                 foreach (var de in documentEmbeddings)
                 {
-                    responses.Add(await MapToResponse(de));
+                    responses.Add(await MapToResponseAsync(de));
                 }
 
                 return new BaseResponse<List<DocumentEmbeddingResponse>>(
@@ -255,7 +265,6 @@ namespace Service.Service
                     results = await _documentEmbeddingRepository.GetAllAsync();
                 }
 
-                // Apply pagination
                 var paginatedResults = results
                     .Skip((request.PageNumber - 1) * request.PageSize)
                     .Take(request.PageSize)
@@ -264,7 +273,7 @@ namespace Service.Service
                 var responses = new List<DocumentEmbeddingResponse>();
                 foreach (var de in paginatedResults)
                 {
-                    responses.Add(await MapToResponse(de));
+                    responses.Add(await MapToResponseAsync(de));
                 }
 
                 var searchResult = new SearchResultResponse
@@ -303,19 +312,25 @@ namespace Service.Service
                         false);
                 }
 
-                // TODO: Integrate with AI service to generate vector embedding
-                // var embeddingVector = await _aiService.GenerateEmbeddingAsync(sourceContent);
+                // Simulate AI embedding generation (replace with actual AI service integration)
+                byte[] embeddingVector = GeneratePlaceholderVector(sourceContent);
 
-                // For now, create a simple embedding
                 var embeddingRequest = new CreateDocumentEmbeddingRequest
                 {
                     SourceType = sourceType,
                     SourceId = sourceId,
                     Content = sourceContent,
-                    ContentVector = System.Text.Encoding.UTF8.GetBytes(sourceContent) // Placeholder
+                    ContentVector = embeddingVector
                 };
 
-                await CreateDocumentEmbeddingAsync(embeddingRequest);
+                var result = await CreateDocumentEmbeddingAsync(embeddingRequest);
+                if (result.StatusCode != StatusCodeEnum.Created_201)
+                {
+                    return new BaseResponse<bool>(
+                        $"Failed to create embedding: {result.Message}",
+                        result.StatusCode,
+                        false);
+                }
 
                 return new BaseResponse<bool>(
                     $"Embedding generated successfully for {sourceType} {sourceId}",
@@ -344,19 +359,23 @@ namespace Service.Service
                         null);
                 }
 
-                // TODO: Implement vector similarity search
-                // For now, return embeddings with similar content length as a placeholder
                 var allEmbeddings = await _documentEmbeddingRepository.GetAllAsync();
                 var similarEmbeddings = allEmbeddings
                     .Where(de => de.EmbeddingId != embeddingId)
-                    .OrderBy(de => Math.Abs(de.Content.Length - sourceEmbedding.Content.Length))
+                    .Select(de => new
+                    {
+                        Embedding = de,
+                        Similarity = CalculateCosineSimilarity(sourceEmbedding.ContentVector, de.ContentVector)
+                    })
+                    .OrderByDescending(x => x.Similarity)
                     .Take(maxResults)
+                    .Select(x => x.Embedding)
                     .ToList();
 
                 var responses = new List<DocumentEmbeddingResponse>();
                 foreach (var de in similarEmbeddings)
                 {
-                    responses.Add(await MapToResponse(de));
+                    responses.Add(await MapToResponseAsync(de));
                 }
 
                 return new BaseResponse<List<DocumentEmbeddingResponse>>(
@@ -398,15 +417,51 @@ namespace Service.Service
         private async Task<string> GetSubmissionContentAsync(int submissionId)
         {
             var submission = await _submissionRepository.GetByIdAsync(submissionId);
-            // For Submission, we might need to read the file content from FileUrl
-            // For now, return a combination of available text data
-            return $"FileName: {submission?.FileName}, Keywords: {submission?.Keywords}";
+            if (submission == null)
+                return string.Empty;
+
+            // Check for late submission penalty
+            var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
+            string penaltyNote = string.Empty;
+            if (assignment != null && submission.SubmittedAt > assignment.Deadline && submission.SubmittedAt <= (assignment.FinalDeadline ?? DateTime.MaxValue))
+            {
+                var latePenaltyStr = await GetAssignmentConfig(assignment.AssignmentId, "LateSubmissionPenalty");
+                if (decimal.TryParse(latePenaltyStr, out decimal latePenalty))
+                {
+                    penaltyNote = $"(Late submission, {latePenalty}% penalty applied)";
+                }
+            }
+
+            return $"FileName: {submission.FileName}, Keywords: {submission.Keywords}, SubmittedAt: {submission.SubmittedAt:yyyy-MM-dd}, Penalty: {penaltyNote}";
         }
 
         private async Task<string> GetReviewContentAsync(int reviewId)
         {
             var review = await _reviewRepository.GetByIdAsync(reviewId);
-            return review?.GeneralFeedback ?? string.Empty;
+            if (review == null)
+                return string.Empty;
+
+            // Check for missing review penalty (if reviewer failed to complete on time)
+            var reviewAssignment = await _reviewAssignmentRepository.GetByIdAsync(review.ReviewAssignmentId);
+            string penaltyNote = string.Empty;
+            if (reviewAssignment != null && reviewAssignment.Status != "Completed")
+            {
+                var submission = await _submissionRepository.GetByIdAsync(reviewAssignment.SubmissionId);
+                if (submission != null)
+                {
+                    var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
+                    if (assignment != null)
+                    {
+                        var missPenaltyStr = await GetAssignmentConfig(assignment.AssignmentId, "MissingReviewPenalty");
+                        if (decimal.TryParse(missPenaltyStr, out decimal missPenalty))
+                        {
+                            penaltyNote = $"(Missing review, {missPenalty}% penalty applicable)";
+                        }
+                    }
+                }
+            }
+
+            return $"Feedback: {review?.GeneralFeedback}, Score: {review?.OverallScore}, Penalty: {penaltyNote}";
         }
 
         private async Task<string> GetAISummaryContentAsync(int aiSummaryId)
@@ -415,7 +470,7 @@ namespace Service.Service
             return aiSummary?.Content ?? string.Empty;
         }
 
-        private async Task<DocumentEmbeddingResponse> MapToResponse(DocumentEmbedding documentEmbedding)
+        private async Task<DocumentEmbeddingResponse> MapToResponseAsync(DocumentEmbedding documentEmbedding)
         {
             var response = new DocumentEmbeddingResponse
             {
@@ -424,10 +479,10 @@ namespace Service.Service
                 SourceId = documentEmbedding.SourceId,
                 Content = documentEmbedding.Content,
                 ContentVector = documentEmbedding.ContentVector,
-                CreatedAt = documentEmbedding.CreatedAt
+                CreatedAt = documentEmbedding.CreatedAt,
+                UpdatedAt = documentEmbedding.UpdatedAt
             };
 
-            // Add additional info based on source type - SỬA LẠI ĐÂY
             (response.SourceTitle, response.SourceDescription) = await GetSourceInfoAsync(documentEmbedding.SourceType, documentEmbedding.SourceId);
 
             return response;
@@ -443,9 +498,18 @@ namespace Service.Service
                     {
                         var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
                         var user = await _userRepository.GetByIdAsync(submission.UserId);
+                        string penaltyNote = string.Empty;
+                        if (submission.SubmittedAt > assignment?.Deadline && submission.SubmittedAt <= (assignment?.FinalDeadline ?? DateTime.MaxValue))
+                        {
+                            var latePenaltyStr = await GetAssignmentConfig(assignment.AssignmentId, "LateSubmissionPenalty");
+                            if (decimal.TryParse(latePenaltyStr, out decimal latePenalty))
+                            {
+                                penaltyNote = $"(Late submission, {latePenalty}% penalty)";
+                            }
+                        }
                         return (
                             $"Submission: {submission.FileName}",
-                            $"Assignment: {assignment?.Title}, Student: {user?.FirstName}, Submitted: {submission.SubmittedAt:yyyy-MM-dd}"
+                            $"Assignment: {assignment?.Title}, Student: {user?.FirstName} {user?.LastName}, Submitted: {submission.SubmittedAt:yyyy-MM-dd}, {penaltyNote}"
                         );
                     }
                     break;
@@ -455,9 +519,26 @@ namespace Service.Service
                     if (review != null)
                     {
                         var reviewAssignment = await GetReviewAssignmentAsync(review.ReviewAssignmentId);
+                        string penaltyNote = string.Empty;
+                        if (reviewAssignment?.Status != "Completed")
+                        {
+                            var submission = await _submissionRepository.GetByIdAsync(reviewAssignment.SubmissionId);
+                            if (submission != null)
+                            {
+                                var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
+                                if (assignment != null)
+                                {
+                                    var missPenaltyStr = await GetAssignmentConfig(assignment.AssignmentId, "MissingReviewPenalty");
+                                    if (decimal.TryParse(missPenaltyStr, out decimal missPenalty))
+                                    {
+                                        penaltyNote = $"(Missing review, {missPenalty}% penalty)";
+                                    }
+                                }
+                            }
+                        }
                         return (
                             $"Review #{review.ReviewId}",
-                            $"Feedback: {Truncate(review.GeneralFeedback, 100)}, Score: {review.OverallScore}"
+                            $"Feedback: {Truncate(review.GeneralFeedback, 100)}, Score: {review.OverallScore}, {penaltyNote}"
                         );
                     }
                     break;
@@ -479,9 +560,44 @@ namespace Service.Service
 
         private async Task<ReviewAssignment> GetReviewAssignmentAsync(int reviewAssignmentId)
         {
-            // This would require a method in ReviewAssignmentRepository to get by ID with includes
-            // For now, return null or implement a basic get
-            return null;
+            return await _reviewAssignmentRepository.GetByIdAsync(reviewAssignmentId);
+        }
+
+        private async Task<string> GetAssignmentConfig(int assignmentId, string key)
+        {
+            var configKey = $"{key}_{assignmentId}";
+            var config = await _context.SystemConfigs.FirstOrDefaultAsync(sc => sc.ConfigKey == configKey);
+            return config?.ConfigValue;
+        }
+
+        private byte[] GeneratePlaceholderVector(string content)
+        {
+            // Simulate AI embedding (replace with actual AI service integration)
+            // For now, use a hash of the content as a placeholder
+            using var sha256 = System.Security.Cryptography.SHA256.Create();
+            return sha256.ComputeHash(System.Text.Encoding.UTF8.GetBytes(content));
+        }
+
+        private double CalculateCosineSimilarity(byte[] vectorA, byte[] vectorB)
+        {
+            if (vectorA == null || vectorB == null || vectorA.Length != vectorB.Length)
+                return 0;
+
+            double dotProduct = 0;
+            double normA = 0;
+            double normB = 0;
+
+            for (int i = 0; i < vectorA.Length; i++)
+            {
+                dotProduct += vectorA[i] * vectorB[i];
+                normA += vectorA[i] * vectorA[i];
+                normB += vectorB[i] * vectorB[i];
+            }
+
+            normA = Math.Sqrt(normA);
+            normB = Math.Sqrt(normB);
+
+            return (normA * normB) == 0 ? 0 : dotProduct / (normA * normB);
         }
 
         private string Truncate(string text, int length)

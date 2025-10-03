@@ -1,7 +1,7 @@
 ﻿using BussinessObject.Models;
+using DataAccessLayer;
 using Microsoft.EntityFrameworkCore;
 using Repository.IRepository;
-using Repository.Repository;
 using Service.IService;
 using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Enums;
@@ -26,6 +26,7 @@ namespace Service.Service
         private readonly ISubmissionRepository _submissionRepository;
         private readonly IAssignmentRepository _assignmentRepository;
         private readonly ICourseStudentRepository _courseStudentRepository;
+        private readonly ASDPRSContext _context;
 
         public ReviewService(
             IReviewRepository reviewRepository,
@@ -35,7 +36,8 @@ namespace Service.Service
             IUserRepository userRepository,
             ISubmissionRepository submissionRepository,
             IAssignmentRepository assignmentRepository,
-            ICourseStudentRepository courseStudentRepository)
+            ICourseStudentRepository courseStudentRepository,
+            ASDPRSContext context)
         {
             _reviewRepository = reviewRepository;
             _reviewAssignmentRepository = reviewAssignmentRepository;
@@ -45,13 +47,13 @@ namespace Service.Service
             _submissionRepository = submissionRepository;
             _assignmentRepository = assignmentRepository;
             _courseStudentRepository = courseStudentRepository;
+            _context = context;
         }
 
         public async Task<BaseResponse<ReviewResponse>> CreateReviewAsync(CreateReviewRequest request)
         {
             try
             {
-                // Lấy review assignment
                 var reviewAssignment = await _reviewAssignmentRepository.GetByIdAsync(request.ReviewAssignmentId);
                 if (reviewAssignment == null)
                 {
@@ -61,7 +63,6 @@ namespace Service.Service
                         null);
                 }
 
-                // Kiểm tra xem review đã tồn tại chưa
                 var existingReviews = await _reviewRepository.GetByReviewAssignmentIdAsync(request.ReviewAssignmentId);
                 if (existingReviews.Any(r => r.ReviewType == request.ReviewType && r.FeedbackSource == request.FeedbackSource))
                 {
@@ -71,7 +72,6 @@ namespace Service.Service
                         null);
                 }
 
-                // Tính OverallScore tự động từ criteria feedbacks
                 decimal? overallScore = null;
                 if (request.CriteriaFeedbacks != null && request.CriteriaFeedbacks.Any(cf => cf.Score.HasValue))
                 {
@@ -79,14 +79,12 @@ namespace Service.Service
                         .Where(cf => cf.Score.HasValue)
                         .Select(cf => cf.Score.Value)
                         .ToList();
-
                     if (validScores.Any())
                     {
                         overallScore = Math.Round(validScores.Average(), 2);
                     }
                 }
 
-                // Tạo review
                 var review = new Review
                 {
                     ReviewAssignmentId = request.ReviewAssignmentId,
@@ -99,7 +97,6 @@ namespace Service.Service
 
                 await _reviewRepository.AddAsync(review);
 
-                // Tạo criteria feedbacks
                 if (request.CriteriaFeedbacks != null && request.CriteriaFeedbacks.Any())
                 {
                     foreach (var cfRequest in request.CriteriaFeedbacks)
@@ -120,12 +117,10 @@ namespace Service.Service
                     }
                 }
 
-                // Cập nhật review assignment status
                 reviewAssignment.Status = "Completed";
                 await _reviewAssignmentRepository.UpdateAsync(reviewAssignment);
 
-                // Map to response
-                var response = await MapToResponse(review);
+                var response = await MapToResponseAsync(review);
                 return new BaseResponse<ReviewResponse>(
                     "Review created successfully",
                     StatusCodeEnum.Created_201,
@@ -153,7 +148,6 @@ namespace Service.Service
                         null);
                 }
 
-                // Update fields
                 review.OverallScore = request.OverallScore;
                 review.GeneralFeedback = request.GeneralFeedback;
                 review.ReviewedAt = request.ReviewedAt ?? review.ReviewedAt;
@@ -162,7 +156,46 @@ namespace Service.Service
 
                 await _reviewRepository.UpdateAsync(review);
 
-                var response = await MapToResponse(review);
+                if (request.CriteriaFeedbacks != null && request.CriteriaFeedbacks.Any())
+                {
+                    var existingFeedbacks = await _criteriaFeedbackRepository.GetByReviewIdAsync(review.ReviewId);
+                    foreach (var cf in existingFeedbacks)
+                    {
+                        await _criteriaFeedbackRepository.DeleteAsync(cf);
+                    }
+
+                    foreach (var cfRequest in request.CriteriaFeedbacks)
+                    {
+                        var criteria = await _criteriaRepository.GetByIdAsync(cfRequest.CriteriaId);
+                        if (criteria == null) continue;
+
+                        var criteriaFeedback = new CriteriaFeedback
+                        {
+                            ReviewId = review.ReviewId,
+                            CriteriaId = cfRequest.CriteriaId,
+                            ScoreAwarded = cfRequest.Score,
+                            Feedback = cfRequest.Feedback,
+                            FeedbackSource = request.FeedbackSource
+                        };
+
+                        await _criteriaFeedbackRepository.AddAsync(criteriaFeedback);
+                    }
+
+                    if (request.CriteriaFeedbacks.Any(cf => cf.Score.HasValue))
+                    {
+                        var validScores = request.CriteriaFeedbacks
+                            .Where(cf => cf.Score.HasValue)
+                            .Select(cf => cf.Score.Value)
+                            .ToList();
+                        if (validScores.Any())
+                        {
+                            review.OverallScore = Math.Round(validScores.Average(), 2);
+                            await _reviewRepository.UpdateAsync(review);
+                        }
+                    }
+                }
+
+                var response = await MapToResponseAsync(review);
                 return new BaseResponse<ReviewResponse>(
                     "Review updated successfully",
                     StatusCodeEnum.OK_200,
@@ -190,11 +223,17 @@ namespace Service.Service
                         false);
                 }
 
-                // Delete related criteria feedbacks
                 var criteriaFeedbacks = await _criteriaFeedbackRepository.GetByReviewIdAsync(reviewId);
                 foreach (var cf in criteriaFeedbacks)
                 {
                     await _criteriaFeedbackRepository.DeleteAsync(cf);
+                }
+
+                var reviewAssignment = await _reviewAssignmentRepository.GetByIdAsync(review.ReviewAssignmentId);
+                if (reviewAssignment != null)
+                {
+                    reviewAssignment.Status = "Assigned";
+                    await _reviewAssignmentRepository.UpdateAsync(reviewAssignment);
                 }
 
                 await _reviewRepository.DeleteAsync(review);
@@ -225,7 +264,7 @@ namespace Service.Service
                         null);
                 }
 
-                var response = await MapToResponse(review);
+                var response = await MapToResponseAsync(review);
                 return new BaseResponse<ReviewResponse>(
                     "Success",
                     StatusCodeEnum.OK_200,
@@ -249,7 +288,7 @@ namespace Service.Service
 
                 foreach (var review in reviews)
                 {
-                    responses.Add(await MapToResponse(review));
+                    responses.Add(await MapToResponseAsync(review));
                 }
 
                 return new BaseResponse<List<ReviewResponse>>(
@@ -275,7 +314,7 @@ namespace Service.Service
 
                 foreach (var review in reviews)
                 {
-                    responses.Add(await MapToResponse(review));
+                    responses.Add(await MapToResponseAsync(review));
                 }
 
                 return new BaseResponse<List<ReviewResponse>>(
@@ -301,7 +340,7 @@ namespace Service.Service
 
                 foreach (var review in reviews)
                 {
-                    responses.Add(await MapToResponse(review));
+                    responses.Add(await MapToResponseAsync(review));
                 }
 
                 return new BaseResponse<List<ReviewResponse>>(
@@ -322,23 +361,18 @@ namespace Service.Service
         {
             try
             {
-                // Get all submissions for the assignment
-                var submissions = await _submissionRepository.GetByAssignmentIdAsync(assignmentId);
-                var allReviews = new List<ReviewResponse>();
+                var reviews = await _reviewRepository.GetByAssignmentIdAsync(assignmentId);
+                var responses = new List<ReviewResponse>();
 
-                foreach (var submission in submissions)
+                foreach (var review in reviews)
                 {
-                    var reviews = await _reviewRepository.GetBySubmissionIdAsync(submission.SubmissionId);
-                    foreach (var review in reviews)
-                    {
-                        allReviews.Add(await MapToResponse(review));
-                    }
+                    responses.Add(await MapToResponseAsync(review));
                 }
 
                 return new BaseResponse<List<ReviewResponse>>(
                     "Success",
                     StatusCodeEnum.OK_200,
-                    allReviews);
+                    responses);
             }
             catch (Exception ex)
             {
@@ -353,36 +387,15 @@ namespace Service.Service
         {
             try
             {
-                // Set AI-specific properties
-                request.FeedbackSource = "AI";
-                request.ReviewType = "AI";
-                request.ReviewedAt = DateTime.UtcNow;
-
-                return await CreateReviewAsync(request);
-            }
-            catch (Exception ex)
-            {
-                return new BaseResponse<ReviewResponse>(
-                    $"Error creating AI review: {ex.Message}",
-                    StatusCodeEnum.InternalServerError_500,
-                    null);
-            }
-        }
-        public async Task<BaseResponse<ReviewResponse>> SubmitStudentReviewAsync(SubmitStudentReviewRequest request)
-        {
-            try
-            {
-                // Kiểm tra review assignment tồn tại và thuộc về sinh viên này
                 var reviewAssignment = await _reviewAssignmentRepository.GetByIdAsync(request.ReviewAssignmentId);
-                if (reviewAssignment == null || reviewAssignment.ReviewerUserId != request.ReviewerUserId)
+                if (reviewAssignment == null)
                 {
                     return new BaseResponse<ReviewResponse>(
-                        "Review assignment not found or access denied",
+                        "Review assignment not found",
                         StatusCodeEnum.NotFound_404,
                         null);
                 }
 
-                // Kiểm tra thêm: Sinh viên có quyền review bài này không
                 var submission = await _submissionRepository.GetByIdAsync(reviewAssignment.SubmissionId);
                 if (submission == null)
                 {
@@ -401,7 +414,70 @@ namespace Service.Service
                         null);
                 }
 
-                // Kiểm tra sinh viên có trong lớp và có quyền review
+                // Simulate AI-generated review (replace with actual AI service integration)
+                var aiFeedback = $"AI-generated feedback for submission {submission.SubmissionId}: " +
+                                $"This submission demonstrates {submission.Keywords}. " +
+                                $"Content analysis: Well-structured but could improve clarity.";
+                var aiScore = new Random().Next(70, 95); // Placeholder score
+
+                request.FeedbackSource = "AI";
+                request.ReviewType = "AI";
+                request.ReviewedAt = DateTime.UtcNow;
+                request.GeneralFeedback = aiFeedback;
+
+                if (assignment.RubricId.HasValue)
+                {
+                    var criteria = await _criteriaRepository.GetByRubricIdAsync(assignment.RubricId.Value);
+                    request.CriteriaFeedbacks = criteria.Select(c => new CriteriaFeedbackRequest
+                    {
+                        CriteriaId = c.CriteriaId,
+                        Score = Math.Round(aiScore * (c.Weight / 100.0m), 2),
+                        Feedback = $"AI evaluation for {c.Title}: Meets expectations."
+                    }).ToList();
+                }
+
+                return await CreateReviewAsync(request);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<ReviewResponse>(
+                    $"Error creating AI review: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
+            }
+        }
+
+        public async Task<BaseResponse<ReviewResponse>> SubmitStudentReviewAsync(SubmitStudentReviewRequest request)
+        {
+            try
+            {
+                var reviewAssignment = await _reviewAssignmentRepository.GetByIdAsync(request.ReviewAssignmentId);
+                if (reviewAssignment == null || reviewAssignment.ReviewerUserId != request.ReviewerUserId)
+                {
+                    return new BaseResponse<ReviewResponse>(
+                        "Review assignment not found or access denied",
+                        StatusCodeEnum.Forbidden_403,
+                        null);
+                }
+
+                var submission = await _submissionRepository.GetByIdAsync(reviewAssignment.SubmissionId);
+                if (submission == null)
+                {
+                    return new BaseResponse<ReviewResponse>(
+                        "Submission not found",
+                        StatusCodeEnum.NotFound_404,
+                        null);
+                }
+
+                var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
+                if (assignment == null)
+                {
+                    return new BaseResponse<ReviewResponse>(
+                        "Assignment not found",
+                        StatusCodeEnum.NotFound_404,
+                        null);
+                }
+
                 var courseStudent = await _courseStudentRepository.GetByCourseInstanceAndUserAsync(assignment.CourseInstanceId, request.ReviewerUserId);
                 if (courseStudent == null || (courseStudent.Status != "Enrolled" && !courseStudent.IsPassed))
                 {
@@ -411,7 +487,6 @@ namespace Service.Service
                         null);
                 }
 
-                // Kiểm tra review assignment chưa hoàn thành
                 if (reviewAssignment.Status == "Completed")
                 {
                     return new BaseResponse<ReviewResponse>(
@@ -420,7 +495,17 @@ namespace Service.Service
                         null);
                 }
 
-                // Tính điểm tổng
+                if (reviewAssignment.Deadline < DateTime.UtcNow)
+                {
+                    reviewAssignment.Status = "Overdue";
+                    await _reviewAssignmentRepository.UpdateAsync(reviewAssignment);
+                    var missPenaltyStr = await GetAssignmentConfig(assignment.AssignmentId, "MissingReviewPenalty");
+                    if (decimal.TryParse(missPenaltyStr, out decimal missPenalty))
+                    {
+                        // Log penalty application (actual grade adjustment handled in CourseStudentService)
+                    }
+                }
+
                 decimal? overallScore = null;
                 if (request.CriteriaFeedbacks != null && request.CriteriaFeedbacks.Any(cf => cf.Score.HasValue))
                 {
@@ -428,14 +513,12 @@ namespace Service.Service
                         .Where(cf => cf.Score.HasValue)
                         .Select(cf => cf.Score.Value)
                         .ToList();
-
                     if (validScores.Any())
                     {
                         overallScore = Math.Round(validScores.Average(), 2);
                     }
                 }
 
-                // Tạo review
                 var review = new Review
                 {
                     ReviewAssignmentId = request.ReviewAssignmentId,
@@ -448,7 +531,6 @@ namespace Service.Service
 
                 await _reviewRepository.AddAsync(review);
 
-                // Tạo criteria feedbacks
                 if (request.CriteriaFeedbacks != null && request.CriteriaFeedbacks.Any())
                 {
                     foreach (var cfRequest in request.CriteriaFeedbacks)
@@ -469,11 +551,10 @@ namespace Service.Service
                     }
                 }
 
-                // Cập nhật review assignment status
                 reviewAssignment.Status = "Completed";
                 await _reviewAssignmentRepository.UpdateAsync(reviewAssignment);
 
-                var response = await MapToResponse(review);
+                var response = await MapToResponseAsync(review);
                 return new BaseResponse<ReviewResponse>(
                     "Review submitted successfully",
                     StatusCodeEnum.Created_201,
@@ -488,13 +569,29 @@ namespace Service.Service
             }
         }
 
-        private async Task<ReviewResponse> MapToResponse(Review review)
+        private async Task<string> GetAssignmentConfig(int assignmentId, string key)
+        {
+            var configKey = $"{key}_{assignmentId}";
+            var config = await _context.SystemConfigs.FirstOrDefaultAsync(sc => sc.ConfigKey == configKey);
+            return config?.ConfigValue;
+        }
+
+        private async Task<ReviewResponse> MapToResponseAsync(Review review)
         {
             var reviewAssignment = await _reviewAssignmentRepository.GetByIdAsync(review.ReviewAssignmentId);
             var reviewerUser = reviewAssignment != null ? await _userRepository.GetByIdAsync(reviewAssignment.ReviewerUserId) : null;
-
             var submission = reviewAssignment != null ? await _submissionRepository.GetByIdAsync(reviewAssignment.SubmissionId) : null;
             var assignment = submission != null ? await _assignmentRepository.GetByIdAsync(submission.AssignmentId) : null;
+
+            string penaltyNote = string.Empty;
+            if (reviewAssignment?.Deadline < DateTime.UtcNow && reviewAssignment.Status != "Completed")
+            {
+                var missPenaltyStr = await GetAssignmentConfig(assignment?.AssignmentId ?? 0, "MissingReviewPenalty");
+                if (decimal.TryParse(missPenaltyStr, out decimal missPenalty))
+                {
+                    penaltyNote = $" (Overdue: {missPenalty}% penalty)";
+                }
+            }
 
             var criteriaFeedbacks = await _criteriaFeedbackRepository.GetByReviewIdAsync(review.ReviewId);
             var criteriaFeedbackResponses = new List<CriteriaFeedbackResponse>();
@@ -510,7 +607,7 @@ namespace Service.Service
                     CriteriaTitle = criteria?.Title ?? string.Empty,
                     ScoreAwarded = cf.ScoreAwarded,
                     Feedback = cf.Feedback,
-                    FeedbackSource = review.FeedbackSource
+                    FeedbackSource = cf.FeedbackSource
                 });
             }
 
@@ -519,13 +616,13 @@ namespace Service.Service
                 ReviewId = review.ReviewId,
                 ReviewAssignmentId = review.ReviewAssignmentId,
                 OverallScore = review.OverallScore,
-                GeneralFeedback = review.GeneralFeedback,
+                GeneralFeedback = review.GeneralFeedback + penaltyNote,
                 ReviewedAt = review.ReviewedAt,
                 ReviewType = review.ReviewType,
                 FeedbackSource = review.FeedbackSource,
                 SubmissionId = reviewAssignment?.SubmissionId ?? 0,
-                ReviewerName = reviewerUser?.FirstName ?? string.Empty,
-                ReviewerEmail = reviewerUser?.Email ?? string.Empty,
+                ReviewerName = review.FeedbackSource == "AI" ? "AI System" : (reviewerUser != null ? $"{reviewerUser.FirstName} {reviewerUser.LastName}".Trim() : string.Empty),
+                ReviewerEmail = review.FeedbackSource == "AI" ? string.Empty : (reviewerUser?.Email ?? string.Empty),
                 AssignmentTitle = assignment?.Title ?? string.Empty,
                 CourseName = assignment?.CourseInstance?.Course?.CourseName ?? string.Empty,
                 CriteriaFeedbacks = criteriaFeedbackResponses

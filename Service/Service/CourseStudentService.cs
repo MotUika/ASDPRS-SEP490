@@ -26,6 +26,7 @@ namespace Service.Service
         private readonly IAssignmentRepository _assignmentRepository;
         private readonly ISubmissionRepository _submissionRepository;
         private readonly IReviewRepository _reviewRepository;
+        private readonly IReviewAssignmentRepository _reviewAssignmentRepository;
 
         public CourseStudentService(
             ICourseStudentRepository courseStudentRepository,
@@ -34,7 +35,8 @@ namespace Service.Service
             ASDPRSContext context,
             IAssignmentRepository assignmentRepository,
             ISubmissionRepository submissionRepository,
-            IReviewRepository reviewRepository)
+            IReviewRepository reviewRepository,
+            IReviewAssignmentRepository reviewAssignmentRepository)
         {
             _courseStudentRepository = courseStudentRepository;
             _courseInstanceRepository = courseInstanceRepository;
@@ -43,6 +45,7 @@ namespace Service.Service
             _assignmentRepository = assignmentRepository;
             _submissionRepository = submissionRepository;
             _reviewRepository = reviewRepository;
+            _reviewAssignmentRepository = reviewAssignmentRepository;
         }
 
         // Method import Excel: Đọc file, thêm sinh viên, kiểm tra đơn giản
@@ -528,19 +531,71 @@ namespace Service.Service
 
                 if (totalWeight == 0) return new BaseResponse<decimal>("No weights set", StatusCodeEnum.BadRequest_400, 0);
 
+                // Get student's review assignments across all assignments (to check missing reviews)
+                decimal totalMissingReviewPenalty = 0;
+                int totalRequiredReviews = 0;
+                int completedReviews = 0;
+
                 foreach (var assignment in assignments)
                 {
                     var submission = (await _submissionRepository.GetByAssignmentIdAsync(assignment.AssignmentId))
                         .FirstOrDefault(s => s.UserId == studentId);
 
-                    if (submission == null) continue;  // Or handle no submission: totalGrade += 0 * weight
+                    decimal assignmentGrade = 0;
 
-                    // Get score from reviews or something; assume FinalGrade in CourseStudent, but for assignment level
-                    // Wait, need per assignment score. Assume from Review average
-                    var reviews = await _reviewRepository.GetBySubmissionIdAsync(submission.SubmissionId);
-                    var avgScore = reviews.Where(r => r.OverallScore.HasValue).Average(r => r.OverallScore.Value);
+                    if (submission == null)
+                    {
+                        // No submission: 0
+                        assignmentGrade = 0;
+                    }
+                    else
+                    {
+                        // Calculate base grade from reviews
+                        var reviews = await _reviewRepository.GetBySubmissionIdAsync(submission.SubmissionId);
+                        var avgScore = reviews.Where(r => r.OverallScore.HasValue).Average(r => r.OverallScore.Value);
+                        assignmentGrade = avgScore;
 
-                    totalGrade += avgScore * (assignment.Weight / totalWeight);
+                        // Apply late penalty if submitted late
+                        if (submission.SubmittedAt > assignment.Deadline && submission.SubmittedAt <= (assignment.FinalDeadline ?? DateTime.MaxValue))
+                        {
+                            var latePenaltyStr = await GetAssignmentConfig(assignment.AssignmentId, "LateSubmissionPenalty");
+                            if (decimal.TryParse(latePenaltyStr, out decimal latePenalty))
+                            {
+                                assignmentGrade -= assignmentGrade * (latePenalty / 100);
+                                assignmentGrade = Math.Max(0, assignmentGrade);  // Not negative
+                            }
+                        }
+                    }
+
+                    totalGrade += assignmentGrade * (assignment.Weight / totalWeight);
+
+                    // Count required reviews for this assignment
+                    var studentReviews = await _reviewAssignmentRepository.GetByReviewerIdAsync(studentId);
+                    var assignmentReviews = studentReviews.Where(ra =>
+                    {
+                        var sub = _submissionRepository.GetByIdAsync(ra.SubmissionId).Result;
+                        return sub?.AssignmentId == assignment.AssignmentId;
+                    });
+
+                    totalRequiredReviews += assignmentReviews.Count();
+                    completedReviews += assignmentReviews.Count(ra => ra.Status == "Completed");
+                }
+
+                // Apply missing review penalty to total grade
+                int missingReviews = totalRequiredReviews - completedReviews;
+                if (missingReviews > 0)
+                {
+                    // Assume global or per course penalty; here use first assignment's for simplicity
+                    var sampleAssignment = assignments.FirstOrDefault();
+                    if (sampleAssignment != null)
+                    {
+                        var missPenaltyStr = await GetAssignmentConfig(sampleAssignment.AssignmentId, "MissingReviewPenalty");
+                        if (decimal.TryParse(missPenaltyStr, out decimal missPenalty))
+                        {
+                            totalGrade -= totalGrade * (missPenalty / 100) * missingReviews;  // Per missing
+                            totalGrade = Math.Max(0, totalGrade);
+                        }
+                    }
                 }
 
                 return new BaseResponse<decimal>("Success", StatusCodeEnum.OK_200, totalGrade);
@@ -550,33 +605,11 @@ namespace Service.Service
                 return new BaseResponse<decimal>(ex.Message, StatusCodeEnum.InternalServerError_500, 0);
             }
         }
-        public async Task<BaseResponse<List<StudentGradeResponse>>> GetCourseGradesForExportAsync(int courseInstanceId)
+        private async Task<string> GetAssignmentConfig(int assignmentId, string key)
         {
-            try
-            {
-                var students = await _courseStudentRepository.GetByCourseInstanceIdAsync(courseInstanceId);
-                var responses = new List<StudentGradeResponse>();
-
-                foreach (var student in students)
-                {
-                    var gradeResult = await CalculateTotalAssignmentGradeAsync(courseInstanceId, student.UserId);
-                    var user = await _userRepository.GetByIdAsync(student.UserId);
-
-                    responses.Add(new StudentGradeResponse
-                    {
-                        StudentId = student.UserId,
-                        StudentName = $"{user.FirstName} {user.LastName}",
-                        StudentCode = user.StudentCode,
-                        TotalGrade = gradeResult.Data,
-                    });
-                }
-
-                return new BaseResponse<List<StudentGradeResponse>>("Success", StatusCodeEnum.OK_200, responses);
-            }
-            catch (Exception ex)
-            {
-                return new BaseResponse<List<StudentGradeResponse>>(ex.Message, StatusCodeEnum.InternalServerError_500, null);
-            }
+            var configKey = $"{key}_{assignmentId}";
+            var config = await _context.SystemConfigs.FirstOrDefaultAsync(sc => sc.ConfigKey == configKey);
+            return config?.ConfigValue;
         }
 
         private CourseStudentResponse MapToResponse(CourseStudent courseStudent, CourseInstance courseInstance, User user, User changedByUser)

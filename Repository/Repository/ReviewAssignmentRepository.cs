@@ -76,5 +76,15 @@ namespace Repository.Repository
         {
              return DeleteAsync(reviewAssignment);
         }
+        public async Task<IEnumerable<ReviewAssignment>> GetOverdueAsync(DateTime currentTime)
+        {
+            return await _context.ReviewAssignments
+                .Where(ra => ra.Deadline < currentTime && ra.Status != "Completed")
+                .Include(ra => ra.Submission)
+                .ThenInclude(s => s.Assignment)
+                .ThenInclude(a => a.CourseInstance)
+                .ThenInclude(ci => ci.Course)
+                .ToListAsync();
+        }
     }
 }

@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace Service.RequestAndResponse.Request.Review
 {
@@ -19,5 +20,7 @@ namespace Service.RequestAndResponse.Request.Review
 
         [StringLength(50)]
         public string FeedbackSource { get; set; }
+
+        public List<CriteriaFeedbackRequest> CriteriaFeedbacks { get; set; }
     }
 }
