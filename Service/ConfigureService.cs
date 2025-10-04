@@ -64,6 +64,9 @@ namespace Service
             services.AddScoped<ICourseStudentService, CourseStudentService>();
             services.AddScoped<INotificationService, NotificationService>();
             services.AddScoped<IMajorService, MajorService>(); 
+            services.AddScoped<IAISummaryService, AISummaryService>();
+            services.AddScoped<IGenAIService, GeminiAiService>();
+            services.AddSingleton<IDocumentTextExtractor, DocumentTextExtractor>();
 
 
 
@@ -71,8 +74,6 @@ namespace Service
             services.AddScoped<IUserService, UserService>();
             services.AddScoped<IEmailService, EmailService>();
             services.AddScoped<ITokenService, TokenService>();
-            services.AddScoped<IFileStorageService, FileStorageService>();
-
 
             return services;
 
