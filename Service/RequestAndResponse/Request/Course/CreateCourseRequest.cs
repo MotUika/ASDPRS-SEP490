@@ -15,9 +15,6 @@ namespace Service.RequestAndResponse.Request.Course
         [StringLength(100)]
         public string CourseName { get; set; }
 
-        [StringLength(500)]
-        public string Description { get; set; }
-
         [Required]
         public int Credits { get; set; }
 

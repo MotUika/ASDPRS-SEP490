@@ -6,9 +6,8 @@ namespace Service.RequestAndResponse.Request.RubricTemplate
     public class CreateRubricTemplateRequest
     {
         [Required]
+        [StringLength(200)]
         public string Title { get; set; }
-
-        public string Description { get; set; }
 
         public bool IsPublic { get; set; }
 

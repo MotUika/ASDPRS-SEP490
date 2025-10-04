@@ -1,4 +1,6 @@
-﻿namespace Service.RequestAndResponse.Response.CourseInstance
+﻿using System;
+
+namespace Service.RequestAndResponse.Response.CourseInstance
 {
     public class CourseInstanceResponse
     {
@@ -12,7 +14,6 @@
         public string CampusName { get; set; }
         public string SectionCode { get; set; }
         public string EnrollmentPassword { get; set; }
-        public int MaxStudents { get; set; }
         public bool RequiresApproval { get; set; }
         public DateTime CreatedAt { get; set; }
         public int InstructorCount { get; set; }

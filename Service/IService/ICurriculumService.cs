@@ -14,5 +14,6 @@ namespace Service.IService
         Task<BaseResponse<CurriculumResponse>> UpdateCurriculumAsync(UpdateCurriculumRequest request);
         Task<BaseResponse<bool>> DeleteCurriculumAsync(int id);
         Task<BaseResponse<IEnumerable<CurriculumResponse>>> GetCurriculumsByCampusAsync(int campusId);
+        Task<BaseResponse<IEnumerable<CurriculumResponse>>> GetCurriculumsByMajorAsync(int majorId);
     }
 }

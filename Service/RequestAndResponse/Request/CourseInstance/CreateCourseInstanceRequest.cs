@@ -21,8 +21,6 @@ namespace Service.RequestAndResponse.Request.CourseInstance
         [StringLength(50)]
         public string EnrollmentPassword { get; set; }
 
-        public int MaxStudents { get; set; }
-
         [Required]
         public bool RequiresApproval { get; set; } = false;
     }

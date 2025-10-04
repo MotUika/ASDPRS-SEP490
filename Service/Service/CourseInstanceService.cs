@@ -3,7 +3,6 @@ using BussinessObject.Models;
 using DataAccessLayer;
 using Microsoft.EntityFrameworkCore;
 using Repository.IRepository;
-using Repository.Repository;
 using Service.IService;
 using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Enums;
@@ -48,14 +47,6 @@ namespace Service.Service
                 }
 
                 var response = _mapper.Map<CourseInstanceResponse>(courseInstance);
-                response.CourseCode = courseInstance.Course?.CourseCode;
-                response.CourseName = courseInstance.Course?.CourseName;
-                response.SemesterName = courseInstance.Semester?.Name;
-                response.CampusName = courseInstance.Campus?.CampusName;
-                response.InstructorCount = courseInstance.CourseInstructors?.Count ?? 0;
-                response.StudentCount = courseInstance.CourseStudents?.Count ?? 0;
-                response.AssignmentCount = courseInstance.Assignments?.Count ?? 0;
-
                 return new BaseResponse<CourseInstanceResponse>("Course instance retrieved successfully", StatusCodeEnum.OK_200, response);
             }
             catch (Exception ex)
@@ -77,19 +68,7 @@ namespace Service.Service
                     .Include(ci => ci.Assignments)
                     .ToListAsync();
 
-                var response = courseInstances.Select(ci =>
-                {
-                    var courseInstanceResponse = _mapper.Map<CourseInstanceResponse>(ci);
-                    courseInstanceResponse.CourseCode = ci.Course?.CourseCode;
-                    courseInstanceResponse.CourseName = ci.Course?.CourseName;
-                    courseInstanceResponse.SemesterName = ci.Semester?.Name;
-                    courseInstanceResponse.CampusName = ci.Campus?.CampusName;
-                    courseInstanceResponse.InstructorCount = ci.CourseInstructors?.Count ?? 0;
-                    courseInstanceResponse.StudentCount = ci.CourseStudents?.Count ?? 0;
-                    courseInstanceResponse.AssignmentCount = ci.Assignments?.Count ?? 0;
-                    return courseInstanceResponse;
-                });
-
+                var response = _mapper.Map<IEnumerable<CourseInstanceResponse>>(courseInstances);
                 return new BaseResponse<IEnumerable<CourseInstanceResponse>>("Course instances retrieved successfully", StatusCodeEnum.OK_200, response);
             }
             catch (Exception ex)
@@ -102,15 +81,69 @@ namespace Service.Service
         {
             try
             {
+                // Validate if course exists
+                var courseExists = await _context.Courses.AnyAsync(c => c.CourseId == request.CourseId);
+                if (!courseExists)
+                {
+                    return new BaseResponse<CourseInstanceResponse>("Course not found", StatusCodeEnum.NotFound_404, null);
+                }
+
+                // Validate if semester exists
+                var semesterExists = await _context.Semesters.AnyAsync(s => s.SemesterId == request.SemesterId);
+                if (!semesterExists)
+                {
+                    return new BaseResponse<CourseInstanceResponse>("Semester not found", StatusCodeEnum.NotFound_404, null);
+                }
+
+                // Validate if campus exists
+                var campusExists = await _context.Campuses.AnyAsync(c => c.CampusId == request.CampusId);
+                if (!campusExists)
+                {
+                    return new BaseResponse<CourseInstanceResponse>("Campus not found", StatusCodeEnum.NotFound_404, null);
+                }
+
+                // Check for duplicate section code in the same course and semester
+                var duplicateSection = await _context.CourseInstances
+                    .AnyAsync(ci => ci.CourseId == request.CourseId &&
+                                   ci.SemesterId == request.SemesterId &&
+                                   ci.SectionCode == request.SectionCode);
+
+                if (duplicateSection)
+                {
+                    return new BaseResponse<CourseInstanceResponse>("Section code already exists for this course and semester", StatusCodeEnum.BadRequest_400, null);
+                }
+
                 var courseInstance = _mapper.Map<CourseInstance>(request);
-                courseInstance.EnrollmentPassword = GenerateEnrollKey();
-                var created = await _courseInstanceRepository.AddAsync(courseInstance);
-                var response = _mapper.Map<CourseInstanceResponse>(created);
-                return new BaseResponse<CourseInstanceResponse>("Lớp tạo thành công với key: " + courseInstance.EnrollmentPassword, StatusCodeEnum.Created_201, response);
+
+                // Generate enrollment password if not provided
+                if (string.IsNullOrEmpty(courseInstance.EnrollmentPassword))
+                {
+                    courseInstance.EnrollmentPassword = GenerateEnrollKey();
+                }
+
+                var createdCourseInstance = await _courseInstanceRepository.AddAsync(courseInstance);
+
+                // Reload with related data for response
+                var courseInstanceWithDetails = await _context.CourseInstances
+                    .Include(ci => ci.Course)
+                    .Include(ci => ci.Semester)
+                    .Include(ci => ci.Campus)
+                    .Include(ci => ci.CourseInstructors)
+                    .Include(ci => ci.CourseStudents)
+                    .Include(ci => ci.Assignments)
+                    .FirstOrDefaultAsync(ci => ci.CourseInstanceId == createdCourseInstance.CourseInstanceId);
+
+                var response = _mapper.Map<CourseInstanceResponse>(courseInstanceWithDetails);
+
+                string message = string.IsNullOrEmpty(request.EnrollmentPassword)
+                    ? $"Course instance created successfully with enrollment key: {courseInstance.EnrollmentPassword}"
+                    : "Course instance created successfully";
+
+                return new BaseResponse<CourseInstanceResponse>(message, StatusCodeEnum.Created_201, response);
             }
             catch (Exception ex)
             {
-                return new BaseResponse<CourseInstanceResponse>("Lỗi khi tạo lớp: " + ex.Message, StatusCodeEnum.InternalServerError_500, null);
+                return new BaseResponse<CourseInstanceResponse>($"Error creating course instance: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
 
@@ -118,18 +151,52 @@ namespace Service.Service
         {
             try
             {
-                var courseInstance = await _courseInstanceRepository.GetByIdAsync(courseInstanceId);
+                var courseInstance = await _context.CourseInstances
+                    .FirstOrDefaultAsync(ci => ci.CourseInstanceId == courseInstanceId);
+
                 if (courseInstance == null)
                 {
-                    return new BaseResponse<string>("Không tìm thấy lớp", StatusCodeEnum.NotFound_404, null);
+                    return new BaseResponse<string>("Course instance not found", StatusCodeEnum.NotFound_404, null);
                 }
+
+                // Validate new key
+                if (string.IsNullOrWhiteSpace(newKey) || newKey.Length > 50)
+                {
+                    return new BaseResponse<string>("Enrollment key must be between 1 and 50 characters", StatusCodeEnum.BadRequest_400, null);
+                }
+
                 courseInstance.EnrollmentPassword = newKey;
                 await _courseInstanceRepository.UpdateAsync(courseInstance);
-                return new BaseResponse<string>("Key lớp cập nhật thành công", StatusCodeEnum.OK_200, newKey);
+
+                return new BaseResponse<string>("Enrollment key updated successfully", StatusCodeEnum.OK_200, newKey);
             }
             catch (Exception ex)
             {
-                return new BaseResponse<string>("Lỗi cập nhật key: " + ex.Message, StatusCodeEnum.InternalServerError_500, null);
+                return new BaseResponse<string>($"Error updating enrollment key: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
+            }
+        }
+
+        public async Task<BaseResponse<string>> GenerateNewEnrollKeyAsync(int courseInstanceId)
+        {
+            try
+            {
+                var courseInstance = await _context.CourseInstances
+                    .FirstOrDefaultAsync(ci => ci.CourseInstanceId == courseInstanceId);
+
+                if (courseInstance == null)
+                {
+                    return new BaseResponse<string>("Course instance not found", StatusCodeEnum.NotFound_404, null);
+                }
+
+                var newKey = GenerateEnrollKey();
+                courseInstance.EnrollmentPassword = newKey;
+                await _courseInstanceRepository.UpdateAsync(courseInstance);
+
+                return new BaseResponse<string>("New enrollment key generated successfully", StatusCodeEnum.OK_200, newKey);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<string>($"Error generating enrollment key: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
 
@@ -137,7 +204,8 @@ namespace Service.Service
         {
             const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
             var random = new Random();
-            var key = new string(Enumerable.Repeat(chars, length).Select(s => s[random.Next(s.Length)]).ToArray());
+            var key = new string(Enumerable.Repeat(chars, length)
+                .Select(s => s[random.Next(s.Length)]).ToArray());
             return "ENROLL-" + key;
         }
 
@@ -145,13 +213,74 @@ namespace Service.Service
         {
             try
             {
-                var existingCourseInstance = await _courseInstanceRepository.GetByIdAsync(request.CourseInstanceId);
+                var existingCourseInstance = await _context.CourseInstances
+                    .Include(ci => ci.Course)
+                    .Include(ci => ci.Semester)
+                    .Include(ci => ci.Campus)
+                    .Include(ci => ci.CourseInstructors)
+                    .Include(ci => ci.CourseStudents)
+                    .Include(ci => ci.Assignments)
+                    .FirstOrDefaultAsync(ci => ci.CourseInstanceId == request.CourseInstanceId);
+
                 if (existingCourseInstance == null)
                 {
                     return new BaseResponse<CourseInstanceResponse>("Course instance not found", StatusCodeEnum.NotFound_404, null);
                 }
 
-                _mapper.Map(request, existingCourseInstance);
+                // Validate course if provided
+                if (request.CourseId > 0 && request.CourseId != existingCourseInstance.CourseId)
+                {
+                    var courseExists = await _context.Courses.AnyAsync(c => c.CourseId == request.CourseId);
+                    if (!courseExists)
+                    {
+                        return new BaseResponse<CourseInstanceResponse>("Course not found", StatusCodeEnum.NotFound_404, null);
+                    }
+                }
+
+                // Validate semester if provided
+                if (request.SemesterId > 0 && request.SemesterId != existingCourseInstance.SemesterId)
+                {
+                    var semesterExists = await _context.Semesters.AnyAsync(s => s.SemesterId == request.SemesterId);
+                    if (!semesterExists)
+                    {
+                        return new BaseResponse<CourseInstanceResponse>("Semester not found", StatusCodeEnum.NotFound_404, null);
+                    }
+                }
+
+                // Validate campus if provided
+                if (request.CampusId > 0 && request.CampusId != existingCourseInstance.CampusId)
+                {
+                    var campusExists = await _context.Campuses.AnyAsync(c => c.CampusId == request.CampusId);
+                    if (!campusExists)
+                    {
+                        return new BaseResponse<CourseInstanceResponse>("Campus not found", StatusCodeEnum.NotFound_404, null);
+                    }
+                }
+
+                // Check for duplicate section code if provided
+                if (!string.IsNullOrEmpty(request.SectionCode) && request.SectionCode != existingCourseInstance.SectionCode)
+                {
+                    var duplicateSection = await _context.CourseInstances
+                        .AnyAsync(ci => ci.CourseId == (request.CourseId > 0 ? request.CourseId : existingCourseInstance.CourseId) &&
+                                       ci.SemesterId == (request.SemesterId > 0 ? request.SemesterId : existingCourseInstance.SemesterId) &&
+                                       ci.SectionCode == request.SectionCode &&
+                                       ci.CourseInstanceId != request.CourseInstanceId);
+
+                    if (duplicateSection)
+                    {
+                        return new BaseResponse<CourseInstanceResponse>("Section code already exists for this course and semester", StatusCodeEnum.BadRequest_400, null);
+                    }
+                }
+
+                // Update only provided fields
+                if (request.CourseId > 0) existingCourseInstance.CourseId = request.CourseId;
+                if (request.SemesterId > 0) existingCourseInstance.SemesterId = request.SemesterId;
+                if (request.CampusId > 0) existingCourseInstance.CampusId = request.CampusId;
+                if (!string.IsNullOrEmpty(request.SectionCode)) existingCourseInstance.SectionCode = request.SectionCode;
+                if (!string.IsNullOrEmpty(request.EnrollmentPassword)) existingCourseInstance.EnrollmentPassword = request.EnrollmentPassword;
+
+                existingCourseInstance.RequiresApproval = request.RequiresApproval;
+
                 var updatedCourseInstance = await _courseInstanceRepository.UpdateAsync(existingCourseInstance);
                 var response = _mapper.Map<CourseInstanceResponse>(updatedCourseInstance);
 
@@ -167,10 +296,21 @@ namespace Service.Service
         {
             try
             {
-                var courseInstance = await _courseInstanceRepository.GetByIdAsync(id);
+                var courseInstance = await _context.CourseInstances
+                    .Include(ci => ci.CourseInstructors)
+                    .Include(ci => ci.CourseStudents)
+                    .Include(ci => ci.Assignments)
+                    .FirstOrDefaultAsync(ci => ci.CourseInstanceId == id);
+
                 if (courseInstance == null)
                 {
                     return new BaseResponse<bool>("Course instance not found", StatusCodeEnum.NotFound_404, false);
+                }
+
+                // Check if there are any related records that would prevent deletion
+                if (courseInstance.CourseInstructors.Any() || courseInstance.CourseStudents.Any() || courseInstance.Assignments.Any())
+                {
+                    return new BaseResponse<bool>("Cannot delete course instance that has instructors, students, or assignments", StatusCodeEnum.BadRequest_400, false);
                 }
 
                 await _courseInstanceRepository.DeleteAsync(courseInstance);
@@ -186,9 +326,17 @@ namespace Service.Service
         {
             try
             {
-                var courseInstances = await _courseInstanceRepository.GetByCourseIdAsync(courseId);
-                var response = _mapper.Map<IEnumerable<CourseInstanceResponse>>(courseInstances);
+                var courseInstances = await _context.CourseInstances
+                    .Include(ci => ci.Course)
+                    .Include(ci => ci.Semester)
+                    .Include(ci => ci.Campus)
+                    .Include(ci => ci.CourseInstructors)
+                    .Include(ci => ci.CourseStudents)
+                    .Include(ci => ci.Assignments)
+                    .Where(ci => ci.CourseId == courseId)
+                    .ToListAsync();
 
+                var response = _mapper.Map<IEnumerable<CourseInstanceResponse>>(courseInstances);
                 return new BaseResponse<IEnumerable<CourseInstanceResponse>>("Course instances retrieved successfully", StatusCodeEnum.OK_200, response);
             }
             catch (Exception ex)
@@ -201,9 +349,17 @@ namespace Service.Service
         {
             try
             {
-                var courseInstances = await _courseInstanceRepository.GetBySemesterIdAsync(semesterId);
-                var response = _mapper.Map<IEnumerable<CourseInstanceResponse>>(courseInstances);
+                var courseInstances = await _context.CourseInstances
+                    .Include(ci => ci.Course)
+                    .Include(ci => ci.Semester)
+                    .Include(ci => ci.Campus)
+                    .Include(ci => ci.CourseInstructors)
+                    .Include(ci => ci.CourseStudents)
+                    .Include(ci => ci.Assignments)
+                    .Where(ci => ci.SemesterId == semesterId)
+                    .ToListAsync();
 
+                var response = _mapper.Map<IEnumerable<CourseInstanceResponse>>(courseInstances);
                 return new BaseResponse<IEnumerable<CourseInstanceResponse>>("Course instances retrieved successfully", StatusCodeEnum.OK_200, response);
             }
             catch (Exception ex)
@@ -216,9 +372,17 @@ namespace Service.Service
         {
             try
             {
-                var courseInstances = await _courseInstanceRepository.GetByCampusIdAsync(campusId);
-                var response = _mapper.Map<IEnumerable<CourseInstanceResponse>>(courseInstances);
+                var courseInstances = await _context.CourseInstances
+                    .Include(ci => ci.Course)
+                    .Include(ci => ci.Semester)
+                    .Include(ci => ci.Campus)
+                    .Include(ci => ci.CourseInstructors)
+                    .Include(ci => ci.CourseStudents)
+                    .Include(ci => ci.Assignments)
+                    .Where(ci => ci.CampusId == campusId)
+                    .ToListAsync();
 
+                var response = _mapper.Map<IEnumerable<CourseInstanceResponse>>(courseInstances);
                 return new BaseResponse<IEnumerable<CourseInstanceResponse>>("Course instances retrieved successfully", StatusCodeEnum.OK_200, response);
             }
             catch (Exception ex)
@@ -226,6 +390,5 @@ namespace Service.Service
                 return new BaseResponse<IEnumerable<CourseInstanceResponse>>($"Error retrieving course instances: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
-
     }
 }

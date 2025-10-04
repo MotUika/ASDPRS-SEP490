@@ -5,13 +5,20 @@ using Service.RequestAndResponse.Response.Curriculum;
 
 namespace Service.Mapping
 {
-    public class CurriculumMappingProfile : Profile
+    public class CurriculumProfile : Profile
     {
-        public CurriculumMappingProfile()
+        public CurriculumProfile()
         {
+            // Request to Entity
             CreateMap<CreateCurriculumRequest, Curriculum>();
-            CreateMap<UpdateCurriculumRequest, Curriculum>();
-            CreateMap<Curriculum, CurriculumResponse>();
+            CreateMap<UpdateCurriculumRequest, Curriculum>()
+                .ForAllMembers(opts => opts.Condition((src, dest, srcMember) => srcMember != null));
+
+            // Entity to Response
+            CreateMap<Curriculum, CurriculumResponse>()
+                .ForMember(dest => dest.CampusName, opt => opt.MapFrom(src => src.Campus.CampusName))
+                .ForMember(dest => dest.MajorName, opt => opt.MapFrom(src => src.Major.MajorName))
+                .ForMember(dest => dest.CourseCount, opt => opt.MapFrom(src => src.Courses.Count));
         }
     }
 }
