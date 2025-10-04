@@ -26,7 +26,7 @@ namespace Service
             services.AddAutoMapper(typeof(AcademicYearMappingProfile));
             services.AddAutoMapper(typeof(SemesterMappingProfile));
             services.AddAutoMapper(typeof(CourseMappingProfile));
-            services.AddAutoMapper(typeof(CurriculumMappingProfile));
+            services.AddAutoMapper(typeof(CurriculumProfile));
             services.AddAutoMapper(typeof(CourseInstanceMappingProfile));
             services.AddAutoMapper(typeof(UserMappingProfile));
             services.AddAutoMapper(typeof(RubricTemplateMappingProfile));
