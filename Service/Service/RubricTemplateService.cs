@@ -76,7 +76,7 @@ namespace Service.Service
             try
             {
                 // Validate if user exists
-                var userExists = await _context.Users.AnyAsync(u => u.UserId == request.CreatedByUserId);
+                var userExists = await _context.Users.AnyAsync(u => u.Id == request.CreatedByUserId);
                 if (!userExists)
                 {
                     return new BaseResponse<RubricTemplateResponse>("User not found", StatusCodeEnum.NotFound_404, null);
