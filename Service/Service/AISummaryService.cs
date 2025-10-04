@@ -1,5 +1,7 @@
 ﻿using BussinessObject.Models;
+using Microsoft.Extensions.Logging;
 using Repository.IRepository;
+using Service.Interface;
 using Service.IService;
 using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Enums;
@@ -18,8 +20,12 @@ namespace Service.Service
         private readonly ISubmissionRepository _submissionRepository;
         private readonly IAssignmentRepository _assignmentRepository;
         private readonly IUserRepository _userRepository;
-/*        private readonly IAIService _aiService; // Assuming an AI service interface for Gemini integration
-*/
+        /*        private readonly IAIService _aiService; // Assuming an AI service interface for Gemini integration
+        */
+        private readonly IDocumentTextExtractor _documentTextExtractor;
+        private readonly IFileStorageService _fileStorageService;
+        private readonly IGenAIService _genAIService;
+        private readonly ILogger<AISummaryService> _logger;
         public AISummaryService(
             IAISummaryRepository aiSummaryRepository,
             ISubmissionRepository submissionRepository,
@@ -271,7 +277,6 @@ namespace Service.Service
                         null);
                 }
 
-                // Check if summary already exists and forceRegenerate is false
                 if (!request.ForceRegenerate)
                 {
                     var existingSummaries = await _aiSummaryRepository.GetBySubmissionAndTypeAsync(request.SubmissionId, request.SummaryType);
@@ -297,24 +302,53 @@ namespace Service.Service
                     }
                 }
 
-                // Generate AI summary using Gemini API
                 var startTime = DateTime.UtcNow;
 
-                // TODO: Integrate with actual Gemini AI service
-                // var aiResult = await _aiService.GenerateSummaryAsync(submission, request.SummaryType, request.AdditionalInstructions);
+                // 1) Download file stream using file storage service
+                using var fileStream = await _fileStorageService.GetFileStreamAsync(submission.FileUrl ?? submission.FileName);
+                if (fileStream == null)
+                {
+                    return new BaseResponse<AISummaryGenerationResponse>(
+                        "Failed to download file",
+                        StatusCodeEnum.BadRequest_400,
+                        null);
+                }
 
-                // For now, create a mock response
-                var generatedContent = await GenerateMockSummaryAsync(submission, request.SummaryType, request.AdditionalInstructions);
-                var modelUsed = "gemini-pro"; // Mock model name
+                // 2) Extract text
+                var fileNameForExt = submission.FileName ?? submission.OriginalFileName ?? submission.FileUrl ?? "file";
+                var extractedText = await _documentTextExtractor.ExtractTextAsync(fileStream, fileNameForExt);
 
+                if (string.IsNullOrWhiteSpace(extractedText))
+                {
+                    return new BaseResponse<AISummaryGenerationResponse>(
+                        "No text could be extracted from file",
+                        StatusCodeEnum.BadRequest_400,
+                        null);
+                }
+
+                // 3) Chunk text to respect model limits
+                var chunks = ChunkText(extractedText, 8000); // tune per model token limits
+
+                var chunkSummaries = new List<string>();
+                foreach (var chunk in chunks)
+                {
+                    // call genAI service (service decides model)
+                    var chunkSummary = await _genAIService.SummarizeAsync(chunk, maxOutputTokens: 800);
+                    chunkSummaries.Add(chunkSummary);
+                }
+
+                // 4) Combine chunk summaries and optionally summarize combined text once more
+                var combined = string.Join("\n\n", chunkSummaries);
+                var finalSummary = await _genAIService.SummarizeAsync(combined, maxOutputTokens: 800);
+
+                // 5) Save AISummary
                 var aiSummary = new AISummary
                 {
                     SubmissionId = request.SubmissionId,
-                    Content = generatedContent,
+                    Content = finalSummary,
                     SummaryType = request.SummaryType,
                     GeneratedAt = DateTime.UtcNow
                 };
-
                 await _aiSummaryRepository.AddAsync(aiSummary);
 
                 var generationTime = DateTime.UtcNow - startTime;
@@ -327,7 +361,7 @@ namespace Service.Service
                     GeneratedAt = aiSummary.GeneratedAt,
                     WasGenerated = true,
                     Status = "Successfully generated",
-                    ModelUsed = modelUsed,
+                    ModelUsed = "gemini (via IGenAIService)",
                     GenerationTime = generationTime
                 };
 
@@ -338,11 +372,19 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
+                _logger?.LogError(ex, "Error generating AI summary");
                 return new BaseResponse<AISummaryGenerationResponse>(
                     $"Error generating AI summary: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
                     null);
             }
+        }
+
+        private static IEnumerable<string> ChunkText(string text, int maxChars)
+        {
+            if (string.IsNullOrEmpty(text)) yield break;
+            for (int i = 0; i < text.Length; i += maxChars)
+                yield return text.Substring(i, Math.Min(maxChars, text.Length - i));
         }
 
         public async Task<BaseResponse<List<AISummaryResponse>>> GetRecentAISummariesAsync(int maxResults = 10)

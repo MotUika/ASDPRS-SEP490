@@ -13,6 +13,7 @@ using Repository;
 using Repository.BaseRepository;
 using Repository.IBaseRepository;
 using Service;
+using Service.Interface;
 using Service.IService;
 using Service.Service;
 using System.IdentityModel.Tokens.Jwt;
@@ -122,6 +123,9 @@ builder.Services.AddControllers().AddNewtonsoftJson(options =>
 
 // Register Repository + Service
 builder.Services.ConfigureRepositoryService(builder.Configuration);
+builder.Services.AddHttpClient<IFileStorageService, SupabaseFileStorageService>();
+builder.Services.AddSingleton<IDocumentTextExtractor, DocumentTextExtractor>();
+builder.Services.AddHttpClient<IGenAIService, GeminiAiService>();
 builder.Services.ConfigureServiceService(builder.Configuration);
 builder.Services.AddScoped(typeof(IBaseRepository<>), typeof(BaseRepository<>));
 
