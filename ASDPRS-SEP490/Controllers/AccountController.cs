@@ -101,7 +101,7 @@ namespace ASDPRS_SEP490.Controllers
         Description = "Chuyển hướng đến Google OAuth để xác thực người dùng"
     )]
         [SwaggerResponse(302, "Chuyển hướng đến trang đăng nhập Google")]
-        public IActionResult GoogleLogin([FromQuery] string returnUrl = "https://localhost:5173/")
+        public IActionResult GoogleLogin([FromQuery] string returnUrl = "http://localhost:5173/")
         {
             // Force https for callback generation (ensure Google redirect_uri is registered)
             var redirectUri = Url.Action("GoogleCallback", "Account", null, "https");
@@ -109,7 +109,7 @@ namespace ASDPRS_SEP490.Controllers
             var props = _signInManager.ConfigureExternalAuthenticationProperties(GoogleDefaults.AuthenticationScheme, redirectUri);
 
             // store returnUrl so we'll redirect to it after completing external login
-            props.Items["returnUrl"] = returnUrl ?? "https://localhost:5173/";
+            props.Items["returnUrl"] = returnUrl ?? "http://localhost:5173/";
 
             return Challenge(props, GoogleDefaults.AuthenticationScheme);
         }
@@ -132,7 +132,7 @@ namespace ASDPRS_SEP490.Controllers
                 }
 
                 // Read returnUrl (saved during GoogleLogin)
-                string returnUrl = "https://localhost:5173/";
+                string returnUrl = "http://localhost:5173/";
                 if (info.AuthenticationProperties != null && info.AuthenticationProperties.Items.ContainsKey("returnUrl"))
                 {
                     returnUrl = info.AuthenticationProperties.Items["returnUrl"];
@@ -141,7 +141,7 @@ namespace ASDPRS_SEP490.Controllers
                 // Validate returnUrl origin against allow-list to avoid open redirect
                 var allowedOrigins = new[]
                 {
-            "https://localhost:5173", // FE (update for prod)
+            "http://localhost:5173", // FE (update for prod)
             "https://localhost:7104"  // BE (so you can test BE-only)
         };
 
@@ -152,12 +152,12 @@ namespace ASDPRS_SEP490.Controllers
                     if (!allowedOrigins.Contains(origin))
                     {
                         // fallback to safe default
-                        returnUrl = "https://localhost:5173/";
+                        returnUrl = "http://localhost:5173/";
                     }
                 }
                 catch
                 {
-                    returnUrl = "https://localhost:5173/";
+                    returnUrl = "http://localhost:5173/";
                 }
 
                 // Get claims returned by Google

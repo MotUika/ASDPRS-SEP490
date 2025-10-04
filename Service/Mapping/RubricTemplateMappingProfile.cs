@@ -9,9 +9,19 @@ namespace Service.Mapping
     {
         public RubricTemplateMappingProfile()
         {
+            // Request to Entity
             CreateMap<CreateRubricTemplateRequest, RubricTemplate>();
-            CreateMap<UpdateRubricTemplateRequest, RubricTemplate>();
-            CreateMap<RubricTemplate, RubricTemplateResponse>();
+            CreateMap<UpdateRubricTemplateRequest, RubricTemplate>()
+                .ForAllMembers(opts => opts.Condition((src, dest, srcMember) => srcMember != null));
+
+            // Entity to Response
+            CreateMap<RubricTemplate, RubricTemplateResponse>()
+                .ForMember(dest => dest.CreatedByUserName, opt => opt.MapFrom(src =>
+                    src.CreatedByUser != null ?
+                    $"{src.CreatedByUser.FirstName} {src.CreatedByUser.LastName}" :
+                    string.Empty))
+                .ForMember(dest => dest.RubricCount, opt => opt.MapFrom(src => src.Rubrics.Count))
+                .ForMember(dest => dest.CriteriaTemplateCount, opt => opt.MapFrom(src => src.CriteriaTemplates.Count));
         }
     }
 }

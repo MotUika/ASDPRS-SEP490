@@ -161,5 +161,41 @@ namespace ASDPRS_SEP490.Controllers
                 _ => StatusCode(500, result)
             };
         }
+
+        [HttpGet("active")]
+        [SwaggerOperation(
+    Summary = "Lấy danh sách môn học đang hoạt động",
+    Description = "Trả về danh sách các môn học đang ở trạng thái hoạt động (IsActive = true)"
+)]
+        [SwaggerResponse(200, "Thành công", typeof(BaseResponse<IEnumerable<CourseResponse>>))]
+        [SwaggerResponse(500, "Lỗi server")]
+        public async Task<IActionResult> GetActiveCourses()
+        {
+            var result = await _courseService.GetActiveCoursesAsync();
+
+            return result.StatusCode switch
+            {
+                StatusCodeEnum.OK_200 => Ok(result),
+                _ => StatusCode(500, result)
+            };
+        }
+
+        [HttpGet("major/{majorId}")]
+        [SwaggerOperation(
+            Summary = "Lấy danh sách môn học theo ngành",
+            Description = "Trả về danh sách các môn học thuộc về một ngành đào tạo cụ thể dựa trên MajorId"
+        )]
+        [SwaggerResponse(200, "Thành công", typeof(BaseResponse<IEnumerable<CourseResponse>>))]
+        [SwaggerResponse(500, "Lỗi server")]
+        public async Task<IActionResult> GetCoursesByMajor(int majorId)
+        {
+            var result = await _courseService.GetCoursesByMajorAsync(majorId);
+
+            return result.StatusCode switch
+            {
+                StatusCodeEnum.OK_200 => Ok(result),
+                _ => StatusCode(500, result)
+            };
+        }
     }
 }
