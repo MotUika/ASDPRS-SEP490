@@ -34,6 +34,8 @@ namespace Service
             services.AddAutoMapper(typeof(RubricMappingProfile));
             services.AddAutoMapper(typeof(CriteriaMappingProfile));
             services.AddAutoMapper(typeof(CriteriaFeedbackMappingProfile));
+            services.AddAutoMapper(typeof(MajorMappingProfile));
+
 
 
 
@@ -61,6 +63,8 @@ namespace Service
             services.AddScoped<ICourseInstructorService,CourseInstructorService>();
             services.AddScoped<ICourseStudentService, CourseStudentService>();
             services.AddScoped<INotificationService, NotificationService>();
+            services.AddScoped<IMajorService, MajorService>(); 
+
 
 
             // Add UserService and other dependencies if needed
