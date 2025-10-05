@@ -143,6 +143,20 @@ public class StudentReviewController : ControllerBase
         ));
     }
 
+    [HttpGet("all-classes/pending-reviews/{studentId}")]
+    [SwaggerOperation(
+    Summary = "Lấy tất cả bài cần review từ mọi lớp",
+    Description = "Trả về danh sách tất cả bài nộp cần review từ tất cả các lớp mà sinh viên đang tham gia"
+)]
+    [SwaggerResponse(200, "Thành công", typeof(BaseResponse<List<ReviewAssignmentResponse>>))]
+    [SwaggerResponse(404, "Không tìm thấy sinh viên hoặc không tham gia lớp nào")]
+    [SwaggerResponse(500, "Lỗi server")]
+    public async Task<IActionResult> GetPendingReviewsAcrossAllClasses(int studentId)
+    {
+        var result = await _reviewAssignmentService.GetPendingReviewsAcrossAllClassesAsync(studentId);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
     [HttpGet("review-assignment/{reviewAssignmentId}/status")]
     [SwaggerOperation(
     Summary = "Kiểm tra trạng thái review assignment",

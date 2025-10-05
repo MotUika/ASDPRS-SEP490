@@ -22,5 +22,7 @@ namespace Service.IService
         Task<BaseResponse<PeerReviewStatsResponse>> GetPeerReviewStatisticsAsync(int assignmentId);
         Task<BaseResponse<List<ReviewAssignmentResponse>>> GetPendingReviewsForStudentAsync(int studentId, int? courseInstanceId = null);
         Task<BaseResponse<ReviewAssignmentDetailResponse>> GetReviewAssignmentDetailsAsync(int reviewAssignmentId, int studentId);
+        Task<BaseResponse<List<ReviewAssignmentResponse>>> GetPendingReviewsAcrossAllClassesAsync(int studentId);
+
     }
 }

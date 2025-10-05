@@ -875,6 +875,57 @@ namespace Service.Service
             var config = await _context.SystemConfigs.FirstOrDefaultAsync(sc => sc.ConfigKey == configKey);
             return config?.ConfigValue;
         }
+        public async Task<BaseResponse<List<ReviewAssignmentResponse>>> GetPendingReviewsAcrossAllClassesAsync(int studentId)
+        {
+            try
+            {
+                // Lấy tất cả course instances mà sinh viên tham gia
+                var courseStudents = await _courseStudentRepository.GetByStudentIdAsync(studentId);
+                var enrolledCourseInstanceIds = courseStudents
+                    .Where(cs => cs.Status == "Enrolled")
+                    .Select(cs => cs.CourseInstanceId)
+                    .ToList();
+
+                if (!enrolledCourseInstanceIds.Any())
+                {
+                    return new BaseResponse<List<ReviewAssignmentResponse>>(
+                        "Student is not enrolled in any courses",
+                        StatusCodeEnum.OK_200,
+                        new List<ReviewAssignmentResponse>());
+                }
+
+                var allPendingReviews = new List<ReviewAssignmentResponse>();
+
+                // Lấy pending reviews từ tất cả các lớp
+                foreach (var courseInstanceId in enrolledCourseInstanceIds)
+                {
+                    var reviewsInCourse = await GetPendingReviewsForStudentAsync(studentId, courseInstanceId);
+                    if (reviewsInCourse.StatusCode == StatusCodeEnum.OK_200 && reviewsInCourse.Data != null)
+                    {
+                        allPendingReviews.AddRange(reviewsInCourse.Data);
+                    }
+                }
+
+                // Sắp xếp theo deadline gần nhất
+                allPendingReviews = allPendingReviews
+                    .OrderBy(r => r.Deadline)
+                    .ThenBy(r => r.AssignmentTitle)
+                    .ToList();
+
+                return new BaseResponse<List<ReviewAssignmentResponse>>(
+                    $"Found {allPendingReviews.Count} pending reviews across {enrolledCourseInstanceIds.Count} classes",
+                    StatusCodeEnum.OK_200,
+                    allPendingReviews);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving pending reviews across all classes for student {StudentId}", studentId);
+                return new BaseResponse<List<ReviewAssignmentResponse>>(
+                    $"Error retrieving pending reviews: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
+            }
+        }
 
         private async Task<ReviewAssignmentResponse> MapToResponseAsync(ReviewAssignment reviewAssignment, bool forStudent = false)
         {
