@@ -1,8 +1,10 @@
 ﻿using BussinessObject.Models;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Service.IService;
 using Service.RequestAndResponse.BaseResponse;
+using Service.RequestAndResponse.Enums;
 using Service.RequestAndResponse.Request.User;
 using Service.RequestAndResponse.Response.User;
 using Service.RequestAndResponse.Response.User.Service.RequestAndResponse.Response.User;
@@ -19,10 +21,12 @@ namespace ASDPRS_SEP490.Controllers
     public class UsersController : ControllerBase
     {
         private readonly IUserService _userService;
+        private readonly UserManager<User> _userManager;
 
-        public UsersController(IUserService userService)
+        public UsersController(IUserService userService, UserManager<User> userManager)
         {
             _userService = userService;
+            _userManager = userManager;
         }
 
         [HttpGet("{id}")]
@@ -242,9 +246,14 @@ namespace ASDPRS_SEP490.Controllers
         public async Task<IActionResult> AddInstructorEmail([FromBody] string email, string firstName, string LastName, int campus)
         {
 
-            var existingUser = await _userService.GetUserByEmailAsync(email);
-            if (existingUser.StatusCode.ToString().StartsWith("2"))
-                return BadRequest(new { message = "Email already exists in system" });
+            var existingUser = await _userManager.FindByEmailAsync(email);
+            if (existingUser != null)
+            {
+                return BadRequest(new BaseResponse<UserResponse>(
+                    "Email already exists in system",
+                    StatusCodeEnum.Conflict_409,
+                    null));
+            }
 
             var createRequest = new CreateUserRequest
             {
