@@ -358,26 +358,14 @@ namespace Service.Service
             }
         }
 
-        public async Task<BaseResponse<List<AssignmentResponse>>> GetAssignmentsByCourseInstanceAsync(int courseInstanceId, bool includeAll = false)
+        public async Task<BaseResponse<List<AssignmentResponse>>> GetAssignmentsByCourseInstanceAsync(int courseInstanceId)
         {
             try
             {
+                var assignments = await _assignmentRepository.GetByCourseInstanceIdAsync(courseInstanceId);
                 IQueryable<Assignment> query = _context.Assignments
                     .Where(a => a.CourseInstanceId == courseInstanceId);
 
-                // Nếu không includeAll, chỉ lấy assignments trong timeline hiện tại
-                if (!includeAll)
-                {
-                    var now = DateTime.UtcNow;
-                    query = query.Where(a =>
-                        (a.StartDate == null || a.StartDate <= now) &&
-                        (a.FinalDeadline == null || now <= a.FinalDeadline) &&
-                        a.Status != "Draft" &&
-                        a.Status != "Archived"
-                    );
-                }
-
-                var assignments = await query.ToListAsync();
                 var responses = new List<AssignmentResponse>();
 
                 foreach (var assignment in assignments)
