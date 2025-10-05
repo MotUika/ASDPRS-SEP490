@@ -390,5 +390,27 @@ namespace Service.Service
                 return new BaseResponse<IEnumerable<CourseInstanceResponse>>($"Error retrieving course instances: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
+        public async Task UpdateAssignmentStatusBasedOnTimeline()
+        {
+            var now = DateTime.UtcNow;
+            var assignments = await _context.Assignments.ToListAsync();
+
+            foreach (var assignment in assignments)
+            {
+                assignment.Status = CalculateAssignmentStatus(assignment, now);
+            }
+
+            await _context.SaveChangesAsync();
+        }
+        private string CalculateAssignmentStatus(Assignment assignment, DateTime now)
+        {
+            if (assignment.StartDate.HasValue && now < assignment.StartDate.Value)
+                return "Scheduled";
+            if (now <= assignment.Deadline)
+                return "Active";
+            if (assignment.FinalDeadline.HasValue && now <= assignment.FinalDeadline.Value)
+                return "LateSubmission";
+            return "Closed";
+        }
     }
 }
