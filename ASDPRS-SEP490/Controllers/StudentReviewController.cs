@@ -56,7 +56,7 @@ public class StudentReviewController : ControllerBase
     [SwaggerResponse(500, "Lỗi server")]
     public async Task<IActionResult> GetAssignmentsByCourseInstance(int courseInstanceId, int studentId)
     {
-        var result = await _assignmentService.GetAssignmentsByCourseInstanceBasicAsync(courseInstanceId, studentId);
+        var result = await _assignmentService.GetActiveAssignmentsByCourseInstanceAsync(courseInstanceId, studentId);
         return StatusCode((int)result.StatusCode, result);
     }
 
