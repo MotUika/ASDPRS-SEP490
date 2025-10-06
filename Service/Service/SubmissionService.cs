@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Repository.IRepository;
 using Service.Interface;
+using Service.IService;
 using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Enums;
 using Service.RequestAndResponse.Request.Submission;
@@ -29,7 +30,8 @@ namespace Service.Service
         private readonly IMapper _mapper;
         private readonly ILogger<SubmissionService> _logger;
         private readonly IFileStorageService _fileStorageService;
-        private readonly ASDPRSContext _context; // Assuming you have a DbContext for SystemConfig
+        private readonly ASDPRSContext _context;
+        private readonly IReviewAssignmentService _reviewAssignmentService;
 
         public SubmissionService(
             ISubmissionRepository submissionRepository,
@@ -41,7 +43,8 @@ namespace Service.Service
             IMapper mapper,
             ILogger<SubmissionService> logger,
             IFileStorageService fileStorageService,
-            ASDPRSContext context)
+            ASDPRSContext context,
+            IReviewAssignmentService reviewAssignmentService)
         {
             _submissionRepository = submissionRepository;
             _assignmentRepository = assignmentRepository;
@@ -53,6 +56,7 @@ namespace Service.Service
             _logger = logger;
             _fileStorageService = fileStorageService;
             _context = context;
+            _reviewAssignmentService = reviewAssignmentService;
         }
 
 
@@ -98,6 +102,8 @@ namespace Service.Service
                 var response = await MapToSubmissionResponse(createdSubmission);
 
                 _logger.LogInformation($"Submission created successfully. SubmissionId: {createdSubmission.SubmissionId}");
+                await AutoAssignReviewsForNewSubmission(request.AssignmentId);
+
 
                 // Late check
                 if (submission.SubmittedAt > assignment.Deadline && submission.SubmittedAt <= (assignment.FinalDeadline ?? DateTime.MaxValue))
@@ -112,6 +118,26 @@ namespace Service.Service
             {
                 _logger.LogError(ex, "Error creating submission");
                 return new BaseResponse<SubmissionResponse>("An error occurred while creating the submission", StatusCodeEnum.InternalServerError_500, null);
+            }
+        }
+
+        private async Task AutoAssignReviewsForNewSubmission(int assignmentId)
+        {
+            try
+            {
+                var assignment = await _assignmentRepository.GetByIdAsync(assignmentId);
+                if (assignment == null) return;
+
+                // Sử dụng NumPeerReviewsRequired mà instructor đã set
+                await _reviewAssignmentService.AssignPeerReviewsAutomaticallyAsync(
+                    assignment.AssignmentId,
+                    assignment.NumPeerReviewsRequired);
+
+                _logger.LogInformation($"Auto-assigned {assignment.NumPeerReviewsRequired} reviews for new submission in assignment {assignment.AssignmentId}");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in auto review assignment for new submission");
             }
         }
         public async Task<BaseResponse<SubmissionResponse>> SubmitAssignmentAsync(SubmitAssignmentRequest request)

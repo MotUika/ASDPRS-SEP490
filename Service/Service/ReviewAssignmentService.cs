@@ -452,19 +452,13 @@ namespace Service.Service
                 var assignment = await _assignmentRepository.GetByIdAsync(assignmentId);
                 if (assignment == null)
                 {
-                    return new BaseResponse<bool>(
-                        "Assignment not found",
-                        StatusCodeEnum.NotFound_404,
-                        false);
+                    return new BaseResponse<bool>("Assignment not found", StatusCodeEnum.NotFound_404, false);
                 }
 
                 var submissions = await _submissionRepository.GetByAssignmentIdAsync(assignmentId);
                 if (!submissions.Any())
                 {
-                    return new BaseResponse<bool>(
-                        "No submissions found for this assignment",
-                        StatusCodeEnum.BadRequest_400,
-                        false);
+                    return new BaseResponse<bool>("No submissions found for this assignment", StatusCodeEnum.BadRequest_400, false);
                 }
 
                 var courseInstanceId = assignment.CourseInstanceId;
@@ -472,157 +466,131 @@ namespace Service.Service
                 var currentStudents = courseStudents.Where(cs => !cs.IsPassed && cs.Status == "Enrolled").Select(cs => cs.UserId).ToList();
                 var passedStudents = courseStudents.Where(cs => cs.IsPassed).Select(cs => cs.UserId).ToList();
 
-                var currentStudentSet = new HashSet<int>(currentStudents);
-                var passedStudentSet = new HashSet<int>(passedStudents);
-                var allStudentSet = new HashSet<int>(currentStudents.Concat(passedStudents));
+                var allStudents = currentStudents.Concat(passedStudents).ToList();
 
-                var submissionIds = submissions.Select(s => s.SubmissionId).ToList();
-                var reviewerAssignments = new Dictionary<int, HashSet<int>>();
+                // 🆕 TÍNH TOÁN PHÂN PHỐI CÔNG BẰNG
+                var workload = await CalculateFairWorkload(assignmentId, allStudents);
+
+                // 🆕 TÍNH GIỚI HẠN CÔNG BẰNG
+                var totalSubmissions = submissions.Count();
+                var totalStudents = allStudents.Count;
+                var maxReviewsPerStudent = (int)Math.Ceiling((double)(totalSubmissions * reviewsPerSubmission) / totalStudents);
+                maxReviewsPerStudent = Math.Max(maxReviewsPerStudent, 1); // Đảm bảo ít nhất 1
+
                 var submissionReviewers = new Dictionary<int, HashSet<int>>();
-
-                foreach (var userId in allStudentSet)
+                foreach (var submission in submissions)
                 {
-                    reviewerAssignments[userId] = new HashSet<int>();
-                }
-                foreach (var submissionId in submissionIds)
-                {
-                    submissionReviewers[submissionId] = new HashSet<int>();
+                    submissionReviewers[submission.SubmissionId] = new HashSet<int>();
                 }
 
                 var random = new Random();
                 var assignedCount = 0;
 
-                // Phase 1: Assign current students
+                // 🆕 DANH SÁCH STUDENTS SẮP XẾP THEO WORKLOAD (Round Robin)
+                var availableStudents = allStudents
+                    .OrderBy(id => workload[id])
+                    .ThenBy(_ => random.Next())
+                    .ToList();
+
+                // 🆕 PHÂN CÔNG CÔNG BẰNG CHO TỪNG SUBMISSION
                 foreach (var submission in submissions)
                 {
                     var submitterId = submission.UserId;
-                    var neededReviews = reviewsPerSubmission - submissionReviewers[submission.SubmissionId].Count;
+                    var currentReviewers = submissionReviewers[submission.SubmissionId];
+                    var neededReviews = Math.Max(0, reviewsPerSubmission - currentReviewers.Count);
 
                     if (neededReviews <= 0) continue;
 
-                    var availableReviewers = currentStudentSet
-                        .Where(userId => userId != submitterId &&
-                               !submissionReviewers[submission.SubmissionId].Contains(userId))
-                        .OrderBy(userId => reviewerAssignments[userId].Count)
-                        .ThenBy(_ => random.Next())
-                        .Take(neededReviews)
-                        .ToList();
+                    var assignedForThisSubmission = 0;
 
-                    foreach (var reviewerId in availableReviewers)
+                    foreach (var reviewerId in availableStudents)
                     {
-                        if (reviewerAssignments[reviewerId].Count >= reviewsPerSubmission * 2)
-                            continue;
+                        if (assignedForThisSubmission >= neededReviews) break;
 
-                        await CreateReviewAssignment(submission.SubmissionId, reviewerId, assignment);
-                        reviewerAssignments[reviewerId].Add(submission.SubmissionId);
-                        submissionReviewers[submission.SubmissionId].Add(reviewerId);
-                        assignedCount++;
-                    }
-                }
-
-                // Phase 2: Fill remaining slots with current students
-                foreach (var submissionId in submissionReviewers.Keys.ToList())
-                {
-                    var currentReviewers = submissionReviewers[submissionId];
-                    var submission = submissions.First(s => s.SubmissionId == submissionId);
-                    var submitterId = submission.UserId;
-                    var neededReviews = reviewsPerSubmission - currentReviewers.Count;
-
-                    if (neededReviews <= 0) continue;
-
-                    var availableReviewers = currentStudentSet
-                        .Where(userId => userId != submitterId &&
-                               !currentReviewers.Contains(userId) &&
-                               reviewerAssignments[userId].Count < reviewsPerSubmission * 2)
-                        .OrderBy(userId => reviewerAssignments[userId].Count)
-                        .ThenBy(_ => random.Next())
-                        .Take(neededReviews)
-                        .ToList();
-
-                    foreach (var reviewerId in availableReviewers)
-                    {
-                        await CreateReviewAssignment(submissionId, reviewerId, assignment);
-                        reviewerAssignments[reviewerId].Add(submissionId);
-                        submissionReviewers[submissionId].Add(reviewerId);
-                        assignedCount++;
-                    }
-                }
-
-                // Phase 3: Use passed students if needed
-                foreach (var submissionId in submissionReviewers.Keys.ToList())
-                {
-                    var currentReviewers = submissionReviewers[submissionId];
-                    var submission = submissions.First(s => s.SubmissionId == submissionId);
-                    var submitterId = submission.UserId;
-                    var neededReviews = reviewsPerSubmission - currentReviewers.Count;
-
-                    if (neededReviews <= 0) continue;
-
-                    var availableReviewers = passedStudentSet
-                        .Where(userId => userId != submitterId &&
-                               !currentReviewers.Contains(userId) &&
-                               reviewerAssignments[userId].Count < reviewsPerSubmission)
-                        .OrderBy(userId => reviewerAssignments[userId].Count)
-                        .ThenBy(_ => random.Next())
-                        .Take(neededReviews)
-                        .ToList();
-
-                    foreach (var reviewerId in availableReviewers)
-                    {
-                        await CreateReviewAssignment(submissionId, reviewerId, assignment);
-                        reviewerAssignments[reviewerId].Add(submissionId);
-                        submissionReviewers[submissionId].Add(reviewerId);
-                        assignedCount++;
-                    }
-                }
-
-                // Phase 4: Apply MissingReviewPenalty for incomplete assignments
-                foreach (var submissionId in submissionReviewers.Keys)
-                {
-                    if (submissionReviewers[submissionId].Count < reviewsPerSubmission)
-                    {
-                        var submission = submissions.First(s => s.SubmissionId == submissionId);
-                        var assignmentPenalty = await GetAssignmentConfig(assignment.AssignmentId, "MissingReviewPenalty");
-                        if (decimal.TryParse(assignmentPenalty, out decimal missPenalty))
+                        // 🆕 KIỂM TRA ĐIỀU KIỆN PHÂN CÔNG
+                        if (reviewerId != submitterId &&
+                            !currentReviewers.Contains(reviewerId) &&
+                            workload[reviewerId] < maxReviewsPerStudent)
                         {
-                            // Log penalty application (actual grade adjustment handled in CourseStudentService)
-                            _logger.LogInformation($"Submission {submissionId} has insufficient reviews. Penalty: {missPenalty}%");
+                            await CreateReviewAssignment(submission.SubmissionId, reviewerId, assignment);
+                            currentReviewers.Add(reviewerId);
+                            workload[reviewerId]++;
+                            assignedCount++;
+                            assignedForThisSubmission++;
                         }
                     }
+
+                    // 🆕 CẬP NHẬT LẠI THỨ TỰ SAU MỖI SUBMISSION
+                    availableStudents = availableStudents
+                        .OrderBy(id => workload[id])
+                        .ThenBy(_ => random.Next())
+                        .ToList();
                 }
 
-                var submissionsWithInsufficientReviews = submissionReviewers
-                    .Count(kv => kv.Value.Count < reviewsPerSubmission);
-                var averageReviews = submissionReviewers.Average(kv => kv.Value.Count);
+                // 🆕 LOG KẾT QUẢ PHÂN CÔNG
+                var avgWorkload = workload.Values.Average();
+                var minWorkload = workload.Values.Min();
+                var maxWorkload = workload.Values.Max();
 
-                var message = $"Assigned {assignedCount} peer reviews. " +
-                             $"Average reviews per submission: {averageReviews:F1}. " +
-                             $"Submissions with insufficient reviews: {submissionsWithInsufficientReviews}";
-
-                if (submissionsWithInsufficientReviews > 0)
-                {
-                    message += $". Consider manual assignment for submission IDs: " +
-                              string.Join(", ", submissionReviewers
-                                  .Where(kv => kv.Value.Count < reviewsPerSubmission)
-                                  .Select(kv => kv.Key));
-                }
+                _logger.LogInformation($"Fair assignment completed: {assignedCount} reviews assigned. " +
+                                      $"Workload - Avg: {avgWorkload:F1}, Min: {minWorkload}, Max: {maxWorkload}");
 
                 await transaction.CommitAsync();
 
                 return new BaseResponse<bool>(
-                    message,
+                    $"Fair assignment completed: {assignedCount} reviews assigned. " +
+                    $"Average workload: {avgWorkload:F1} reviews per student",
                     StatusCodeEnum.OK_200,
                     true);
             }
             catch (Exception ex)
             {
                 await transaction.RollbackAsync();
-                _logger.LogError(ex, "Error assigning peer reviews automatically");
+                _logger.LogError(ex, "Error in fair peer review assignment");
                 return new BaseResponse<bool>(
-                    $"Error assigning peer reviews automatically: {ex.Message}",
+                    $"Error in fair peer review assignment: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
                     false);
             }
+        }
+
+        // Method để tính workflow cho từng student cần xem thêm
+        private async Task<Dictionary<int, int>> CalculateFairWorkload(int assignmentId, List<int> allStudents)
+        {
+            var workload = new Dictionary<int, int>();
+
+            // KHỞI TẠO WORKLOAD = 0 CHO TẤT CẢ STUDENTS
+            foreach (var studentId in allStudents)
+            {
+                workload[studentId] = 0;
+            }
+
+            // ĐẾM SỐ REVIEW ASSIGNMENTS HIỆN CÓ
+            var submissions = await _submissionRepository.GetByAssignmentIdAsync(assignmentId);
+            foreach (var submission in submissions)
+            {
+                var reviewAssignments = await _reviewAssignmentRepository.GetBySubmissionIdAsync(submission.SubmissionId);
+                foreach (var ra in reviewAssignments)
+                {
+                    if (workload.ContainsKey(ra.ReviewerUserId))
+                    {
+                        workload[ra.ReviewerUserId]++;
+                    }
+                }
+            }
+
+            return workload;
+        }
+
+        public async Task<Dictionary<int, int>> GetWorkloadDistribution(int assignmentId)
+        {
+            var assignment = await _assignmentRepository.GetByIdAsync(assignmentId);
+            if (assignment == null) return new Dictionary<int, int>();
+
+            var courseStudents = await _courseStudentRepository.GetByCourseInstanceIdAsync(assignment.CourseInstanceId);
+            var allStudents = courseStudents.Select(cs => cs.UserId).ToList();
+
+            return await CalculateFairWorkload(assignmentId, allStudents);
         }
 
         public async Task<BaseResponse<PeerReviewStatsResponse>> GetPeerReviewStatisticsAsync(int assignmentId)
