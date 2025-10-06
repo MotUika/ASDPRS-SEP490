@@ -3,12 +3,14 @@ using DataAccessLayer;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Service.IService;
 using Service.RequestAndResponse.BaseResponse;
+using Service.RequestAndResponse.Enums;
 using Service.RequestAndResponse.Request.User;
 using Service.RequestAndResponse.Response.User;
 using Swashbuckle.AspNetCore.Annotations;
@@ -97,9 +99,9 @@ namespace ASDPRS_SEP490.Controllers
 
         [HttpGet("google-login")]
         [SwaggerOperation(
-        Summary = "Đăng nhập bằng Google",
-        Description = "Chuyển hướng đến Google OAuth để xác thực người dùng"
-    )]
+                Summary = "Đăng nhập bằng Google",
+                Description = "Chuyển hướng đến Google OAuth để xác thực người dùng"
+            )]
         [SwaggerResponse(302, "Chuyển hướng đến trang đăng nhập Google")]
         public IActionResult GoogleLogin([FromQuery] string returnUrl = "http://localhost:5173/")
         {
@@ -141,9 +143,9 @@ namespace ASDPRS_SEP490.Controllers
                 // Validate returnUrl origin against allow-list to avoid open redirect
                 var allowedOrigins = new[]
                 {
-            "http://localhost:5173", // FE (update for prod)
-            "https://localhost:7104"  // BE (so you can test BE-only)
-        };
+                    "http://localhost:5173", // FE (update for prod)
+                    "https://localhost:7104"  // BE (so you can test BE-only)
+                };
 
                 try
                 {
@@ -168,8 +170,6 @@ namespace ASDPRS_SEP490.Controllers
 
                 if (string.IsNullOrEmpty(googleEmail))
                     return BadRequest(new { message = "Could not get email from Google" });
-
-                // ----- NOTE: removed domain check here (no @fpt.edu.vn restriction) -----
 
                 // find or create user
                 var user = await _userManager.FindByEmailAsync(googleEmail);
@@ -213,6 +213,9 @@ namespace ASDPRS_SEP490.Controllers
                 if (tokenResponse == null)
                     return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Failed to create tokens" });
 
+                // IMPORTANT: Sign in with Identity cookie for browser sessions
+                await _signInManager.SignInAsync(user, new AuthenticationProperties { IsPersistent = true });
+
                 // Clear external cookie
                 await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
 
@@ -247,35 +250,27 @@ namespace ASDPRS_SEP490.Controllers
         }
 
         [HttpGet("me")]
-        [Authorize]
-        [SwaggerOperation(
-        Summary = "Lấy thông tin người dùng hiện tại",
-        Description = "Trả về thông tin chi tiết của người dùng đang đăng nhập bao gồm roles và thông tin cá nhân"
-    )]
-        [SwaggerResponse(200, "Thành công", typeof(object))]
+        [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+        [SwaggerOperation(Summary = "Lấy thông tin người dùng hiện tại", Description = "Lấy thông tin người dùng đang đăng nhập và roles của họ")]
+        [SwaggerResponse(200, "Thành công", typeof(BaseResponse<UserResponse>))]
         [SwaggerResponse(401, "Chưa đăng nhập")]
         public async Task<IActionResult> GetCurrentUser()
         {
-            var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
-            var result = await _userService.GetUserByIdAsync(userId);
-            if (!result.StatusCode.ToString().StartsWith("2"))
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)
+                ?? User.FindFirst(ClaimTypes.Name)
+                ?? User.FindFirst("sub");
+
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out var userId))
             {
-                return StatusCode((int)result.StatusCode, result.Message);
+                return StatusCode(401, new BaseResponse<UserResponse>(
+                    "Unable to determine user id from token",
+                    StatusCodeEnum.Unauthorized_401,
+                    null
+                ));
             }
 
-            // Sửa lại phần này - không cần gán Roles vào UserResponse
-            var userWithRoles = await _context.Users
-                .Include(u => u.UserRoles)
-                .ThenInclude(ur => ur.Role)
-                .FirstOrDefaultAsync(u => u.Id == userId);
-
-            var response = new
-            {
-                result.Data,
-                Roles = userWithRoles.UserRoles.Select(ur => ur.Role.RoleName).ToList()
-            };
-
-            return Ok(response);
+            var result = await _userService.GetUserByIdAsync(userId);
+            return StatusCode((int)result.StatusCode, result);
         }
 
         [HttpPost("change-password")]
