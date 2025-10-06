@@ -175,29 +175,7 @@ namespace ASDPRS_SEP490.Controllers
                 var user = await _userManager.FindByEmailAsync(googleEmail);
                 if (user == null)
                 {
-                    user = new User
-                    {
-                        UserName = googleEmail.Split('@')[0],
-                        Email = googleEmail,
-                        FirstName = givenName ?? "Google",
-                        LastName = surname ?? "User",
-                        CampusId = 1,
-                        IsActive = true,
-                        EmailConfirmed = true,
-                        StudentCode = $"GOOGLE_{DateTime.Now:yyyyMMddHHmmss}",
-                        CreatedAt = DateTime.UtcNow
-                    };
-
-                    var createResult = await _userManager.CreateAsync(user);
-                    if (!createResult.Succeeded)
-                    {
-                        return BadRequest(new
-                        {
-                            message = "Failed to create user",
-                            errors = createResult.Errors.Select(e => e.Description)
-                        });
-                    }
-                    await _userManager.AddToRoleAsync(user, "Instructor");
+                    return BadRequest(new { message = "Tài khoản Google này chưa được đăng ký trong hệ thống." });
                 }
 
                 if (!user.IsActive)
@@ -251,8 +229,8 @@ namespace ASDPRS_SEP490.Controllers
 
         [HttpGet("me")]
         [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
-        [SwaggerOperation(Summary = "Lấy thông tin người dùng hiện tại", Description = "Lấy thông tin người dùng đang đăng nhập và roles của họ")]
-        [SwaggerResponse(200, "Thành công", typeof(BaseResponse<UserResponse>))]
+        [SwaggerOperation(Summary = "Lấy thông tin người dùng hiện tại", Description = "Lấy thông tin người dùng đang đăng nhập, roles và tokens của họ")]
+        [SwaggerResponse(200, "Thành công", typeof(BaseResponse<object>))]
         [SwaggerResponse(401, "Chưa đăng nhập")]
         public async Task<IActionResult> GetCurrentUser()
         {
@@ -269,9 +247,47 @@ namespace ASDPRS_SEP490.Controllers
                 ));
             }
 
+            // Lấy thông tin user
             var result = await _userService.GetUserByIdAsync(userId);
-            return StatusCode((int)result.StatusCode, result);
+            if (!result.StatusCode.ToString().StartsWith("2"))
+                return StatusCode((int)result.StatusCode, result);
+
+            // Lấy roles của user
+            var user = await _context.Users
+                .Include(u => u.UserRoles)
+                .ThenInclude(ur => ur.Role)
+                .FirstOrDefaultAsync(u => u.Id == userId);
+
+            var roles = user.UserRoles.Select(ur => ur.Role.RoleName).ToList();
+
+            // Lấy token từ cookie (nếu đang test bằng Google Login flow)
+            var accessToken = Request.Cookies["ASDPRS_Access"];
+            var refreshToken = Request.Cookies["ASDPRS_Refresh"];
+
+            // Nếu không có cookie (ví dụ test Postman bằng Bearer token) → tạo lại token mới
+            if (string.IsNullOrEmpty(accessToken) || string.IsNullOrEmpty(refreshToken))
+            {
+                var tokenResponse = await _tokenService.CreateToken(user);
+                accessToken = tokenResponse.AccessToken;
+                refreshToken = tokenResponse.RefreshToken;
+            }
+
+            // Trả về user + role + token
+            var response = new
+            {
+                User = result.Data,
+                Roles = roles,
+                AccessToken = accessToken,
+                RefreshToken = refreshToken
+            };
+
+            return Ok(new BaseResponse<object>(
+                "Lấy thông tin người dùng thành công",
+                StatusCodeEnum.OK_200,
+                response
+            ));
         }
+
 
         [HttpPost("change-password")]
         [Authorize]
