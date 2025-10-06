@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Service.IService;
 using Service.RequestAndResponse.BaseResponse;
+using Service.RequestAndResponse.Enums;
 using Service.RequestAndResponse.Request.ReviewAssignment;
 using Service.RequestAndResponse.Response.ReviewAssignment;
 using Swashbuckle.AspNetCore.Annotations;
@@ -235,6 +236,45 @@ namespace API.Controllers
         {
             var response = await _reviewAssignmentService.GetReviewAssignmentsBySubmissionIdAsync(submissionId);
             return StatusCode((int)response.StatusCode, response);
+        }
+
+        [HttpGet("assignment/{assignmentId}/workload")]
+        [SwaggerOperation(
+    Summary = "Lấy phân bổ workload review assignment",
+    Description = "Trả về số lượng review assignments của mỗi sinh viên trong assignment"
+)]
+        public async Task<IActionResult> GetWorkloadDistribution(int assignmentId)
+        {
+            try
+            {
+                var workload = await _reviewAssignmentService.GetWorkloadDistribution(assignmentId);
+
+                var result = new
+                {
+                    AssignmentId = assignmentId,
+                    WorkloadDistribution = workload,
+                    Statistics = new
+                    {
+                        TotalStudents = workload.Count,
+                        AverageWorkload = workload.Values.Average(),
+                        MinWorkload = workload.Values.Min(),
+                        MaxWorkload = workload.Values.Max(),
+                        IsBalanced = (workload.Values.Max() - workload.Values.Min()) <= 1 // Chênh lệch <= 1 là cân bằng
+                    }
+                };
+
+                return Ok(new BaseResponse<object>(
+                    "Workload distribution retrieved successfully",
+                    StatusCodeEnum.OK_200,
+                    result));
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new BaseResponse<object>(
+                    $"Error retrieving workload distribution: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null));
+            }
         }
     }
 }
