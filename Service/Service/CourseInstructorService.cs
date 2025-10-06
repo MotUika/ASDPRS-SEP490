@@ -18,22 +18,25 @@ namespace Service.Service
         private readonly ICourseInstructorRepository _courseInstructorRepository;
         private readonly ICourseInstanceRepository _courseInstanceRepository;
         private readonly IUserRepository _userRepository;
+        private readonly ICourseStudentRepository _courseStudentRepository;
 
         public CourseInstructorService(
             ICourseInstructorRepository courseInstructorRepository,
             ICourseInstanceRepository courseInstanceRepository,
-            IUserRepository userRepository)
+            IUserRepository userRepository,
+            ICourseStudentRepository courseStudentRepository)
         {
             _courseInstructorRepository = courseInstructorRepository;
             _courseInstanceRepository = courseInstanceRepository;
             _userRepository = userRepository;
+            _courseStudentRepository = courseStudentRepository;
         }
 
+        // 🟢 Tạo mới instructor trong lớp
         public async Task<BaseResponse<CourseInstructorResponse>> CreateCourseInstructorAsync(CreateCourseInstructorRequest request)
         {
             try
             {
-                // Validate course instance exists
                 var courseInstance = await _courseInstanceRepository.GetByIdAsync(request.CourseInstanceId);
                 if (courseInstance == null)
                 {
@@ -43,7 +46,6 @@ namespace Service.Service
                         null);
                 }
 
-                // Validate user exists
                 var user = await _userRepository.GetByIdAsync(request.UserId);
                 if (user == null)
                 {
@@ -53,7 +55,6 @@ namespace Service.Service
                         null);
                 }
 
-                // Check if assignment already exists
                 var existing = (await _courseInstructorRepository.GetByCourseInstanceIdAsync(request.CourseInstanceId))
                     .FirstOrDefault(ci => ci.UserId == request.UserId);
 
@@ -73,7 +74,7 @@ namespace Service.Service
 
                 await _courseInstructorRepository.AddAsync(courseInstructor);
 
-                var response = MapToResponse(courseInstructor, courseInstance, user);
+                var response = await MapToResponseAsync(courseInstructor);
                 return new BaseResponse<CourseInstructorResponse>(
                     "Course instructor assigned successfully",
                     StatusCodeEnum.Created_201,
@@ -88,6 +89,7 @@ namespace Service.Service
             }
         }
 
+        // 🔴 Xóa instructor khỏi lớp
         public async Task<BaseResponse<bool>> DeleteCourseInstructorAsync(int courseInstructorId)
         {
             try
@@ -116,6 +118,7 @@ namespace Service.Service
             }
         }
 
+        // 🔍 Lấy instructor theo ID
         public async Task<BaseResponse<CourseInstructorResponse>> GetCourseInstructorByIdAsync(int id)
         {
             try
@@ -129,9 +132,7 @@ namespace Service.Service
                         null);
                 }
 
-                var courseInstance = await _courseInstanceRepository.GetByIdAsync(courseInstructor.CourseInstanceId);
-                var user = await _userRepository.GetByIdAsync(courseInstructor.UserId);
-                var response = MapToResponse(courseInstructor, courseInstance, user);
+                var response = await MapToResponseAsync(courseInstructor);
                 return new BaseResponse<CourseInstructorResponse>(
                     "Success",
                     StatusCodeEnum.OK_200,
@@ -146,6 +147,7 @@ namespace Service.Service
             }
         }
 
+        // 📚 Lấy danh sách instructors của 1 lớp
         public async Task<BaseResponse<List<CourseInstructorResponse>>> GetCourseInstructorsByCourseInstanceAsync(int courseInstanceId)
         {
             try
@@ -155,9 +157,7 @@ namespace Service.Service
 
                 foreach (var ci in courseInstructors)
                 {
-                    var courseInstance = await _courseInstanceRepository.GetByIdAsync(ci.CourseInstanceId);
-                    var user = await _userRepository.GetByIdAsync(ci.UserId);
-                    responses.Add(MapToResponse(ci, courseInstance, user));
+                    responses.Add(await MapToResponseAsync(ci));
                 }
 
                 return new BaseResponse<List<CourseInstructorResponse>>(
@@ -174,6 +174,7 @@ namespace Service.Service
             }
         }
 
+        // 👨‍🏫 Lấy danh sách lớp mà 1 instructor dạy
         public async Task<BaseResponse<List<CourseInstructorResponse>>> GetCourseInstructorsByInstructorAsync(int instructorId)
         {
             try
@@ -183,9 +184,7 @@ namespace Service.Service
 
                 foreach (var ci in courseInstructors)
                 {
-                    var courseInstance = await _courseInstanceRepository.GetByIdAsync(ci.CourseInstanceId);
-                    var user = await _userRepository.GetByIdAsync(ci.UserId);
-                    responses.Add(MapToResponse(ci, courseInstance, user));
+                    responses.Add(await MapToResponseAsync(ci));
                 }
 
                 return new BaseResponse<List<CourseInstructorResponse>>(
@@ -202,15 +201,16 @@ namespace Service.Service
             }
         }
 
+        // 🟡 Tạm thời chưa dùng
         public async Task<BaseResponse<bool>> UpdateMainInstructorAsync(int courseInstanceId, int mainInstructorId)
         {
-            // Tạm thời chưa implement vì model chưa có field IsMainInstructor
             return new BaseResponse<bool>(
                 "Function not implemented yet",
                 StatusCodeEnum.NotImplemented_501,
                 false);
         }
 
+        // 🔁 Gán nhiều instructors vào 1 lớp
         public async Task<BaseResponse<List<CourseInstructorResponse>>> BulkAssignInstructorsAsync(BulkAssignInstructorsRequest request)
         {
             try
@@ -231,11 +231,9 @@ namespace Service.Service
 
                 foreach (var instructorId in request.InstructorIds)
                 {
-                    // Skip if already assigned
                     if (existingInstructors.Contains(instructorId))
                         continue;
 
-                    // Validate user exists and is instructor
                     var user = await _userRepository.GetByIdAsync(instructorId);
                     if (user == null)
                         continue;
@@ -247,7 +245,7 @@ namespace Service.Service
                     };
 
                     await _courseInstructorRepository.AddAsync(courseInstructor);
-                    responses.Add(MapToResponse(courseInstructor, courseInstance, user));
+                    responses.Add(await MapToResponseAsync(courseInstructor));
                 }
 
                 return new BaseResponse<List<CourseInstructorResponse>>(
@@ -264,8 +262,19 @@ namespace Service.Service
             }
         }
 
-        private CourseInstructorResponse MapToResponse(CourseInstructor courseInstructor, CourseInstance courseInstance, User user)
+        // 🔹 Helper: Map dữ liệu sang response (có đếm SV & trạng thái lớp)
+        private async Task<CourseInstructorResponse> MapToResponseAsync(CourseInstructor courseInstructor)
         {
+            var courseInstance = await _courseInstanceRepository.GetByIdAsync(courseInstructor.CourseInstanceId);
+            var user = await _userRepository.GetByIdAsync(courseInstructor.UserId);
+
+            // 🔸 Đếm sinh viên trong lớp
+            var studentCount = await _courseStudentRepository.CountByCourseInstanceIdAsync(courseInstructor.CourseInstanceId);
+
+            // 🔸 Xác định trạng thái lớp học
+            string status = "Unknown"; // nếu chưa có ngày học thì tạm gán
+
+
             return new CourseInstructorResponse
             {
                 Id = courseInstructor.Id,
@@ -275,8 +284,10 @@ namespace Service.Service
                 UserId = courseInstructor.UserId,
                 InstructorName = user?.FirstName ?? string.Empty,
                 InstructorEmail = user?.Email ?? string.Empty,
-                IsMainInstructor = false, // Mặc định false vì model chưa có field này
-                CreatedAt = DateTime.UtcNow
+                IsMainInstructor = false,
+                CreatedAt = DateTime.UtcNow,
+                StudentCount = studentCount,
+                CourseInstanceStatus = status
             };
         }
     }

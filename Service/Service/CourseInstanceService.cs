@@ -114,24 +114,37 @@ namespace Service.Service
             }
         }
 
-        public async Task<BaseResponse<string>> UpdateEnrollKeyAsync(int courseInstanceId, string newKey)
+        public async Task<BaseResponse<string>> UpdateEnrollKeyAsync(int courseInstanceId, string newKey, int userId)
         {
             try
             {
                 var courseInstance = await _courseInstanceRepository.GetByIdAsync(courseInstanceId);
                 if (courseInstance == null)
                 {
-                    return new BaseResponse<string>("Không tìm thấy lớp", StatusCodeEnum.NotFound_404, null);
+                    return new BaseResponse<string>("Không tìm thấy lớp học", StatusCodeEnum.NotFound_404, null);
                 }
+
+                // Kiểm tra instructor có thuộc lớp không (CourseInstructor)
+                var isInstructorInCourse = await _context.CourseInstructors
+                    .AnyAsync(ci => ci.CourseInstanceId == courseInstanceId && ci.UserId == userId);
+
+                if (!isInstructorInCourse)
+                {
+                    return new BaseResponse<string>("Bạn không có quyền đổi mã lớp này", StatusCodeEnum.Forbidden_403, null);
+                }
+
+                // Cập nhật mã mới
                 courseInstance.EnrollmentPassword = newKey;
                 await _courseInstanceRepository.UpdateAsync(courseInstance);
-                return new BaseResponse<string>("Key lớp cập nhật thành công", StatusCodeEnum.OK_200, newKey);
+
+                return new BaseResponse<string>("Cập nhật mã lớp thành công", StatusCodeEnum.OK_200, newKey);
             }
             catch (Exception ex)
             {
-                return new BaseResponse<string>("Lỗi cập nhật key: " + ex.Message, StatusCodeEnum.InternalServerError_500, null);
+                return new BaseResponse<string>($"Lỗi khi cập nhật mã lớp: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
+
 
         private string GenerateEnrollKey(int length = 6)
         {

@@ -45,5 +45,12 @@ namespace Repository.Repository
             return await _context.CourseStudents
                 .FirstOrDefaultAsync(cs => cs.CourseInstanceId == courseInstanceId && cs.UserId == userId);
         }
+
+        public async Task<int> CountByCourseInstanceIdAsync(int courseInstanceId)
+        {
+            return await _context.CourseStudents
+                .CountAsync(cs => cs.CourseInstanceId == courseInstanceId);
+        }
+
     }
 }
