@@ -118,10 +118,10 @@ namespace ASDPRS_SEP490.Controllers
 
         [HttpGet("google-callback")]
         [SwaggerOperation(
-        Summary = "Callback xác thực Google",
-        Description = "Endpoint callback từ Google OAuth sau khi xác thực thành công, tạo token và trả về frontend"
-    )]
-        [SwaggerResponse(302, "Chuyển hướng về frontend với token trong cookie")]
+    Summary = "Callback xác thực Google",
+    Description = "Endpoint callback từ Google OAuth sau khi xác thực thành công, tạo token và trả về frontend"
+)]
+        [SwaggerResponse(302, "Chuyển hướng về frontend với token trong URL hoặc cookie")]
         [SwaggerResponse(400, "Xác thực Google thất bại")]
         public async Task<IActionResult> GoogleCallback()
         {
@@ -133,27 +133,25 @@ namespace ASDPRS_SEP490.Controllers
                     return BadRequest(new { message = "Google authentication info is null (correlation/state failed)." });
                 }
 
-                // Read returnUrl (saved during GoogleLogin)
+                // Read returnUrl
                 string returnUrl = "http://localhost:5173/";
                 if (info.AuthenticationProperties != null && info.AuthenticationProperties.Items.ContainsKey("returnUrl"))
                 {
                     returnUrl = info.AuthenticationProperties.Items["returnUrl"];
                 }
 
-                // Validate returnUrl origin against allow-list to avoid open redirect
+                // Check origin whitelist
                 var allowedOrigins = new[]
                 {
-                    "http://localhost:5173", // FE (update for prod)
-                    "https://localhost:7104"  // BE (so you can test BE-only)
-                };
-
+            "http://localhost:5173", // FE
+            "https://localhost:7104" // BE test
+        };
                 try
                 {
                     var ruri = new Uri(returnUrl);
                     var origin = $"{ruri.Scheme}://{ruri.Host}{(ruri.IsDefaultPort ? "" : ":" + ruri.Port)}";
                     if (!allowedOrigins.Contains(origin))
                     {
-                        // fallback to safe default
                         returnUrl = "http://localhost:5173/";
                     }
                 }
@@ -162,16 +160,11 @@ namespace ASDPRS_SEP490.Controllers
                     returnUrl = "http://localhost:5173/";
                 }
 
-                // Get claims returned by Google
+                // Extract Google info
                 var googleEmail = info.Principal.FindFirst(ClaimTypes.Email)?.Value;
-                var givenName = info.Principal.FindFirst(ClaimTypes.GivenName)?.Value;
-                var surname = info.Principal.FindFirst(ClaimTypes.Surname)?.Value;
-                var googleId = info.Principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-
                 if (string.IsNullOrEmpty(googleEmail))
                     return BadRequest(new { message = "Could not get email from Google" });
 
-                // find or create user
                 var user = await _userManager.FindByEmailAsync(googleEmail);
                 if (user == null)
                 {
@@ -181,24 +174,20 @@ namespace ASDPRS_SEP490.Controllers
                 if (!user.IsActive)
                     return BadRequest(new { message = "Account is deactivated" });
 
-                // Ensure role Instructor (your policy)
                 var roles = await _userManager.GetRolesAsync(user);
                 if (!roles.Contains("Instructor"))
                     return BadRequest(new { message = "Only instructors can login with Google" });
 
-                // create tokens
+                // Generate tokens
                 var tokenResponse = await _tokenService.CreateToken(user);
                 if (tokenResponse == null)
                     return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Failed to create tokens" });
 
-                // IMPORTANT: Sign in with Identity cookie for browser sessions
                 await _signInManager.SignInAsync(user, new AuthenticationProperties { IsPersistent = true });
-
-                // Clear external cookie
                 await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
 
-                // Set HttpOnly secure cookies (FE will use credentials: 'include')
-                var accessCookieOptions = new CookieOptions
+                // (optional) cookie for browser session
+                var cookieOptions = new CookieOptions
                 {
                     HttpOnly = true,
                     Secure = true,
@@ -206,26 +195,19 @@ namespace ASDPRS_SEP490.Controllers
                     Expires = DateTimeOffset.UtcNow.AddMinutes(30),
                     Path = "/"
                 };
-                Response.Cookies.Append("ASDPRS_Access", tokenResponse.AccessToken, accessCookieOptions);
+                Response.Cookies.Append("ASDPRS_Access", tokenResponse.AccessToken, cookieOptions);
+                Response.Cookies.Append("ASDPRS_Refresh", tokenResponse.RefreshToken, cookieOptions);
 
-                var refreshCookieOptions = new CookieOptions
-                {
-                    HttpOnly = true,
-                    Secure = true,
-                    SameSite = SameSiteMode.None,
-                    Expires = DateTimeOffset.UtcNow.AddDays(30),
-                    Path = "/"
-                };
-                Response.Cookies.Append("ASDPRS_Refresh", tokenResponse.RefreshToken, refreshCookieOptions);
-
-                // redirect to frontend (or backend test URL)
-                return Redirect(returnUrl);
+                // ✅ Redirect to FE with token query params
+                var redirectUrl = $"{returnUrl}?accessToken={Uri.EscapeDataString(tokenResponse.AccessToken)}&refreshToken={Uri.EscapeDataString(tokenResponse.RefreshToken)}";
+                return Redirect(redirectUrl);
             }
             catch (Exception ex)
             {
                 return BadRequest(new { message = $"Error during Google login: {ex.Message}" });
             }
         }
+
 
         [HttpGet("me")]
         [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
