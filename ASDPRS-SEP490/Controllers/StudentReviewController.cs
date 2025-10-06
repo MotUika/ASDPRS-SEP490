@@ -88,6 +88,33 @@ public class StudentReviewController : ControllerBase
         return StatusCode((int)result.StatusCode, result);
     }
 
+    [HttpGet("assignment/{assignmentId}/random-pending")]
+    [SwaggerOperation(
+    Summary = "Lấy bài cần review ngẫu nhiên trong assignment",
+    Description = "Trả về một bài nộp ngẫu nhiên trong assignment mà sinh viên có thể review"
+)]
+    [SwaggerResponse(200, "Thành công", typeof(BaseResponse<ReviewAssignmentDetailResponse>))]
+    [SwaggerResponse(404, "Không có bài nào để review")]
+    public async Task<IActionResult> GetRandomPendingReview(int assignmentId)
+    {
+        var studentId = GetCurrentStudentId();
+        var result = await _reviewAssignmentService.GetRandomPendingReviewByAssignmentAsync(assignmentId, studentId);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpGet("assignment/{assignmentId}/pending-reviews")]
+    [SwaggerOperation(
+        Summary = "Lấy danh sách bài cần review trong assignment",
+        Description = "Trả về tất cả bài nộp trong assignment mà sinh viên cần review"
+    )]
+    [SwaggerResponse(200, "Thành công", typeof(BaseResponse<List<ReviewAssignmentResponse>>))]
+    public async Task<IActionResult> GetPendingReviewsByAssignment(int assignmentId)
+    {
+        var studentId = GetCurrentStudentId();
+        var result = await _reviewAssignmentService.GetPendingReviewsByAssignmentAsync(assignmentId, studentId);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
     [HttpGet("assignment/{assignmentId}/rubric")]
     [SwaggerOperation(
             Summary = "Lấy rubric của bài tập",

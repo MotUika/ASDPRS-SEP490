@@ -1051,5 +1051,122 @@ namespace Service.Service
                 Reviews = reviewResponses
             };
         }
+
+        public async Task<BaseResponse<List<ReviewAssignmentResponse>>> GetPendingReviewsByAssignmentAsync(int assignmentId, int reviewerId)
+        {
+            try
+            {
+                // Lấy tất cả submissions của assignment
+                var submissions = await _submissionRepository.GetByAssignmentIdAsync(assignmentId);
+
+                // Lấy tất cả review assignments của reviewer
+                var reviewerAssignments = await _reviewAssignmentRepository.GetByReviewerIdAsync(reviewerId);
+
+                // Lọc các review assignment trong assignment này và chưa hoàn thành
+                var pendingReviews = new List<ReviewAssignment>();
+
+                foreach (var submission in submissions)
+                {
+                    var reviewAssignment = reviewerAssignments
+                        .FirstOrDefault(ra => ra.SubmissionId == submission.SubmissionId &&
+                                         ra.ReviewerUserId == reviewerId &&
+                                         ra.Status != "Completed");
+
+                    if (reviewAssignment != null)
+                    {
+                        pendingReviews.Add(reviewAssignment);
+                    }
+                }
+
+                var responses = new List<ReviewAssignmentResponse>();
+                foreach (var ra in pendingReviews)
+                {
+                    responses.Add(await MapToResponseAsync(ra, true));
+                }
+
+                return new BaseResponse<List<ReviewAssignmentResponse>>(
+                    $"Found {responses.Count} pending reviews in assignment",
+                    StatusCodeEnum.OK_200,
+                    responses);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting pending reviews by assignment {AssignmentId} for reviewer {ReviewerId}", assignmentId, reviewerId);
+                return new BaseResponse<List<ReviewAssignmentResponse>>(
+                    $"Error retrieving pending reviews: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
+            }
+        }
+
+        public async Task<BaseResponse<ReviewAssignmentDetailResponse>> GetRandomPendingReviewByAssignmentAsync(int assignmentId, int reviewerId)
+        {
+            try
+            {
+                // Lấy tất cả submissions của assignment
+                var submissions = await _submissionRepository.GetByAssignmentIdAsync(assignmentId);
+
+                // Lấy tất cả review assignments của reviewer này
+                var reviewerAssignments = await _reviewAssignmentRepository.GetByReviewerIdAsync(reviewerId);
+
+                // Lọc các submission mà reviewer CHƯA review và KHÔNG phải bài của chính họ
+                var availableSubmissions = submissions
+                    .Where(s => s.UserId != reviewerId &&
+                           !reviewerAssignments.Any(ra =>
+                               ra.SubmissionId == s.SubmissionId &&
+                               ra.ReviewerUserId == reviewerId &&
+                               ra.Status == "Completed"))
+                    .ToList();
+
+                if (!availableSubmissions.Any())
+                {
+                    return new BaseResponse<ReviewAssignmentDetailResponse>(
+                        "No available submissions to review in this assignment",
+                        StatusCodeEnum.NotFound_404,
+                        null);
+                }
+
+                // Chọn ngẫu nhiên 1 submission
+                var random = new Random();
+                var selectedSubmission = availableSubmissions[random.Next(availableSubmissions.Count)];
+
+                // Tạo review assignment mới nếu chưa có
+                var existingReviewAssignment = reviewerAssignments
+                    .FirstOrDefault(ra => ra.SubmissionId == selectedSubmission.SubmissionId && ra.ReviewerUserId == reviewerId);
+
+                ReviewAssignment reviewAssignment;
+
+                if (existingReviewAssignment == null)
+                {
+                    var assignment = await _assignmentRepository.GetByIdAsync(assignmentId);
+                    reviewAssignment = new ReviewAssignment
+                    {
+                        SubmissionId = selectedSubmission.SubmissionId,
+                        ReviewerUserId = reviewerId,
+                        Status = "Assigned",
+                        AssignedAt = DateTime.UtcNow,
+                        Deadline = assignment.ReviewDeadline ?? assignment.Deadline.AddDays(7),
+                        IsAIReview = false
+                    };
+
+                    await _reviewAssignmentRepository.AddAsync(reviewAssignment);
+                }
+                else
+                {
+                    reviewAssignment = existingReviewAssignment;
+                }
+
+                // Trả về review assignment details
+                return await GetReviewAssignmentDetailsAsync(reviewAssignment.ReviewAssignmentId, reviewerId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting random pending review for assignment {AssignmentId} and reviewer {ReviewerId}", assignmentId, reviewerId);
+                return new BaseResponse<ReviewAssignmentDetailResponse>(
+                    $"Error getting random review: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
+            }
+        }
     }
 }
