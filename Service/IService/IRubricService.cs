@@ -14,7 +14,9 @@ namespace Service.IService
         Task<BaseResponse<RubricResponse>> UpdateRubricAsync(UpdateRubricRequest request);
         Task<BaseResponse<bool>> DeleteRubricAsync(int id);
         Task<BaseResponse<IEnumerable<RubricResponse>>> GetRubricsByTemplateIdAsync(int templateId);
-/*        Task<BaseResponse<IEnumerable<RubricResponse>>> GetRubricsByAssignmentIdAsync(int assignmentId);
-*/        Task<BaseResponse<RubricResponse>> GetRubricWithCriteriaAsync(int rubricId);
+        Task<BaseResponse<IEnumerable<RubricResponse>>> GetRubricsByAssignmentIdAsync(int assignmentId);
+        Task<BaseResponse<RubricResponse>> GetRubricWithCriteriaAsync(int rubricId);
+        Task<BaseResponse<IEnumerable<RubricResponse>>> GetModifiedRubricsAsync();
+        Task<BaseResponse<RubricResponse>> CreateRubricFromTemplateAsync(int templateId, int? assignmentId = null);
     }
 }

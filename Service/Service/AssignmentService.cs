@@ -363,6 +363,9 @@ namespace Service.Service
             try
             {
                 var assignments = await _assignmentRepository.GetByCourseInstanceIdAsync(courseInstanceId);
+                IQueryable<Assignment> query = _context.Assignments
+                    .Where(a => a.CourseInstanceId == courseInstanceId);
+
                 var responses = new List<AssignmentResponse>();
 
                 foreach (var assignment in assignments)
@@ -370,10 +373,7 @@ namespace Service.Service
                     responses.Add(await MapToResponse(assignment));
                 }
 
-                return new BaseResponse<List<AssignmentResponse>>(
-                    "Success",
-                    StatusCodeEnum.OK_200,
-                    responses);
+                return new BaseResponse<List<AssignmentResponse>>("Success", StatusCodeEnum.OK_200, responses);
             }
             catch (Exception ex)
             {

@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DataAccessLayer.Migrations
 {
     [DbContext(typeof(ASDPRSContext))]
-    [Migration("20251001103225_InitialCreate")]
+    [Migration("20251003150933_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -56,6 +56,11 @@ namespace DataAccessLayer.Migrations
                     b.Property<DateTime?>("FinalDeadline")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("GradingScale")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<string>("Guidelines")
                         .IsRequired()
                         .HasMaxLength(1000)
@@ -94,6 +99,10 @@ namespace DataAccessLayer.Migrations
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<decimal>("Weight")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
 
                     b.HasKey("AssignmentId");
 
@@ -1034,8 +1043,8 @@ namespace DataAccessLayer.Migrations
                             Id = 1,
                             AccessFailedCount = 0,
                             CampusId = 1,
-                            ConcurrencyStamp = "ec7fce3e-11d6-45d5-900a-671b26f6a4f4",
-                            CreatedAt = new DateTime(2025, 10, 1, 10, 32, 24, 122, DateTimeKind.Utc).AddTicks(8414),
+                            ConcurrencyStamp = "44f78e15-aa64-4967-b48a-0a491dd2a545",
+                            CreatedAt = new DateTime(2025, 10, 3, 15, 9, 32, 95, DateTimeKind.Utc).AddTicks(3141),
                             Email = "admin@example.com",
                             EmailConfirmed = true,
                             FirstName = "Admin",
@@ -1046,7 +1055,7 @@ namespace DataAccessLayer.Migrations
                             NormalizedUserName = "ADMIN",
                             PasswordHash = "AQAAAAIAAYagAAAAEK95SlxvEPzqxJyTxIof0ufhmHVKdEGcuw7MxCBj92JUehpXlaMI0F4RrX3mzLDNzA==",
                             PhoneNumberConfirmed = false,
-                            SecurityStamp = "3e33511f-469a-4ceb-bcac-e2900f9d079d",
+                            SecurityStamp = "6b1d7307-2243-42d8-b089-aebe649b3620",
                             StudentCode = "ADMIN001",
                             TwoFactorEnabled = false,
                             UserName = "admin"

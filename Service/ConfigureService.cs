@@ -26,7 +26,7 @@ namespace Service
             services.AddAutoMapper(typeof(AcademicYearMappingProfile));
             services.AddAutoMapper(typeof(SemesterMappingProfile));
             services.AddAutoMapper(typeof(CourseMappingProfile));
-            services.AddAutoMapper(typeof(CurriculumMappingProfile));
+            services.AddAutoMapper(typeof(CurriculumProfile));
             services.AddAutoMapper(typeof(CourseInstanceMappingProfile));
             services.AddAutoMapper(typeof(UserMappingProfile));
             services.AddAutoMapper(typeof(RubricTemplateMappingProfile));
@@ -34,6 +34,8 @@ namespace Service
             services.AddAutoMapper(typeof(RubricMappingProfile));
             services.AddAutoMapper(typeof(CriteriaMappingProfile));
             services.AddAutoMapper(typeof(CriteriaFeedbackMappingProfile));
+            services.AddAutoMapper(typeof(MajorMappingProfile));
+
 
 
 
@@ -61,14 +63,17 @@ namespace Service
             services.AddScoped<ICourseInstructorService,CourseInstructorService>();
             services.AddScoped<ICourseStudentService, CourseStudentService>();
             services.AddScoped<INotificationService, NotificationService>();
+            services.AddScoped<IMajorService, MajorService>(); 
+            services.AddScoped<IAISummaryService, AISummaryService>();
+            services.AddScoped<IGenAIService, GeminiAiService>();
+            services.AddSingleton<IDocumentTextExtractor, DocumentTextExtractor>();
+
 
 
             // Add UserService and other dependencies if needed
             services.AddScoped<IUserService, UserService>();
             services.AddScoped<IEmailService, EmailService>();
             services.AddScoped<ITokenService, TokenService>();
-            services.AddScoped<IFileStorageService, FileStorageService>();
-
 
             return services;
 

@@ -1,10 +1,12 @@
 ﻿using BussinessObject.Models;
 using DataAccessLayer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Repository.IRepository;
 using Service.IService;
 using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Enums;
+using Service.RequestAndResponse.Request.Notification;
 using Service.RequestAndResponse.Request.ReviewAssignment;
 using Service.RequestAndResponse.Response.Criteria;
 using Service.RequestAndResponse.Response.Review;
@@ -29,6 +31,9 @@ namespace Service.Service
         private readonly ICriteriaRepository _criteriaRepository;
         private readonly IRubricRepository _rubricRepository;
         private readonly ASDPRSContext _context;
+        private readonly INotificationService _notificationService;
+        private readonly IEmailService _emailService;
+        private readonly ILogger<ReviewAssignmentService> _logger;
 
         public ReviewAssignmentService(
             IReviewAssignmentRepository reviewAssignmentRepository,
@@ -40,7 +45,10 @@ namespace Service.Service
             ICourseInstanceRepository courseInstanceRepository,
             ICriteriaRepository criteriaRepository,
             IRubricRepository rubricRepository,
-            ASDPRSContext context)
+            ASDPRSContext context,
+            INotificationService notificationService,
+            IEmailService emailService,
+            ILogger<ReviewAssignmentService> logger)
         {
             _reviewAssignmentRepository = reviewAssignmentRepository;
             _submissionRepository = submissionRepository;
@@ -52,6 +60,9 @@ namespace Service.Service
             _criteriaRepository = criteriaRepository;
             _rubricRepository = rubricRepository;
             _context = context;
+            _notificationService = notificationService;
+            _emailService = emailService;
+            _logger = logger;
         }
 
         public async Task<BaseResponse<ReviewAssignmentResponse>> CreateReviewAssignmentAsync(CreateReviewAssignmentRequest request)
@@ -91,7 +102,7 @@ namespace Service.Service
                 {
                     SubmissionId = request.SubmissionId,
                     ReviewerUserId = request.ReviewerUserId,
-                    Status = request.Status ?? "Assigned",
+                    Status = request.Status,
                     AssignedAt = DateTime.UtcNow,
                     Deadline = request.Deadline,
                     IsAIReview = request.IsAIReview
@@ -107,6 +118,7 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error creating review assignment");
                 return new BaseResponse<ReviewAssignmentResponse>(
                     $"Error creating review assignment: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
@@ -162,6 +174,7 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error creating bulk review assignments");
                 return new BaseResponse<List<ReviewAssignmentResponse>>(
                     $"Error creating bulk review assignments: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
@@ -201,6 +214,7 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error updating review assignment");
                 return new BaseResponse<ReviewAssignmentResponse>(
                     $"Error updating review assignment: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
@@ -235,6 +249,7 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error deleting review assignment");
                 return new BaseResponse<bool>(
                     $"Error deleting review assignment: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
@@ -263,6 +278,7 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error retrieving review assignment");
                 return new BaseResponse<ReviewAssignmentResponse>(
                     $"Error retrieving review assignment: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
@@ -289,6 +305,7 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error retrieving review assignments by submission");
                 return new BaseResponse<List<ReviewAssignmentResponse>>(
                     $"Error retrieving review assignments: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
@@ -315,6 +332,7 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error retrieving review assignments by reviewer");
                 return new BaseResponse<List<ReviewAssignmentResponse>>(
                     $"Error retrieving review assignments: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
@@ -345,6 +363,7 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error retrieving review assignments by assignment");
                 return new BaseResponse<List<ReviewAssignmentResponse>>(
                     $"Error retrieving review assignments: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
@@ -376,6 +395,7 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error retrieving overdue review assignments");
                 return new BaseResponse<List<ReviewAssignmentResponse>>(
                     $"Error retrieving overdue review assignments: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
@@ -416,6 +436,7 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error retrieving pending review assignments");
                 return new BaseResponse<List<ReviewAssignmentResponse>>(
                     $"Error retrieving pending review assignments: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
@@ -425,6 +446,7 @@ namespace Service.Service
 
         public async Task<BaseResponse<bool>> AssignPeerReviewsAutomaticallyAsync(int assignmentId, int reviewsPerSubmission)
         {
+            using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
                 var assignment = await _assignmentRepository.GetByIdAsync(assignmentId);
@@ -455,12 +477,23 @@ namespace Service.Service
                 var allStudentSet = new HashSet<int>(currentStudents.Concat(passedStudents));
 
                 var submissionIds = submissions.Select(s => s.SubmissionId).ToList();
+
+                var currentWorkload = await CalculateFairWorkload(assignmentId, allStudentSet.ToList());
+
+                var totalSubmissions = submissions.Count();
+                var totalStudents = allStudentSet.Count;
+                var maxReviewsPerStudent = (int)Math.Ceiling((double)(totalSubmissions * reviewsPerSubmission) / totalStudents);
+                maxReviewsPerStudent = Math.Max(maxReviewsPerStudent, 1); // Đảm bảo ít nhất 1
+
                 var reviewerAssignments = new Dictionary<int, HashSet<int>>();
                 var submissionReviewers = new Dictionary<int, HashSet<int>>();
 
                 foreach (var userId in allStudentSet)
                 {
                     reviewerAssignments[userId] = new HashSet<int>();
+                    if (currentWorkload.ContainsKey(userId))
+                    {
+                    }
                 }
                 foreach (var submissionId in submissionIds)
                 {
@@ -470,7 +503,12 @@ namespace Service.Service
                 var random = new Random();
                 var assignedCount = 0;
 
-                // Phase 1: Assign current students
+                // PHASE 1: SẮP XẾP THEO WORKLOAD HIỆN TẠI
+                var availableCurrentStudents = currentStudentSet
+                    .OrderBy(userId => currentWorkload.ContainsKey(userId) ? currentWorkload[userId] : 0)
+                    .ThenBy(_ => random.Next())
+                    .ToList();
+
                 foreach (var submission in submissions)
                 {
                     var submitterId = submission.UserId;
@@ -478,27 +516,30 @@ namespace Service.Service
 
                     if (neededReviews <= 0) continue;
 
-                    var availableReviewers = currentStudentSet
+                    var availableReviewers = availableCurrentStudents
                         .Where(userId => userId != submitterId &&
-                               !submissionReviewers[submission.SubmissionId].Contains(userId))
-                        .OrderBy(userId => reviewerAssignments[userId].Count)
-                        .ThenBy(_ => random.Next())
+                               !submissionReviewers[submission.SubmissionId].Contains(userId) &&
+                               currentWorkload[userId] < maxReviewsPerStudent) // KIỂM TRA GIỚI HẠN MAX
                         .Take(neededReviews)
                         .ToList();
 
                     foreach (var reviewerId in availableReviewers)
                     {
-                        if (reviewerAssignments[reviewerId].Count >= reviewsPerSubmission * 2)
-                            continue;
-
                         await CreateReviewAssignment(submission.SubmissionId, reviewerId, assignment);
                         reviewerAssignments[reviewerId].Add(submission.SubmissionId);
                         submissionReviewers[submission.SubmissionId].Add(reviewerId);
+                        currentWorkload[reviewerId]++;
                         assignedCount++;
                     }
+
+                    // CẬP NHẬT LẠI THỨ TỰ SAU MỖI SUBMISSION
+                    availableCurrentStudents = availableCurrentStudents
+                        .OrderBy(userId => currentWorkload[userId])
+                        .ThenBy(_ => random.Next())
+                        .ToList();
                 }
 
-                // Phase 2: Fill remaining slots with current students
+                //PHASE 2: FILL SLOTS CÒN THIẾU VỚI WORKLOAD CÂN BẰNG
                 foreach (var submissionId in submissionReviewers.Keys.ToList())
                 {
                     var currentReviewers = submissionReviewers[submissionId];
@@ -511,8 +552,8 @@ namespace Service.Service
                     var availableReviewers = currentStudentSet
                         .Where(userId => userId != submitterId &&
                                !currentReviewers.Contains(userId) &&
-                               reviewerAssignments[userId].Count < reviewsPerSubmission * 2)
-                        .OrderBy(userId => reviewerAssignments[userId].Count)
+                               currentWorkload[userId] < maxReviewsPerStudent)
+                        .OrderBy(userId => currentWorkload[userId])
                         .ThenBy(_ => random.Next())
                         .Take(neededReviews)
                         .ToList();
@@ -522,11 +563,12 @@ namespace Service.Service
                         await CreateReviewAssignment(submissionId, reviewerId, assignment);
                         reviewerAssignments[reviewerId].Add(submissionId);
                         submissionReviewers[submissionId].Add(reviewerId);
+                        currentWorkload[reviewerId]++; 
                         assignedCount++;
                     }
                 }
 
-                // Phase 3: Use passed students if needed
+                //PHASE 3: DÙNG PASSED STUDENTS VỚI WORKLOAD CÂN BẰNG
                 foreach (var submissionId in submissionReviewers.Keys.ToList())
                 {
                     var currentReviewers = submissionReviewers[submissionId];
@@ -539,8 +581,8 @@ namespace Service.Service
                     var availableReviewers = passedStudentSet
                         .Where(userId => userId != submitterId &&
                                !currentReviewers.Contains(userId) &&
-                               reviewerAssignments[userId].Count < reviewsPerSubmission)
-                        .OrderBy(userId => reviewerAssignments[userId].Count)
+                               currentWorkload[userId] < maxReviewsPerStudent)
+                        .OrderBy(userId => currentWorkload[userId])
                         .ThenBy(_ => random.Next())
                         .Take(neededReviews)
                         .ToList();
@@ -550,6 +592,7 @@ namespace Service.Service
                         await CreateReviewAssignment(submissionId, reviewerId, assignment);
                         reviewerAssignments[reviewerId].Add(submissionId);
                         submissionReviewers[submissionId].Add(reviewerId);
+                        currentWorkload[reviewerId]++;
                         assignedCount++;
                     }
                 }
@@ -563,7 +606,7 @@ namespace Service.Service
                         var assignmentPenalty = await GetAssignmentConfig(assignment.AssignmentId, "MissingReviewPenalty");
                         if (decimal.TryParse(assignmentPenalty, out decimal missPenalty))
                         {
-                            // Log penalty application (actual grade adjustment handled in CourseStudentService)
+                            _logger.LogInformation($"Submission {submissionId} has insufficient reviews. Penalty: {missPenalty}%");
                         }
                     }
                 }
@@ -572,8 +615,14 @@ namespace Service.Service
                     .Count(kv => kv.Value.Count < reviewsPerSubmission);
                 var averageReviews = submissionReviewers.Average(kv => kv.Value.Count);
 
+                //THÊM THỐNG KÊ WORKLOAD VÀO MESSAGE
+                var avgWorkload = currentWorkload.Values.Average();
+                var minWorkload = currentWorkload.Values.Min();
+                var maxWorkload = currentWorkload.Values.Max();
+
                 var message = $"Assigned {assignedCount} peer reviews. " +
                              $"Average reviews per submission: {averageReviews:F1}. " +
+                             $"Workload - Avg: {avgWorkload:F1}, Min: {minWorkload}, Max: {maxWorkload}. " +
                              $"Submissions with insufficient reviews: {submissionsWithInsufficientReviews}";
 
                 if (submissionsWithInsufficientReviews > 0)
@@ -584,6 +633,8 @@ namespace Service.Service
                                   .Select(kv => kv.Key));
                 }
 
+                await transaction.CommitAsync();
+
                 return new BaseResponse<bool>(
                     message,
                     StatusCodeEnum.OK_200,
@@ -591,11 +642,52 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
+                await transaction.RollbackAsync();
+                _logger.LogError(ex, "Error assigning peer reviews automatically");
                 return new BaseResponse<bool>(
                     $"Error assigning peer reviews automatically: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
                     false);
             }
+        }
+
+        // Method để tính workflow cho từng student cần xem thêm
+        private async Task<Dictionary<int, int>> CalculateFairWorkload(int assignmentId, List<int> allStudents)
+        {
+            var workload = new Dictionary<int, int>();
+
+            // KHỞI TẠO WORKLOAD = 0 CHO TẤT CẢ STUDENTS
+            foreach (var studentId in allStudents)
+            {
+                workload[studentId] = 0;
+            }
+
+            // ĐẾM SỐ REVIEW ASSIGNMENTS HIỆN CÓ
+            var submissions = await _submissionRepository.GetByAssignmentIdAsync(assignmentId);
+            foreach (var submission in submissions)
+            {
+                var reviewAssignments = await _reviewAssignmentRepository.GetBySubmissionIdAsync(submission.SubmissionId);
+                foreach (var ra in reviewAssignments)
+                {
+                    if (workload.ContainsKey(ra.ReviewerUserId))
+                    {
+                        workload[ra.ReviewerUserId]++;
+                    }
+                }
+            }
+
+            return workload;
+        }
+
+        public async Task<Dictionary<int, int>> GetWorkloadDistribution(int assignmentId)
+        {
+            var assignment = await _assignmentRepository.GetByIdAsync(assignmentId);
+            if (assignment == null) return new Dictionary<int, int>();
+
+            var courseStudents = await _courseStudentRepository.GetByCourseInstanceIdAsync(assignment.CourseInstanceId);
+            var allStudents = courseStudents.Select(cs => cs.UserId).ToList();
+
+            return await CalculateFairWorkload(assignmentId, allStudents);
         }
 
         public async Task<BaseResponse<PeerReviewStatsResponse>> GetPeerReviewStatisticsAsync(int assignmentId)
@@ -666,6 +758,7 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error retrieving peer review statistics");
                 return new BaseResponse<PeerReviewStatsResponse>(
                     $"Error retrieving peer review statistics: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
@@ -716,6 +809,7 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error retrieving pending reviews");
                 return new BaseResponse<List<ReviewAssignmentResponse>>(
                     $"Error retrieving pending reviews: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
@@ -817,6 +911,7 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error retrieving review assignment details");
                 return new BaseResponse<ReviewAssignmentDetailResponse>(
                     $"Error retrieving review assignment details: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
@@ -832,7 +927,7 @@ namespace Service.Service
                 ReviewerUserId = reviewerId,
                 Status = "Assigned",
                 AssignedAt = DateTime.UtcNow,
-                Deadline = assignment.ReviewDeadline ?? assignment.Deadline,
+                Deadline = assignment.ReviewDeadline ?? assignment.Deadline.AddDays(7),
                 IsAIReview = false
             };
 
@@ -844,6 +939,57 @@ namespace Service.Service
             var configKey = $"{key}_{assignmentId}";
             var config = await _context.SystemConfigs.FirstOrDefaultAsync(sc => sc.ConfigKey == configKey);
             return config?.ConfigValue;
+        }
+        public async Task<BaseResponse<List<ReviewAssignmentResponse>>> GetPendingReviewsAcrossAllClassesAsync(int studentId)
+        {
+            try
+            {
+                // Lấy tất cả course instances mà sinh viên tham gia
+                var courseStudents = await _courseStudentRepository.GetByStudentIdAsync(studentId);
+                var enrolledCourseInstanceIds = courseStudents
+                    .Where(cs => cs.Status == "Enrolled")
+                    .Select(cs => cs.CourseInstanceId)
+                    .ToList();
+
+                if (!enrolledCourseInstanceIds.Any())
+                {
+                    return new BaseResponse<List<ReviewAssignmentResponse>>(
+                        "Student is not enrolled in any courses",
+                        StatusCodeEnum.OK_200,
+                        new List<ReviewAssignmentResponse>());
+                }
+
+                var allPendingReviews = new List<ReviewAssignmentResponse>();
+
+                // Lấy pending reviews từ tất cả các lớp
+                foreach (var courseInstanceId in enrolledCourseInstanceIds)
+                {
+                    var reviewsInCourse = await GetPendingReviewsForStudentAsync(studentId, courseInstanceId);
+                    if (reviewsInCourse.StatusCode == StatusCodeEnum.OK_200 && reviewsInCourse.Data != null)
+                    {
+                        allPendingReviews.AddRange(reviewsInCourse.Data);
+                    }
+                }
+
+                // Sắp xếp theo deadline gần nhất
+                allPendingReviews = allPendingReviews
+                    .OrderBy(r => r.Deadline)
+                    .ThenBy(r => r.AssignmentTitle)
+                    .ToList();
+
+                return new BaseResponse<List<ReviewAssignmentResponse>>(
+                    $"Found {allPendingReviews.Count} pending reviews across {enrolledCourseInstanceIds.Count} classes",
+                    StatusCodeEnum.OK_200,
+                    allPendingReviews);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving pending reviews across all classes for student {StudentId}", studentId);
+                return new BaseResponse<List<ReviewAssignmentResponse>>(
+                    $"Error retrieving pending reviews: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
+            }
         }
 
         private async Task<ReviewAssignmentResponse> MapToResponseAsync(ReviewAssignment reviewAssignment, bool forStudent = false)

@@ -19,7 +19,7 @@ namespace Service.RequestAndResponse.Response.Submission
         // Navigation properties
         public AssignmentInfoResponse Assignment { get; set; }
         public UserInfoResponse User { get; set; }
-        public List<ReviewAssignmentResponse> ReviewAssignments { get; set; }
+        public List<SubmissionReviewAssignmentResponse> ReviewAssignments { get; set; }
         public List<AISummaryResponse> AISummaries { get; set; }
         public List<RegradeRequestResponse> RegradeRequests { get; set; }
     }
@@ -41,7 +41,7 @@ namespace Service.RequestAndResponse.Response.Submission
         public string StudentId { get; set; }
     }
 
-    public class ReviewAssignmentResponse
+    public class SubmissionReviewAssignmentResponse
     {
         public int ReviewAssignmentId { get; set; }
         public int ReviewerId { get; set; }

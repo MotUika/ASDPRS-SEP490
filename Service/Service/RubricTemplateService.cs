@@ -44,10 +44,6 @@ namespace Service.Service
                 }
 
                 var response = _mapper.Map<RubricTemplateResponse>(rubricTemplate);
-                response.RubricCount = rubricTemplate.Rubrics?.Count ?? 0;
-                response.CriteriaTemplateCount = rubricTemplate.CriteriaTemplates?.Count ?? 0;
-                response.CreatedByUserName = rubricTemplate.CreatedByUser?.FirstName + " " + rubricTemplate.CreatedByUser?.LastName;
-
                 return new BaseResponse<RubricTemplateResponse>("Rubric template retrieved successfully", StatusCodeEnum.OK_200, response);
             }
             catch (Exception ex)
@@ -66,15 +62,7 @@ namespace Service.Service
                     .Include(rt => rt.CriteriaTemplates)
                     .ToListAsync();
 
-                var response = rubricTemplates.Select(rt =>
-                {
-                    var rubricTemplateResponse = _mapper.Map<RubricTemplateResponse>(rt);
-                    rubricTemplateResponse.RubricCount = rt.Rubrics?.Count ?? 0;
-                    rubricTemplateResponse.CriteriaTemplateCount = rt.CriteriaTemplates?.Count ?? 0;
-                    rubricTemplateResponse.CreatedByUserName = rt.CreatedByUser?.FirstName + " " + rt.CreatedByUser?.LastName;
-                    return rubricTemplateResponse;
-                });
-
+                var response = _mapper.Map<IEnumerable<RubricTemplateResponse>>(rubricTemplates);
                 return new BaseResponse<IEnumerable<RubricTemplateResponse>>("Rubric templates retrieved successfully", StatusCodeEnum.OK_200, response);
             }
             catch (Exception ex)
@@ -87,12 +75,35 @@ namespace Service.Service
         {
             try
             {
+                // Validate if user exists
+                var userExists = await _context.Users.AnyAsync(u => u.Id == request.CreatedByUserId);
+                if (!userExists)
+                {
+                    return new BaseResponse<RubricTemplateResponse>("User not found", StatusCodeEnum.NotFound_404, null);
+                }
+
+                // Check for duplicate title for the same user
+                var duplicateTemplate = await _context.RubricTemplates
+                    .AnyAsync(rt => rt.CreatedByUserId == request.CreatedByUserId && rt.Title == request.Title);
+
+                if (duplicateTemplate)
+                {
+                    return new BaseResponse<RubricTemplateResponse>("Rubric template with the same title already exists for this user", StatusCodeEnum.BadRequest_400, null);
+                }
+
                 var rubricTemplate = _mapper.Map<RubricTemplate>(request);
                 rubricTemplate.CreatedAt = DateTime.UtcNow;
 
                 var createdRubricTemplate = await _rubricTemplateRepository.AddAsync(rubricTemplate);
-                var response = _mapper.Map<RubricTemplateResponse>(createdRubricTemplate);
 
+                // Reload with related data for response
+                var rubricTemplateWithDetails = await _context.RubricTemplates
+                    .Include(rt => rt.CreatedByUser)
+                    .Include(rt => rt.Rubrics)
+                    .Include(rt => rt.CriteriaTemplates)
+                    .FirstOrDefaultAsync(rt => rt.TemplateId == createdRubricTemplate.TemplateId);
+
+                var response = _mapper.Map<RubricTemplateResponse>(rubricTemplateWithDetails);
                 return new BaseResponse<RubricTemplateResponse>("Rubric template created successfully", StatusCodeEnum.Created_201, response);
             }
             catch (Exception ex)
@@ -105,13 +116,37 @@ namespace Service.Service
         {
             try
             {
-                var existingRubricTemplate = await _rubricTemplateRepository.GetByIdAsync(request.TemplateId);
+                var existingRubricTemplate = await _context.RubricTemplates
+                    .Include(rt => rt.CreatedByUser)
+                    .Include(rt => rt.Rubrics)
+                    .Include(rt => rt.CriteriaTemplates)
+                    .FirstOrDefaultAsync(rt => rt.TemplateId == request.TemplateId);
+
                 if (existingRubricTemplate == null)
                 {
                     return new BaseResponse<RubricTemplateResponse>("Rubric template not found", StatusCodeEnum.NotFound_404, null);
                 }
 
-                _mapper.Map(request, existingRubricTemplate);
+                // Check for duplicate title if provided
+                if (!string.IsNullOrEmpty(request.Title) && request.Title != existingRubricTemplate.Title)
+                {
+                    var duplicateTemplate = await _context.RubricTemplates
+                        .AnyAsync(rt => rt.CreatedByUserId == existingRubricTemplate.CreatedByUserId &&
+                                       rt.Title == request.Title &&
+                                       rt.TemplateId != request.TemplateId);
+
+                    if (duplicateTemplate)
+                    {
+                        return new BaseResponse<RubricTemplateResponse>("Rubric template with the same title already exists for this user", StatusCodeEnum.BadRequest_400, null);
+                    }
+                }
+
+                // Update only provided fields
+                if (!string.IsNullOrEmpty(request.Title))
+                    existingRubricTemplate.Title = request.Title;
+
+                existingRubricTemplate.IsPublic = request.IsPublic;
+
                 var updatedRubricTemplate = await _rubricTemplateRepository.UpdateAsync(existingRubricTemplate);
                 var response = _mapper.Map<RubricTemplateResponse>(updatedRubricTemplate);
 
@@ -127,10 +162,20 @@ namespace Service.Service
         {
             try
             {
-                var rubricTemplate = await _rubricTemplateRepository.GetByIdAsync(id);
+                var rubricTemplate = await _context.RubricTemplates
+                    .Include(rt => rt.Rubrics)
+                    .Include(rt => rt.CriteriaTemplates)
+                    .FirstOrDefaultAsync(rt => rt.TemplateId == id);
+
                 if (rubricTemplate == null)
                 {
                     return new BaseResponse<bool>("Rubric template not found", StatusCodeEnum.NotFound_404, false);
+                }
+
+                // Check if rubric template has rubrics or criteria templates
+                if (rubricTemplate.Rubrics.Any() || rubricTemplate.CriteriaTemplates.Any())
+                {
+                    return new BaseResponse<bool>("Cannot delete rubric template that has rubrics or criteria templates", StatusCodeEnum.BadRequest_400, false);
                 }
 
                 await _rubricTemplateRepository.DeleteAsync(rubricTemplate);
@@ -146,9 +191,14 @@ namespace Service.Service
         {
             try
             {
-                var rubricTemplates = await _rubricTemplateRepository.GetByCreatedByUserIdAsync(userId);
-                var response = _mapper.Map<IEnumerable<RubricTemplateResponse>>(rubricTemplates);
+                var rubricTemplates = await _context.RubricTemplates
+                    .Include(rt => rt.CreatedByUser)
+                    .Include(rt => rt.Rubrics)
+                    .Include(rt => rt.CriteriaTemplates)
+                    .Where(rt => rt.CreatedByUserId == userId)
+                    .ToListAsync();
 
+                var response = _mapper.Map<IEnumerable<RubricTemplateResponse>>(rubricTemplates);
                 return new BaseResponse<IEnumerable<RubricTemplateResponse>>("Rubric templates retrieved successfully", StatusCodeEnum.OK_200, response);
             }
             catch (Exception ex)
@@ -168,20 +218,33 @@ namespace Service.Service
                     .Where(rt => rt.IsPublic)
                     .ToListAsync();
 
-                var response = rubricTemplates.Select(rt =>
-                {
-                    var rubricTemplateResponse = _mapper.Map<RubricTemplateResponse>(rt);
-                    rubricTemplateResponse.RubricCount = rt.Rubrics?.Count ?? 0;
-                    rubricTemplateResponse.CriteriaTemplateCount = rt.CriteriaTemplates?.Count ?? 0;
-                    rubricTemplateResponse.CreatedByUserName = rt.CreatedByUser?.FirstName + " " + rt.CreatedByUser?.LastName;
-                    return rubricTemplateResponse;
-                });
-
+                var response = _mapper.Map<IEnumerable<RubricTemplateResponse>>(rubricTemplates);
                 return new BaseResponse<IEnumerable<RubricTemplateResponse>>("Public rubric templates retrieved successfully", StatusCodeEnum.OK_200, response);
             }
             catch (Exception ex)
             {
                 return new BaseResponse<IEnumerable<RubricTemplateResponse>>($"Error retrieving public rubric templates: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
+            }
+        }
+
+        public async Task<BaseResponse<IEnumerable<RubricTemplateResponse>>> SearchRubricTemplatesAsync(string searchTerm)
+        {
+            try
+            {
+                var rubricTemplates = await _context.RubricTemplates
+                    .Include(rt => rt.CreatedByUser)
+                    .Include(rt => rt.Rubrics)
+                    .Include(rt => rt.CriteriaTemplates)
+                    .Where(rt => rt.Title.Contains(searchTerm) ||
+                                 (rt.CreatedByUser.FirstName + " " + rt.CreatedByUser.LastName).Contains(searchTerm))
+                    .ToListAsync();
+
+                var response = _mapper.Map<IEnumerable<RubricTemplateResponse>>(rubricTemplates);
+                return new BaseResponse<IEnumerable<RubricTemplateResponse>>("Rubric templates retrieved successfully", StatusCodeEnum.OK_200, response);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<IEnumerable<RubricTemplateResponse>>($"Error searching rubric templates: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
     }

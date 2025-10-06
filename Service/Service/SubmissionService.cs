@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Repository.IRepository;
 using Service.Interface;
+using Service.IService;
 using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Enums;
 using Service.RequestAndResponse.Request.Submission;
@@ -29,7 +30,8 @@ namespace Service.Service
         private readonly IMapper _mapper;
         private readonly ILogger<SubmissionService> _logger;
         private readonly IFileStorageService _fileStorageService;
-        private readonly ASDPRSContext _context; // Assuming you have a DbContext for SystemConfig
+        private readonly ASDPRSContext _context;
+        private readonly IReviewAssignmentService _reviewAssignmentService;
 
         public SubmissionService(
             ISubmissionRepository submissionRepository,
@@ -41,7 +43,8 @@ namespace Service.Service
             IMapper mapper,
             ILogger<SubmissionService> logger,
             IFileStorageService fileStorageService,
-            ASDPRSContext context)
+            ASDPRSContext context,
+            IReviewAssignmentService reviewAssignmentService)
         {
             _submissionRepository = submissionRepository;
             _assignmentRepository = assignmentRepository;
@@ -53,59 +56,41 @@ namespace Service.Service
             _logger = logger;
             _fileStorageService = fileStorageService;
             _context = context;
+            _reviewAssignmentService = reviewAssignmentService;
         }
+
 
         public async Task<BaseResponse<SubmissionResponse>> CreateSubmissionAsync(CreateSubmissionRequest request)
         {
             try
             {
-                // Validate assignment exists
                 var assignment = await _assignmentRepository.GetByIdAsync(request.AssignmentId);
                 if (assignment == null)
-                {
-                    return new BaseResponse<SubmissionResponse>(
-                        "Assignment not found",
-                        StatusCodeEnum.NotFound_404,
-                        null);
-                }
+                    return new BaseResponse<SubmissionResponse>("Assignment not found", StatusCodeEnum.NotFound_404, null);
 
-                // Validate user exists
                 var user = await _userRepository.GetByIdAsync(request.UserId);
                 if (user == null)
-                {
-                    return new BaseResponse<SubmissionResponse>(
-                        "User not found",
-                        StatusCodeEnum.NotFound_404,
-                        null);
-                }
+                    return new BaseResponse<SubmissionResponse>("User not found", StatusCodeEnum.NotFound_404, null);
 
-                // Check if user already submitted for this assignment
                 var existingSubmission = await _submissionRepository.GetAllAsync();
                 if (existingSubmission.Any(s => s.AssignmentId == request.AssignmentId && s.UserId == request.UserId))
                 {
-                    return new BaseResponse<SubmissionResponse>(
-                        "User has already submitted for this assignment",
-                        StatusCodeEnum.Conflict_409,
-                        null);
+                    return new BaseResponse<SubmissionResponse>("User has already submitted for this assignment", StatusCodeEnum.Conflict_409, null);
                 }
 
-                // Upload file
-                var fileUploadResult = await _fileStorageService.UploadFileAsync(request.File);
-                if (!fileUploadResult.Success)
+                // Upload file to Supabase (via IFileStorageService)
+                var uploadResult = await _fileStorageService.UploadFileAsync(request.File, folder: $"submissions/{request.AssignmentId}/{request.UserId}", makePublic: request.IsPublic);
+                if (!uploadResult.Success)
                 {
-                    return new BaseResponse<SubmissionResponse>(
-                        fileUploadResult.ErrorMessage,
-                        StatusCodeEnum.BadRequest_400,
-                        null);
+                    return new BaseResponse<SubmissionResponse>(uploadResult.ErrorMessage, StatusCodeEnum.BadRequest_400, null);
                 }
 
-                // Create submission
                 var submission = new Submission
                 {
                     AssignmentId = request.AssignmentId,
                     UserId = request.UserId,
-                    FileUrl = fileUploadResult.FileUrl,
-                    FileName = fileUploadResult.FileName,
+                    FileUrl = uploadResult.FileUrl,        // URL to serve (public or signed)
+                    FileName = uploadResult.FileName,      // object path in bucket (useful to delete)
                     OriginalFileName = request.File.FileName,
                     Keywords = request.Keywords,
                     SubmittedAt = DateTime.UtcNow,
@@ -117,30 +102,46 @@ namespace Service.Service
                 var response = await MapToSubmissionResponse(createdSubmission);
 
                 _logger.LogInformation($"Submission created successfully. SubmissionId: {createdSubmission.SubmissionId}");
-                // Check for late submission
+                await AutoAssignReviewsForNewSubmission(request.AssignmentId);
+
+
+                // Late check
                 if (submission.SubmittedAt > assignment.Deadline && submission.SubmittedAt <= (assignment.FinalDeadline ?? DateTime.MaxValue))
                 {
                     submission.Status = "Late";
                     await _submissionRepository.UpdateAsync(submission);
                 }
-                return new BaseResponse<SubmissionResponse>(
-                    "Submission created successfully",
-                    StatusCodeEnum.Created_201,
-                    response);
+
+                return new BaseResponse<SubmissionResponse>("Submission created successfully", StatusCodeEnum.Created_201, response);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error creating submission");
-                return new BaseResponse<SubmissionResponse>(
-                    "An error occurred while creating the submission",
-                    StatusCodeEnum.InternalServerError_500,
-                    null);
+                return new BaseResponse<SubmissionResponse>("An error occurred while creating the submission", StatusCodeEnum.InternalServerError_500, null);
             }
         }
 
+        private async Task AutoAssignReviewsForNewSubmission(int assignmentId)
+        {
+            try
+            {
+                var assignment = await _assignmentRepository.GetByIdAsync(assignmentId);
+                if (assignment == null) return;
+
+                // Sử dụng NumPeerReviewsRequired mà instructor đã set
+                await _reviewAssignmentService.AssignPeerReviewsAutomaticallyAsync(
+                    assignment.AssignmentId,
+                    assignment.NumPeerReviewsRequired);
+
+                _logger.LogInformation($"Auto-assigned {assignment.NumPeerReviewsRequired} reviews for new submission in assignment {assignment.AssignmentId}");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in auto review assignment for new submission");
+            }
+        }
         public async Task<BaseResponse<SubmissionResponse>> SubmitAssignmentAsync(SubmitAssignmentRequest request)
         {
-            // This method can include additional validation specific to assignment submission
             var createRequest = new CreateSubmissionRequest
             {
                 AssignmentId = request.AssignmentId,
@@ -298,68 +299,51 @@ namespace Service.Service
                 var existingSubmission = await _submissionRepository.GetByIdAsync(request.SubmissionId);
                 if (existingSubmission == null)
                 {
-                    return new BaseResponse<SubmissionResponse>(
-                        "Submission not found",
-                        StatusCodeEnum.NotFound_404,
-                        null);
+                    return new BaseResponse<SubmissionResponse>("Submission not found", StatusCodeEnum.NotFound_404, null);
                 }
 
                 // Update file if provided
                 if (request.File != null)
                 {
-                    var fileUploadResult = await _fileStorageService.UploadFileAsync(request.File);
-                    if (!fileUploadResult.Success)
+                    // Upload new file
+                    var uploadResult = await _fileStorageService.UploadFileAsync(request.File, folder: $"submissions/{existingSubmission.AssignmentId}/{existingSubmission.UserId}", makePublic: request.IsPublic ?? existingSubmission.IsPublic);
+                    if (!uploadResult.Success)
                     {
-                        return new BaseResponse<SubmissionResponse>(
-                            fileUploadResult.ErrorMessage,
-                            StatusCodeEnum.BadRequest_400,
-                            null);
+                        return new BaseResponse<SubmissionResponse>(uploadResult.ErrorMessage, StatusCodeEnum.BadRequest_400, null);
                     }
 
-                    // Delete old file
-                    await _fileStorageService.DeleteFileAsync(existingSubmission.FileUrl);
+                    // Delete old file (prefer stored path but allow URL)
+                    var toDelete = !string.IsNullOrEmpty(existingSubmission.FileName) ? existingSubmission.FileName : existingSubmission.FileUrl;
+                    await _fileStorageService.DeleteFileAsync(toDelete);
 
-                    existingSubmission.FileUrl = fileUploadResult.FileUrl;
-                    existingSubmission.FileName = fileUploadResult.FileName;
+                    existingSubmission.FileUrl = uploadResult.FileUrl;
+                    existingSubmission.FileName = uploadResult.FileName;
                     existingSubmission.OriginalFileName = request.File.FileName;
                 }
 
-                // Update other fields
+                // Update other properties
                 if (!string.IsNullOrEmpty(request.Keywords))
-                {
                     existingSubmission.Keywords = request.Keywords;
-                }
 
                 if (request.IsPublic.HasValue)
-                {
                     existingSubmission.IsPublic = request.IsPublic.Value;
-                }
 
                 if (!string.IsNullOrEmpty(request.Status))
-                {
                     existingSubmission.Status = request.Status;
-                }
 
                 var updatedSubmission = await _submissionRepository.UpdateAsync(existingSubmission);
                 var response = await MapToSubmissionResponse(updatedSubmission);
 
                 _logger.LogInformation($"Submission updated successfully. SubmissionId: {updatedSubmission.SubmissionId}");
 
-                return new BaseResponse<SubmissionResponse>(
-                    "Submission updated successfully",
-                    StatusCodeEnum.OK_200,
-                    response);
+                return new BaseResponse<SubmissionResponse>("Submission updated successfully", StatusCodeEnum.OK_200, response);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Error updating submission with ID: {request.SubmissionId}");
-                return new BaseResponse<SubmissionResponse>(
-                    "An error occurred while updating the submission",
-                    StatusCodeEnum.InternalServerError_500,
-                    null);
+                return new BaseResponse<SubmissionResponse>("An error occurred while updating the submission", StatusCodeEnum.InternalServerError_500, null);
             }
         }
-
         public async Task<BaseResponse<SubmissionResponse>> UpdateSubmissionStatusAsync(UpdateSubmissionStatusRequest request)
         {
             try
@@ -402,31 +386,23 @@ namespace Service.Service
                 var submission = await _submissionRepository.GetByIdAsync(submissionId);
                 if (submission == null)
                 {
-                    return new BaseResponse<bool>(
-                        "Submission not found",
-                        StatusCodeEnum.NotFound_404,
-                        false);
+                    return new BaseResponse<bool>("Submission not found", StatusCodeEnum.NotFound_404, false);
                 }
 
-                // Delete associated file
-                await _fileStorageService.DeleteFileAsync(submission.FileUrl);
+                // Delete associated file (prefer stored object path)
+                var toDelete = !string.IsNullOrEmpty(submission.FileName) ? submission.FileName : submission.FileUrl;
+                await _fileStorageService.DeleteFileAsync(toDelete);
 
                 await _submissionRepository.DeleteAsync(submission);
 
                 _logger.LogInformation($"Submission deleted successfully. SubmissionId: {submissionId}");
 
-                return new BaseResponse<bool>(
-                    "Submission deleted successfully",
-                    StatusCodeEnum.OK_200,
-                    true);
+                return new BaseResponse<bool>("Submission deleted successfully", StatusCodeEnum.OK_200, true);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Error deleting submission with ID: {submissionId}");
-                return new BaseResponse<bool>(
-                    "An error occurred while deleting the submission",
-                    StatusCodeEnum.InternalServerError_500,
-                    false);
+                return new BaseResponse<bool>("An error occurred while deleting the submission", StatusCodeEnum.InternalServerError_500, false);
             }
         }
 
@@ -640,7 +616,7 @@ namespace Service.Service
             // Load reviews if requested
             if (includeReviews && submission.ReviewAssignments != null)
             {
-                response.ReviewAssignments = _mapper.Map<List<ReviewAssignmentResponse>>(submission.ReviewAssignments);
+                response.ReviewAssignments = _mapper.Map<List<SubmissionReviewAssignmentResponse>>(submission.ReviewAssignments);
             }
 
             // Load AI summaries if requested

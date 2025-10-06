@@ -97,5 +97,17 @@ namespace ASDPRS_SEP490.Controllers
                 _ => StatusCode(500, result)
             };
         }
+
+        [HttpGet("major/{majorId}")]
+        public async Task<IActionResult> GetCurriculumsByMajor(int majorId)
+        {
+            var result = await _curriculumService.GetCurriculumsByMajorAsync(majorId);
+
+            return result.StatusCode switch
+            {
+                StatusCodeEnum.OK_200 => Ok(result),
+                _ => StatusCode(500, result)
+            };
+        }
     }
 }

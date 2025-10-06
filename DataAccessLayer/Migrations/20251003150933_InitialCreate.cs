@@ -491,6 +491,8 @@ namespace DataAccessLayer.Migrations
                     AllowCrossClass = table.Column<bool>(type: "bit", nullable: false),
                     IsBlindReview = table.Column<bool>(type: "bit", nullable: false),
                     InstructorWeight = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    GradingScale = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    Weight = table.Column<decimal>(type: "decimal(5,2)", precision: 5, scale: 2, nullable: false),
                     PeerWeight = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
                     IncludeAIScore = table.Column<bool>(type: "bit", nullable: false),
                     Status = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
@@ -938,7 +940,7 @@ namespace DataAccessLayer.Migrations
             migrationBuilder.InsertData(
                 table: "AspNetUsers",
                 columns: new[] { "Id", "AccessFailedCount", "AvatarUrl", "CampusId", "ConcurrencyStamp", "CreatedAt", "Email", "EmailConfirmed", "FirstName", "IsActive", "LastName", "LockoutEnabled", "LockoutEnd", "NormalizedEmail", "NormalizedUserName", "PasswordHash", "PhoneNumber", "PhoneNumberConfirmed", "SecurityStamp", "StudentCode", "TwoFactorEnabled", "UserName" },
-                values: new object[] { 1, 0, null, 1, "ec7fce3e-11d6-45d5-900a-671b26f6a4f4", new DateTime(2025, 10, 1, 10, 32, 24, 122, DateTimeKind.Utc).AddTicks(8414), "admin@example.com", true, "Admin", true, "User", true, null, "ADMIN@EXAMPLE.COM", "ADMIN", "AQAAAAIAAYagAAAAEK95SlxvEPzqxJyTxIof0ufhmHVKdEGcuw7MxCBj92JUehpXlaMI0F4RrX3mzLDNzA==", null, false, "3e33511f-469a-4ceb-bcac-e2900f9d079d", "ADMIN001", false, "admin" });
+                values: new object[] { 1, 0, null, 1, "44f78e15-aa64-4967-b48a-0a491dd2a545", new DateTime(2025, 10, 3, 15, 9, 32, 95, DateTimeKind.Utc).AddTicks(3141), "admin@example.com", true, "Admin", true, "User", true, null, "ADMIN@EXAMPLE.COM", "ADMIN", "AQAAAAIAAYagAAAAEK95SlxvEPzqxJyTxIof0ufhmHVKdEGcuw7MxCBj92JUehpXlaMI0F4RrX3mzLDNzA==", null, false, "6b1d7307-2243-42d8-b089-aebe649b3620", "ADMIN001", false, "admin" });
 
             migrationBuilder.InsertData(
                 table: "AspNetUserRoles",

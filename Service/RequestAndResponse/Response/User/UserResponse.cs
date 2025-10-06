@@ -5,7 +5,7 @@ namespace Service.RequestAndResponse.Response.User
 {
     public class UserResponse
     {
-        public int UserId { get; set; }
+        public int Id { get; set; }
         public int CampusId { get; set; }
         public string CampusName { get; set; }
         public string Username { get; set; }

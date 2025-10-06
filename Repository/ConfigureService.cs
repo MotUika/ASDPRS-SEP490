@@ -36,6 +36,8 @@ namespace Repository
             services.AddScoped<CourseInstanceDAO>();
             services.AddScoped<ReviewAssignmentDAO>();
             services.AddScoped<NotificationDAO>();
+            services.AddScoped<MajorDAO>();
+
 
 
             services.AddScoped<ICourseStudentRepository, CourseStudentRepository>();
@@ -64,6 +66,8 @@ namespace Repository
             services.AddScoped<ITokenRepository, TokenRepository>();
             services.AddScoped<ICourseInstanceRepository, CourseInstanceRepository>();
             services.AddScoped<INotificationRepository, NotificationRepository>();
+            services.AddScoped<IMajorRepository, MajorRepository>();
+
 
 
             return services;

@@ -13,6 +13,7 @@ using Repository;
 using Repository.BaseRepository;
 using Repository.IBaseRepository;
 using Service;
+using Service.Interface;
 using Service.IService;
 using Service.Service;
 using System.IdentityModel.Tokens.Jwt;
@@ -101,7 +102,6 @@ builder.Services.ConfigureApplicationCookie(options =>
 
     options.Cookie.SameSite = SameSiteMode.None;
     options.Cookie.SecurePolicy = CookieSecurePolicy.Always; // TEMP DEBUG
-
 });
 // External cookie used by Identity when handling external logins
 builder.Services.ConfigureExternalCookie(options =>
@@ -122,6 +122,9 @@ builder.Services.AddControllers().AddNewtonsoftJson(options =>
 
 // Register Repository + Service
 builder.Services.ConfigureRepositoryService(builder.Configuration);
+builder.Services.AddHttpClient<IFileStorageService, SupabaseFileStorageService>();
+builder.Services.AddSingleton<IDocumentTextExtractor, DocumentTextExtractor>();
+builder.Services.AddHttpClient<IGenAIService, GeminiAiService>();
 builder.Services.ConfigureServiceService(builder.Configuration);
 builder.Services.AddScoped(typeof(IBaseRepository<>), typeof(BaseRepository<>));
 
@@ -132,17 +135,27 @@ builder.Services.AddCors(options =>
     {
         builder.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
     });
+
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        policy.WithOrigins("http://localhost:5173")   // <- FE origin (update if needed)
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
+    });
 });
 
 // Authentication config
 builder.Services.AddAuthentication(options =>
 {
-    options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = GoogleDefaults.AuthenticationScheme;
+    // Use JWT as the default authentication/challenge for APIs,
+    // but keep Cookie scheme available for external sign-in / browser sessions.
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultSignInScheme = CookieAuthenticationDefaults.AuthenticationScheme; // used by Identity external login
 })
 .AddJwtBearer(options =>
 {
-    // giữ nguyên cấu hình JWT của bạn
     options.RequireHttpsMetadata = false;
     options.SaveToken = true;
     options.TokenValidationParameters = new TokenValidationParameters
@@ -155,8 +168,32 @@ builder.Services.AddAuthentication(options =>
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["JWT:SigningKey"])),
         ValidateLifetime = true,
         ClockSkew = TimeSpan.Zero,
-        RoleClaimType = ClaimTypes.Role,
-        NameClaimType = ClaimTypes.Name
+        // ensure the claim that contains user id is mapped to NameIdentifier
+        NameClaimType = ClaimTypes.NameIdentifier,
+        RoleClaimType = ClaimTypes.Role
+    };
+
+    // allow reading token from Authorization header OR a cookie (ASDPRS_Access)
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            // 1) Prefer Authorization header
+            var authHeader = context.Request.Headers["Authorization"].FirstOrDefault();
+            if (!string.IsNullOrEmpty(authHeader) && authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            {
+                context.Token = authHeader.Substring("Bearer ".Length).Trim();
+                return Task.CompletedTask;
+            }
+
+            // 2) Fallback: read from ASDPRS_Access cookie
+            if (context.Request.Cookies.TryGetValue("ASDPRS_Access", out var tokenFromCookie))
+            {
+                context.Token = tokenFromCookie;
+            }
+
+            return Task.CompletedTask;
+        }
     };
 })
 .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, options =>
@@ -188,17 +225,8 @@ builder.Services.AddAuthentication(options =>
     googleOptions.CorrelationCookie.SameSite = SameSiteMode.None;
     googleOptions.CorrelationCookie.SecurePolicy = CookieSecurePolicy.Always; // TEMP DEBUG
 });
-// Configure CORS - use a named policy for frontend
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowFrontend", policy =>
-    {
-        policy.WithOrigins("https://localhost:5173")   // <- FE origin (update if needed)
-              .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials();
-    });
-});
+
+// Configure Swagger / annotations already configured earlier
 builder.Services.AddSwaggerGen(c =>
 {
     c.EnableAnnotations();
@@ -223,8 +251,7 @@ else
     });
 }
 
-
-
+// Ensure CORS for frontend is applied before auth
 app.UseCors("AllowFrontend");
 app.UseAuthentication();
 app.UseAuthorization();

@@ -11,11 +11,19 @@
   </ItemGroup>
 	<ItemGroup>
 		<PackageReference Include="AutoMapper" Version="13.0.1" />
+		<PackageReference Include="DocumentFormat.OpenXml" Version="3.3.0" />
 		<PackageReference Include="EPPlus" Version="8.2.0" />
+		<PackageReference Include="Google.Apis.Auth" Version="1.71.0" />
 		<PackageReference Include="MailKit" Version="4.8.0" />
 		<PackageReference Include="Microsoft.AspNetCore.Authentication.Google" Version="8.0.10" />
 		<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.10" />
 		<PackageReference Include="MimeKit" Version="4.8.0" />
 		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+		<PackageReference Include="NPOI" Version="2.7.5" />
+		<PackageReference Include="PdfPig" Version="0.1.11" />
+		<PackageReference Include="Realtime" Version="2.4.0" />
+		<PackageReference Include="SharpCompress" Version="0.40.0" />
+		<PackageReference Include="Supabase" Version="1.1.1" />
+		<PackageReference Include="Supabase.Storage" Version="2.4.0" />
 	</ItemGroup>
 </Project>
