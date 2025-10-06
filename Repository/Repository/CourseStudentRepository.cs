@@ -50,5 +50,15 @@ namespace Repository.Repository
             return await _context.CourseStudents
                 .CountAsync(cs => cs.CourseInstanceId == courseInstanceId);
         }
+        public async Task<List<CourseStudent>> GetByStudentIdAsync(int studentId)
+        {
+            return await _context.CourseStudents
+                .Include(cs => cs.CourseInstance)
+                    .ThenInclude(ci => ci.Course)
+                .Include(cs => cs.CourseInstance)
+                    .ThenInclude(ci => ci.Semester)
+                .Where(cs => cs.UserId == studentId)
+                .ToListAsync();
+        }
     }
 }
