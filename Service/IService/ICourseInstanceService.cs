@@ -16,6 +16,6 @@ namespace Service.IService
         Task<BaseResponse<IEnumerable<CourseInstanceResponse>>> GetCourseInstancesByCourseIdAsync(int courseId);
         Task<BaseResponse<IEnumerable<CourseInstanceResponse>>> GetCourseInstancesBySemesterIdAsync(int semesterId);
         Task<BaseResponse<IEnumerable<CourseInstanceResponse>>> GetCourseInstancesByCampusIdAsync(int campusId);
-        Task<BaseResponse<string>> UpdateEnrollKeyAsync(int courseInstanceId, string newKey);
+        Task<BaseResponse<string>> UpdateEnrollKeyAsync(int courseInstanceId, string newKey, int userId);
     }
 }

@@ -147,7 +147,7 @@ namespace Service.Service
             }
         }
 
-        public async Task<BaseResponse<string>> UpdateEnrollKeyAsync(int courseInstanceId, string newKey)
+        public async Task<BaseResponse<string>> UpdateEnrollKeyAsync(int courseInstanceId, string newKey, int userId)
         {
             try
             {
@@ -156,49 +156,30 @@ namespace Service.Service
 
                 if (courseInstance == null)
                 {
-                    return new BaseResponse<string>("Course instance not found", StatusCodeEnum.NotFound_404, null);
+                    return new BaseResponse<string>("Không tìm thấy lớp học", StatusCodeEnum.NotFound_404, null);
                 }
 
-                // Validate new key
-                if (string.IsNullOrWhiteSpace(newKey) || newKey.Length > 50)
+                // Kiểm tra instructor có thuộc lớp không (CourseInstructor)
+                var isInstructorInCourse = await _context.CourseInstructors
+                    .AnyAsync(ci => ci.CourseInstanceId == courseInstanceId && ci.UserId == userId);
+
+                if (!isInstructorInCourse)
                 {
-                    return new BaseResponse<string>("Enrollment key must be between 1 and 50 characters", StatusCodeEnum.BadRequest_400, null);
+                    return new BaseResponse<string>("Bạn không có quyền đổi mã lớp này", StatusCodeEnum.Forbidden_403, null);
                 }
 
+                // Cập nhật mã mới
                 courseInstance.EnrollmentPassword = newKey;
                 await _courseInstanceRepository.UpdateAsync(courseInstance);
 
-                return new BaseResponse<string>("Enrollment key updated successfully", StatusCodeEnum.OK_200, newKey);
+                return new BaseResponse<string>("Cập nhật mã lớp thành công", StatusCodeEnum.OK_200, newKey);
             }
             catch (Exception ex)
             {
-                return new BaseResponse<string>($"Error updating enrollment key: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
+                return new BaseResponse<string>($"Lỗi khi cập nhật mã lớp: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
 
-        public async Task<BaseResponse<string>> GenerateNewEnrollKeyAsync(int courseInstanceId)
-        {
-            try
-            {
-                var courseInstance = await _context.CourseInstances
-                    .FirstOrDefaultAsync(ci => ci.CourseInstanceId == courseInstanceId);
-
-                if (courseInstance == null)
-                {
-                    return new BaseResponse<string>("Course instance not found", StatusCodeEnum.NotFound_404, null);
-                }
-
-                var newKey = GenerateEnrollKey();
-                courseInstance.EnrollmentPassword = newKey;
-                await _courseInstanceRepository.UpdateAsync(courseInstance);
-
-                return new BaseResponse<string>("New enrollment key generated successfully", StatusCodeEnum.OK_200, newKey);
-            }
-            catch (Exception ex)
-            {
-                return new BaseResponse<string>($"Error generating enrollment key: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
-            }
-        }
 
         private string GenerateEnrollKey(int length = 6)
         {

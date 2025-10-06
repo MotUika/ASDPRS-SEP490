@@ -13,5 +13,7 @@ namespace Service.RequestAndResponse.Response.CourseInstructor
         public string InstructorEmail { get; set; }
         public bool IsMainInstructor { get; set; }
         public DateTime CreatedAt { get; set; }
+        public int StudentCount { get; set; }
+        public string CourseInstanceStatus { get; set; }
     }
 }
