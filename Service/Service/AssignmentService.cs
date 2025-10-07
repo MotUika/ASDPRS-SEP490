@@ -31,6 +31,7 @@ namespace Service.Service
         private readonly IReviewAssignmentRepository _reviewAssignmentRepository;
         private readonly ASDPRSContext _context;
         private readonly INotificationService _notificationService;
+        private readonly ICriteriaFeedbackRepository _criteriaFeedbackRepository;
 
         public AssignmentService(
             IAssignmentRepository assignmentRepository,
@@ -43,7 +44,8 @@ namespace Service.Service
             ICriteriaRepository criteriaRepository,
             IReviewAssignmentRepository reviewAssignmentRepository,
             ASDPRSContext context,
-            INotificationService notificationService)
+            INotificationService notificationService,
+            ICriteriaFeedbackRepository criteriaFeedbackRepository)
         {
             _assignmentRepository = assignmentRepository;
             _courseInstanceRepository = courseInstanceRepository;
@@ -56,6 +58,7 @@ namespace Service.Service
             _reviewAssignmentRepository = reviewAssignmentRepository;
             _context = context;
             _notificationService = notificationService;
+            _criteriaFeedbackRepository = criteriaFeedbackRepository;
         }
 
         public async Task<BaseResponse<AssignmentResponse>> CreateAssignmentAsync(CreateAssignmentRequest request)
@@ -83,6 +86,24 @@ namespace Service.Service
                             StatusCodeEnum.NotFound_404,
                             null);
                     }
+                }
+
+                // Validate weights sum to 100
+                if (request.InstructorWeight + request.PeerWeight != 100)
+                {
+                    return new BaseResponse<AssignmentResponse>(
+                        "Instructor weight and peer weight must sum to 100%",
+                        StatusCodeEnum.BadRequest_400,
+                        null);
+                }
+
+                // Validate grading scale
+                if (request.GradingScale != "Scale10" && request.GradingScale != "PassFail")
+                {
+                    return new BaseResponse<AssignmentResponse>(
+                        "Grading scale must be either 'Scale10' or 'PassFail'",
+                        StatusCodeEnum.BadRequest_400,
+                        null);
                 }
 
                 // Validate weights sum to 100
@@ -877,8 +898,7 @@ namespace Service.Service
             if (now <= assignment.Deadline)
                 return "Active";
             if (assignment.FinalDeadline.HasValue && now <= assignment.FinalDeadline.Value)
-                return "LateSubmission"; // Cho phép nộp muộn với penalty
-                                         // After final deadline, check if we're in review phase
+                return "LateSubmission";
             if (assignment.ReviewDeadline.HasValue && now <= assignment.ReviewDeadline.Value)
                 return "InReview"; // New status for peer review phase
             return "Closed";
@@ -1088,6 +1108,67 @@ namespace Service.Service
                     StatusCodeEnum.InternalServerError_500,
                     null);
             }
+        }
+        // Thêm method để xử lý điểm số theo thang điểm
+        private decimal CalculateScoreBasedOnGradingScale(decimal rawScore, string gradingScale)
+        {
+            {
+                if (gradingScale == "PassFail")
+                {
+                    // Pass/Fail: >=50% là Pass (100), ngược lại Fail (0)
+                    return rawScore >= 50 ? 100 : 0;
+                }
+                else // Scale10
+                {
+                    // Scale10: giữ nguyên điểm 0-10, làm tròn 1 chữ số
+                    return Math.Round(rawScore, 1);
+                }
+            }
+        }
+
+        // Method để hiển thị điểm theo định dạng
+        public string FormatScoreForDisplay(decimal score, string gradingScale)
+        {
+            if (gradingScale == "PassFail")
+            {
+                return score >= 50 ? "Pass" : "Fail";
+            }
+            else // Scale10
+            {
+                return Math.Round(score, 1).ToString("0.0");
+            }
+        }
+
+        // Cập nhật method tính điểm review
+        private async Task<decimal> CalculateReviewScore(Review review, Assignment assignment)
+        {
+            var criteriaFeedbacks = await _criteriaFeedbackRepository.GetByReviewIdAsync(review.ReviewId);
+
+            if (!criteriaFeedbacks.Any())
+                return 0;
+
+            decimal totalScore = 0;
+            decimal totalWeight = 0;
+
+            foreach (var feedback in criteriaFeedbacks)
+            {
+                var criteria = await _criteriaRepository.GetByIdAsync(feedback.CriteriaId);
+                if (criteria == null) continue;
+
+                decimal score = feedback.ScoreAwarded ?? 0;
+                decimal maxScore = criteria.MaxScore;
+                decimal weight = criteria.Weight;
+
+                // Tính điểm chuẩn hóa theo phần trăm
+                decimal normalizedScore = maxScore > 0 ? (score / maxScore) * 100 : 0;
+                totalScore += normalizedScore * weight;
+                totalWeight += weight;
+            }
+
+            decimal rawScore = totalWeight > 0 ? totalScore / totalWeight : 0;
+
+            // Áp dụng thang điểm
+            return CalculateScoreBasedOnGradingScale(rawScore, assignment.GradingScale);
         }
 
         // Lấy assignment status summary

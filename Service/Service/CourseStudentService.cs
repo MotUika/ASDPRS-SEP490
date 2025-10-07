@@ -521,89 +521,97 @@ namespace Service.Service
                     null);
             }
         }
+        // Cập nhật method tính điểm assignment
         public async Task<BaseResponse<decimal>> CalculateTotalAssignmentGradeAsync(int courseInstanceId, int studentId)
         {
             try
             {
                 var assignments = await _assignmentRepository.GetByCourseInstanceIdAsync(courseInstanceId);
                 decimal totalGrade = 0;
-                decimal totalWeight = assignments.Sum(a => a.Weight);
+                decimal totalWeight = assignments.Where(a => a.Weight > 0).Sum(a => a.Weight);
 
-                if (totalWeight == 0) return new BaseResponse<decimal>("No weights set", StatusCodeEnum.BadRequest_400, 0);
+                if (totalWeight == 0)
+                    return new BaseResponse<decimal>("No weights set", StatusCodeEnum.BadRequest_400, 0);
 
-                // Get student's review assignments across all assignments (to check missing reviews)
-                decimal totalMissingReviewPenalty = 0;
-                int totalRequiredReviews = 0;
-                int completedReviews = 0;
-
-                foreach (var assignment in assignments)
+                foreach (var assignment in assignments.Where(a => a.Weight > 0))
                 {
-                    var submission = (await _submissionRepository.GetByAssignmentIdAsync(assignment.AssignmentId))
-                        .FirstOrDefault(s => s.UserId == studentId);
-
-                    decimal assignmentGrade = 0;
-
-                    if (submission == null)
-                    {
-                        // No submission: 0
-                        assignmentGrade = 0;
-                    }
-                    else
-                    {
-                        // Calculate base grade from reviews
-                        var reviews = await _reviewRepository.GetBySubmissionIdAsync(submission.SubmissionId);
-                        var avgScore = reviews.Where(r => r.OverallScore.HasValue).Average(r => r.OverallScore.Value);
-                        assignmentGrade = avgScore;
-
-                        // Apply late penalty if submitted late
-                        if (submission.SubmittedAt > assignment.Deadline && submission.SubmittedAt <= (assignment.FinalDeadline ?? DateTime.MaxValue))
-                        {
-                            var latePenaltyStr = await GetAssignmentConfig(assignment.AssignmentId, "LateSubmissionPenalty");
-                            if (decimal.TryParse(latePenaltyStr, out decimal latePenalty))
-                            {
-                                assignmentGrade -= assignmentGrade * (latePenalty / 100);
-                                assignmentGrade = Math.Max(0, assignmentGrade);  // Not negative
-                            }
-                        }
-                    }
-
+                    var assignmentGrade = await CalculateAssignmentGradeForStudentAsync(assignment.AssignmentId, studentId);
                     totalGrade += assignmentGrade * (assignment.Weight / totalWeight);
-
-                    // Count required reviews for this assignment
-                    var studentReviews = await _reviewAssignmentRepository.GetByReviewerIdAsync(studentId);
-                    var assignmentReviews = studentReviews.Where(ra =>
-                    {
-                        var sub = _submissionRepository.GetByIdAsync(ra.SubmissionId).Result;
-                        return sub?.AssignmentId == assignment.AssignmentId;
-                    });
-
-                    totalRequiredReviews += assignmentReviews.Count();
-                    completedReviews += assignmentReviews.Count(ra => ra.Status == "Completed");
                 }
 
-                // Apply missing review penalty to total grade
-                int missingReviews = totalRequiredReviews - completedReviews;
-                if (missingReviews > 0)
-                {
-                    // Assume global or per course penalty; here use first assignment's for simplicity
-                    var sampleAssignment = assignments.FirstOrDefault();
-                    if (sampleAssignment != null)
-                    {
-                        var missPenaltyStr = await GetAssignmentConfig(sampleAssignment.AssignmentId, "MissingReviewPenalty");
-                        if (decimal.TryParse(missPenaltyStr, out decimal missPenalty))
-                        {
-                            totalGrade -= totalGrade * (missPenalty / 100) * missingReviews;  // Per missing
-                            totalGrade = Math.Max(0, totalGrade);
-                        }
-                    }
-                }
-
-                return new BaseResponse<decimal>("Success", StatusCodeEnum.OK_200, totalGrade);
+                return new BaseResponse<decimal>("Success", StatusCodeEnum.OK_200, Math.Round(totalGrade, 2));
             }
             catch (Exception ex)
             {
                 return new BaseResponse<decimal>(ex.Message, StatusCodeEnum.InternalServerError_500, 0);
             }
+        }
+
+        // Method tính điểm cho từng assignment
+        private async Task<decimal> CalculateAssignmentGradeForStudentAsync(int assignmentId, int studentId)
+        {
+            var assignment = await _assignmentRepository.GetByIdAsync(assignmentId);
+            var submission = (await _submissionRepository.GetByAssignmentIdAsync(assignmentId))
+                .FirstOrDefault(s => s.UserId == studentId);
+
+            if (submission == null)
+                return 0;
+
+            // Lấy tất cả reviews (LOẠI BỎ AI REVIEWS)
+            var reviews = (await _reviewRepository.GetBySubmissionIdAsync(submission.SubmissionId))
+                .Where(r => r.FeedbackSource != "AI" && r.OverallScore.HasValue)
+                .ToList();
+
+            if (!reviews.Any())
+                return 0;
+
+            // Phân loại reviews
+            var peerReviews = reviews.Where(r => r.ReviewType == "Peer").ToList();
+            var instructorReviews = reviews.Where(r => r.ReviewType == "Instructor").ToList();
+
+            decimal peerScore = peerReviews.Any() ? peerReviews.Average(r => r.OverallScore.Value) : 0;
+            decimal instructorScore = instructorReviews.Any() ? instructorReviews.Average(r => r.OverallScore.Value) : peerScore;
+
+            // Tính điểm tổng hợp theo trọng số
+            decimal finalScore = (assignment.InstructorWeight * instructorScore + assignment.PeerWeight * peerScore) / 100;
+
+            // Áp dụng penalty
+            finalScore = await ApplyPenaltiesAsync(assignment, submission, studentId, finalScore);
+
+            return finalScore;
+        }
+
+        // Method áp dụng penalties
+        private async Task<decimal> ApplyPenaltiesAsync(Assignment assignment, Submission submission, int studentId, decimal currentScore)
+        {
+            decimal penalty = 0;
+
+            // Late submission penalty
+            if (submission.SubmittedAt > assignment.Deadline)
+            {
+                var latePenaltyStr = await GetAssignmentConfig(assignment.AssignmentId, "LateSubmissionPenalty");
+                if (decimal.TryParse(latePenaltyStr, out decimal latePenaltyPercent))
+                {
+                    penalty += currentScore * (latePenaltyPercent / 100);
+                }
+            }
+
+            // Missing review penalty
+            var completedReviews = await _reviewAssignmentRepository.GetByReviewerIdAsync(studentId);
+            var requiredReviews = assignment.NumPeerReviewsRequired;
+            var actualCompletedReviews = completedReviews.Count(ra => ra.Status == "Completed");
+
+            if (actualCompletedReviews < requiredReviews)
+            {
+                var missingReviewPenaltyStr = await GetAssignmentConfig(assignment.AssignmentId, "MissingReviewPenalty");
+                if (decimal.TryParse(missingReviewPenaltyStr, out decimal missingReviewPenaltyPercent))
+                {
+                    int missingCount = requiredReviews - actualCompletedReviews;
+                    penalty += currentScore * (missingReviewPenaltyPercent / 100) * missingCount;
+                }
+            }
+
+            return Math.Max(0, currentScore - penalty);
         }
         private async Task<string> GetAssignmentConfig(int assignmentId, string key)
         {

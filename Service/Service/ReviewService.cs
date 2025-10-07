@@ -57,32 +57,22 @@ namespace Service.Service
                 var reviewAssignment = await _reviewAssignmentRepository.GetByIdAsync(request.ReviewAssignmentId);
                 if (reviewAssignment == null)
                 {
-                    return new BaseResponse<ReviewResponse>(
-                        "Review assignment not found",
-                        StatusCodeEnum.NotFound_404,
-                        null);
+                    return new BaseResponse<ReviewResponse>("Review assignment not found", StatusCodeEnum.NotFound_404, null);
                 }
 
-                var existingReviews = await _reviewRepository.GetByReviewAssignmentIdAsync(request.ReviewAssignmentId);
-                if (existingReviews.Any(r => r.ReviewType == request.ReviewType && r.FeedbackSource == request.FeedbackSource))
+                var submission = await _submissionRepository.GetByIdAsync(reviewAssignment.SubmissionId);
+                var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
+
+                if (request.FeedbackSource == "AI")
                 {
-                    return new BaseResponse<ReviewResponse>(
-                        "Review already exists for this assignment with the same type and source",
-                        StatusCodeEnum.Conflict_409,
-                        null);
+                    request.ReviewType = "AI";
+                    request.FeedbackSource = "AI";
                 }
 
                 decimal? overallScore = null;
-                if (request.CriteriaFeedbacks != null && request.CriteriaFeedbacks.Any(cf => cf.Score.HasValue))
+                if (request.FeedbackSource != "AI" && request.CriteriaFeedbacks != null && request.CriteriaFeedbacks.Any())
                 {
-                    var validScores = request.CriteriaFeedbacks
-                        .Where(cf => cf.Score.HasValue)
-                        .Select(cf => cf.Score.Value)
-                        .ToList();
-                    if (validScores.Any())
-                    {
-                        overallScore = Math.Round(validScores.Average(), 2);
-                    }
+                    overallScore = await CalculateReviewScoreFromRequest(request, assignment);
                 }
 
                 var review = new Review
@@ -117,21 +107,18 @@ namespace Service.Service
                     }
                 }
 
-                reviewAssignment.Status = "Completed";
-                await _reviewAssignmentRepository.UpdateAsync(reviewAssignment);
+                if (request.FeedbackSource != "AI")
+                {
+                    reviewAssignment.Status = "Completed";
+                    await _reviewAssignmentRepository.UpdateAsync(reviewAssignment);
+                }
 
                 var response = await MapToResponseAsync(review);
-                return new BaseResponse<ReviewResponse>(
-                    "Review created successfully",
-                    StatusCodeEnum.Created_201,
-                    response);
+                return new BaseResponse<ReviewResponse>("Review created successfully", StatusCodeEnum.Created_201, response);
             }
             catch (Exception ex)
             {
-                return new BaseResponse<ReviewResponse>(
-                    $"Error creating review: {ex.Message}",
-                    StatusCodeEnum.InternalServerError_500,
-                    null);
+                return new BaseResponse<ReviewResponse>($"Error creating review: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
 
@@ -509,14 +496,7 @@ namespace Service.Service
                 decimal? overallScore = null;
                 if (request.CriteriaFeedbacks != null && request.CriteriaFeedbacks.Any(cf => cf.Score.HasValue))
                 {
-                    var validScores = request.CriteriaFeedbacks
-                        .Where(cf => cf.Score.HasValue)
-                        .Select(cf => cf.Score.Value)
-                        .ToList();
-                    if (validScores.Any())
-                    {
-                        overallScore = Math.Round(validScores.Average(), 2);
-                    }
+                    overallScore = await CalculateReviewScoreFromRequest(request, assignment);
                 }
 
                 var review = new Review
@@ -664,6 +644,96 @@ namespace Service.Service
             }
         }
 
+        private async Task<decimal> CalculateReviewScoreFromRequest(SubmitStudentReviewRequest request, Assignment assignment)
+        {
+            decimal totalScore = 0;
+            decimal totalWeight = 0;
+
+            foreach (var cfRequest in request.CriteriaFeedbacks.Where(cf => cf.Score.HasValue))
+            {
+                var criteria = await _criteriaRepository.GetByIdAsync(cfRequest.CriteriaId);
+                if (criteria == null) continue;
+
+                decimal score = cfRequest.Score.Value;
+                decimal maxScore = criteria.MaxScore;
+                decimal weight = criteria.Weight;
+
+                // Tính điểm chuẩn hóa
+                decimal normalizedScore = maxScore > 0 ? (score / maxScore) * 100 : 0;
+                totalScore += normalizedScore * weight;
+                totalWeight += weight;
+            }
+
+            decimal rawScore = totalWeight > 0 ? totalScore / totalWeight : 0;
+
+            // Áp dụng thang điểm
+            return assignment.GradingScale == "PassFail"
+                ? (rawScore >= 50 ? 100 : 0)
+                : Math.Round(rawScore / 10, 1); // Chia 10 để chuyển từ 0-100 sang 0-10
+        }
+        // Method tính điểm từ request
+        private async Task<decimal> CalculateReviewScoreFromRequest(CreateReviewRequest request, Assignment assignment)
+        {
+            decimal totalScore = 0;
+            decimal totalWeight = 0;
+
+            foreach (var cfRequest in request.CriteriaFeedbacks.Where(cf => cf.Score.HasValue))
+            {
+                var criteria = await _criteriaRepository.GetByIdAsync(cfRequest.CriteriaId);
+                if (criteria == null) continue;
+
+                decimal score = cfRequest.Score.Value;
+                decimal maxScore = criteria.MaxScore;
+                decimal weight = criteria.Weight;
+
+                // Tính điểm chuẩn hóa
+                decimal normalizedScore = maxScore > 0 ? (score / maxScore) * 100 : 0;
+                totalScore += normalizedScore * weight;
+                totalWeight += weight;
+            }
+
+            decimal rawScore = totalWeight > 0 ? totalScore / totalWeight : 0;
+
+            // Áp dụng thang điểm
+            return assignment.GradingScale == "PassFail"
+                ? (rawScore >= 50 ? 100 : 0)
+                : Math.Round(rawScore / 10, 1); // Chia 10 để chuyển từ 0-100 sang 0-10
+        }
+
+        // Trong ReviewService.cs - Thêm method để lấy AI review (chỉ để tham khảo)
+        public async Task<BaseResponse<ReviewResponse>> GetAIReviewForReferenceAsync(int submissionId)
+        {
+            try
+            {
+                var submission = await _submissionRepository.GetByIdAsync(submissionId);
+                if (submission == null)
+                {
+                    return new BaseResponse<ReviewResponse>("Submission not found", StatusCodeEnum.NotFound_404, null);
+                }
+
+                var aiReviews = (await _reviewRepository.GetBySubmissionIdAsync(submissionId))
+                    .Where(r => r.FeedbackSource == "AI")
+                    .ToList();
+
+                if (!aiReviews.Any())
+                {
+                    return new BaseResponse<ReviewResponse>("No AI review available", StatusCodeEnum.NotFound_404, null);
+                }
+
+                var latestAIReview = aiReviews.OrderByDescending(r => r.ReviewedAt).First();
+                var response = await MapToResponseAsync(latestAIReview);
+
+                // Đánh dấu đây là AI review (chỉ để tham khảo)
+                response.IsAIReference = true;
+                response.DisplayNote = "AI Review - For Reference Only";
+
+                return new BaseResponse<ReviewResponse>("AI review retrieved for reference", StatusCodeEnum.OK_200, response);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<ReviewResponse>($"Error retrieving AI review: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
+            }
+        }
         private async Task<string> GetAssignmentConfig(int assignmentId, string key)
         {
             var configKey = $"{key}_{assignmentId}";
