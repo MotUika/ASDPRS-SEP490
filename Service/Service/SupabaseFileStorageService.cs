@@ -14,13 +14,20 @@ public class SupabaseFileStorageService : IFileStorageService
     private readonly ILogger<SupabaseFileStorageService> _logger;
     private readonly string _bucket;
 
-    public SupabaseFileStorageService(IConfiguration config, ILogger<SupabaseFileStorageService> logger)
+    public SupabaseFileStorageService(ILogger<SupabaseFileStorageService> logger)
     {
         _logger = logger;
-        _bucket = config["Supabase:DefaultBucket"] ?? "files";
-        var url = config["Supabase:Url"];
-        var key = config["Supabase:ServiceKey"];
-        _client = new Supabase.Client(url, key, new SupabaseOptions { AutoConnectRealtime = false });
+
+        var url = "https://yznanpovvpvcqtblwggk.supabase.co";
+        var key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6bmFucG92dnB2Y3F0Ymx3Z2drIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1OTU2NjU1NywiZXhwIjoyMDc1MTQyNTU3fQ.LivBDEuCI7VOVbjArzbI3aDdZkSEpwnOXISEE87nTxE"; // ⚠️ Service Role Key, không phải anon key
+        _bucket = "files"; // Tên bucket bạn tạo trong Supabase Storage
+
+        _client = new Supabase.Client(url, key, new SupabaseOptions
+        {
+            AutoConnectRealtime = false
+        });
+
+        _logger.LogInformation($"✅ Supabase initialized with bucket '{_bucket}'");
     }
 
     private static string SanitizeFilename(string fileName)

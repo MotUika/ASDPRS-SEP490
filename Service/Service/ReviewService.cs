@@ -568,6 +568,101 @@ namespace Service.Service
                     null);
             }
         }
+        public async Task<BaseResponse<ReviewResponse>> UpdateStudentReviewAsync(UpdateStudentReviewRequest request)
+        {
+            try
+            {
+                var review = await _reviewRepository.GetByIdAsync(request.ReviewId);
+                if (review == null)
+                {
+                    return new BaseResponse<ReviewResponse>(
+                        "Review not found",
+                        StatusCodeEnum.NotFound_404,
+                        null);
+                }
+
+                var reviewAssignment = await _reviewAssignmentRepository.GetByIdAsync(review.ReviewAssignmentId);
+                if (reviewAssignment == null || reviewAssignment.ReviewerUserId != request.ReviewerUserId)
+                {
+                    return new BaseResponse<ReviewResponse>(
+                        "Review assignment not found or access denied",
+                        StatusCodeEnum.Forbidden_403,
+                        null);
+                }
+
+                var submission = await _submissionRepository.GetByIdAsync(reviewAssignment.SubmissionId);
+                var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
+
+                // Check if still within review period
+                if (assignment.ReviewDeadline.HasValue && DateTime.UtcNow > assignment.ReviewDeadline.Value)
+                {
+                    return new BaseResponse<ReviewResponse>(
+                        "Cannot edit review after review deadline",
+                        StatusCodeEnum.Forbidden_403,
+                        null);
+                }
+
+                // Update review
+                review.GeneralFeedback = request.GeneralFeedback;
+                review.ReviewedAt = DateTime.UtcNow;
+
+                // Update criteria feedbacks
+                var existingFeedbacks = await _criteriaFeedbackRepository.GetByReviewIdAsync(review.ReviewId);
+
+                // Remove existing feedbacks
+                foreach (var cf in existingFeedbacks)
+                {
+                    await _criteriaFeedbackRepository.DeleteAsync(cf);
+                }
+
+                // Add new feedbacks
+                if (request.CriteriaFeedbacks != null && request.CriteriaFeedbacks.Any())
+                {
+                    foreach (var cfRequest in request.CriteriaFeedbacks)
+                    {
+                        var criteria = await _criteriaRepository.GetByIdAsync(cfRequest.CriteriaId);
+                        if (criteria == null) continue;
+
+                        var criteriaFeedback = new CriteriaFeedback
+                        {
+                            ReviewId = review.ReviewId,
+                            CriteriaId = cfRequest.CriteriaId,
+                            ScoreAwarded = cfRequest.Score,
+                            Feedback = cfRequest.Feedback,
+                            FeedbackSource = "Student"
+                        };
+
+                        await _criteriaFeedbackRepository.AddAsync(criteriaFeedback);
+                    }
+
+                    // Recalculate overall score
+                    var validScores = request.CriteriaFeedbacks
+                        .Where(cf => cf.Score.HasValue)
+                        .Select(cf => cf.Score.Value)
+                        .ToList();
+
+                    if (validScores.Any())
+                    {
+                        review.OverallScore = Math.Round(validScores.Average(), 2);
+                    }
+                }
+
+                await _reviewRepository.UpdateAsync(review);
+
+                var response = await MapToResponseAsync(review);
+                return new BaseResponse<ReviewResponse>(
+                    "Review updated successfully",
+                    StatusCodeEnum.OK_200,
+                    response);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<ReviewResponse>(
+                    $"Error updating review: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
+            }
+        }
 
         private async Task<string> GetAssignmentConfig(int assignmentId, string key)
         {

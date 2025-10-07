@@ -1,7 +1,9 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Service.Interface;
 using Service.IService;
 using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Request.CourseStudent;
+using Service.RequestAndResponse.Request.Review;
 using Service.RequestAndResponse.Response.Assignment;
 using Service.RequestAndResponse.Response.CourseInstance;
 using Service.RequestAndResponse.Response.Review;
@@ -19,17 +21,20 @@ public class StudentReviewController : ControllerBase
     private readonly IReviewAssignmentService _reviewAssignmentService;
     private readonly IReviewService _reviewService;
     private readonly IAssignmentService _assignmentService;
+    private readonly ISubmissionService _submissionService;
 
     public StudentReviewController(
         ICourseStudentService courseStudentService,
         IReviewAssignmentService reviewAssignmentService,
         IReviewService reviewService,
-        IAssignmentService assignmentService)
+        IAssignmentService assignmentService,
+        ISubmissionService submissionService)
     {
         _courseStudentService = courseStudentService;
         _reviewAssignmentService = reviewAssignmentService;
         _reviewService = reviewService;
         _assignmentService = assignmentService;
+        _submissionService = submissionService;
     }
 
     [HttpGet("courses/{studentId}")]
@@ -198,6 +203,62 @@ public class StudentReviewController : ControllerBase
         var result = await _reviewAssignmentService.GetReviewAssignmentByIdAsync(reviewAssignmentId);
         return StatusCode((int)result.StatusCode, result);
     }
+    [HttpGet("assignment/{assignmentId}/random-review")]
+    [SwaggerOperation(
+        Summary = "Get random submission to review",
+        Description = "Get a random submission from the assignment (excluding own submission and already reviewed)"
+    )]
+    [SwaggerResponse(200, "Success", typeof(BaseResponse<ReviewAssignmentDetailResponse>))]
+    [SwaggerResponse(404, "No available submissions")]
+    public async Task<IActionResult> GetRandomReview(int assignmentId)
+    {
+        var studentId = GetCurrentStudentId();
+        var result = await _reviewAssignmentService.GetRandomReviewAssignmentAsync(assignmentId, studentId);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpGet("assignment/{assignmentId}/available-reviews")]
+    [SwaggerOperation(
+        Summary = "Get all available submissions to review",
+        Description = "Get all submissions that student can review (excluding own and already reviewed)"
+    )]
+    [SwaggerResponse(200, "Success", typeof(BaseResponse<List<ReviewAssignmentResponse>>))]
+    public async Task<IActionResult> GetAvailableReviews(int assignmentId)
+    {
+        var studentId = GetCurrentStudentId();
+        var result = await _reviewAssignmentService.GetAvailableReviewsForStudentAsync(assignmentId, studentId);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpPut("review/{reviewId}")]
+    [SwaggerOperation(
+        Summary = "Edit existing review",
+        Description = "Edit a review that was previously submitted (only during review period)"
+    )]
+    [SwaggerResponse(200, "Review updated successfully", typeof(BaseResponse<ReviewResponse>))]
+    [SwaggerResponse(403, "Cannot edit after review deadline")]
+    public async Task<IActionResult> UpdateStudentReview(int reviewId, [FromBody] UpdateStudentReviewRequest request)
+    {
+        request.ReviewId = reviewId;
+        request.ReviewerUserId = GetCurrentStudentId();
+
+        var result = await _reviewService.UpdateStudentReviewAsync(request);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpGet("submission/{submissionId}/can-modify")]
+    [SwaggerOperation(
+        Summary = "Check if student can modify submission",
+        Description = "Check if student can update or delete submission (before deadline)"
+    )]
+    [SwaggerResponse(200, "Success", typeof(BaseResponse<bool>))]
+    public async Task<IActionResult> CanModifySubmission(int submissionId)
+    {
+        var studentId = GetCurrentStudentId();
+        var result = await _submissionService.CanStudentModifySubmissionAsync(submissionId, studentId);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
     private int GetCurrentStudentId()
     {
         var userIdClaim = User.FindFirst("userId");

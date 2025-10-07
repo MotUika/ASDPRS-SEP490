@@ -878,6 +878,9 @@ namespace Service.Service
                 return "Active";
             if (assignment.FinalDeadline.HasValue && now <= assignment.FinalDeadline.Value)
                 return "LateSubmission"; // Cho phép nộp muộn với penalty
+                                         // After final deadline, check if we're in review phase
+            if (assignment.ReviewDeadline.HasValue && now <= assignment.ReviewDeadline.Value)
+                return "InReview"; // New status for peer review phase
             return "Closed";
         }
 
