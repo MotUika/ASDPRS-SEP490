@@ -1168,5 +1168,169 @@ namespace Service.Service
                     null);
             }
         }
+
+        public async Task<BaseResponse<ReviewAssignmentDetailResponse>> GetRandomReviewAssignmentAsync(int assignmentId, int reviewerId)
+        {
+            try
+            {
+                var assignment = await _assignmentRepository.GetByIdAsync(assignmentId);
+                if (assignment == null)
+                {
+                    return new BaseResponse<ReviewAssignmentDetailResponse>(
+                        "Assignment not found",
+                        StatusCodeEnum.NotFound_404,
+                        null);
+                }
+
+                // Check if assignment is in review phase
+                if (assignment.Status != "InReview")
+                {
+                    return new BaseResponse<ReviewAssignmentDetailResponse>(
+                        "Assignment is not in review phase yet",
+                        StatusCodeEnum.BadRequest_400,
+                        null);
+                }
+
+                // Get all submissions for this assignment excluding reviewer's own submission
+                var submissions = await _submissionRepository.GetByAssignmentIdAsync(assignmentId);
+                var reviewerSubmissions = submissions.Where(s => s.UserId == reviewerId).Select(s => s.SubmissionId).ToHashSet();
+
+                var availableSubmissions = submissions
+                    .Where(s => !reviewerSubmissions.Contains(s.SubmissionId))
+                    .ToList();
+
+                if (!availableSubmissions.Any())
+                {
+                    return new BaseResponse<ReviewAssignmentDetailResponse>(
+                        "No available submissions to review",
+                        StatusCodeEnum.NotFound_404,
+                        null);
+                }
+
+                // Get reviewer's existing review assignments to avoid duplicates
+                var existingReviewAssignments = await _reviewAssignmentRepository.GetByReviewerIdAsync(reviewerId);
+                var reviewedSubmissionIds = existingReviewAssignments
+                    .Select(ra => ra.SubmissionId)
+                    .ToHashSet();
+
+                // Filter out already reviewed submissions
+                var newSubmissions = availableSubmissions
+                    .Where(s => !reviewedSubmissionIds.Contains(s.SubmissionId))
+                    .ToList();
+
+                if (!newSubmissions.Any())
+                {
+                    return new BaseResponse<ReviewAssignmentDetailResponse>(
+                        "You have already reviewed all available submissions",
+                        StatusCodeEnum.NotFound_404,
+                        null);
+                }
+
+                // Randomly select a submission
+                var random = new Random();
+                var selectedSubmission = newSubmissions[random.Next(newSubmissions.Count)];
+
+                // Create or get existing review assignment
+                var existingAssignment = existingReviewAssignments
+                    .FirstOrDefault(ra => ra.SubmissionId == selectedSubmission.SubmissionId);
+
+                ReviewAssignment reviewAssignment;
+
+                if (existingAssignment == null)
+                {
+                    reviewAssignment = new ReviewAssignment
+                    {
+                        SubmissionId = selectedSubmission.SubmissionId,
+                        ReviewerUserId = reviewerId,
+                        Status = "Assigned",
+                        AssignedAt = DateTime.UtcNow,
+                        Deadline = assignment.ReviewDeadline ?? DateTime.UtcNow.AddDays(7),
+                        IsAIReview = false
+                    };
+
+                    await _reviewAssignmentRepository.AddAsync(reviewAssignment);
+                }
+                else
+                {
+                    reviewAssignment = existingAssignment;
+                }
+
+                return await GetReviewAssignmentDetailsAsync(reviewAssignment.ReviewAssignmentId, reviewerId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting random review assignment");
+                return new BaseResponse<ReviewAssignmentDetailResponse>(
+                    $"Error getting random review assignment: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
+            }
+        }
+
+        public async Task<BaseResponse<List<ReviewAssignmentResponse>>> GetAvailableReviewsForStudentAsync(int assignmentId, int studentId)
+        {
+            try
+            {
+                var assignment = await _assignmentRepository.GetByIdAsync(assignmentId);
+                if (assignment == null)
+                {
+                    return new BaseResponse<List<ReviewAssignmentResponse>>(
+                        "Assignment not found",
+                        StatusCodeEnum.NotFound_404,
+                        null);
+                }
+
+                // Check if assignment is in review phase
+                if (assignment.Status != "InReview")
+                {
+                    return new BaseResponse<List<ReviewAssignmentResponse>>(
+                        "Assignment is not in review phase yet",
+                        StatusCodeEnum.BadRequest_400,
+                        null);
+                }
+
+                var submissions = await _submissionRepository.GetByAssignmentIdAsync(assignmentId);
+                var existingReviewAssignments = await _reviewAssignmentRepository.GetByReviewerIdAsync(studentId);
+
+                var reviewedSubmissionIds = existingReviewAssignments
+                    .Select(ra => ra.SubmissionId)
+                    .ToHashSet();
+
+                var availableSubmissions = submissions
+                    .Where(s => s.UserId != studentId && !reviewedSubmissionIds.Contains(s.SubmissionId))
+                    .ToList();
+
+                var responses = new List<ReviewAssignmentResponse>();
+
+                foreach (var submission in availableSubmissions)
+                {
+                    // Create temporary review assignment for display
+                    var tempAssignment = new ReviewAssignment
+                    {
+                        SubmissionId = submission.SubmissionId,
+                        ReviewerUserId = studentId,
+                        Status = "Available",
+                        AssignedAt = DateTime.UtcNow,
+                        Deadline = assignment.ReviewDeadline ?? DateTime.UtcNow.AddDays(7),
+                        IsAIReview = false
+                    };
+
+                    responses.Add(await MapToResponseAsync(tempAssignment, true));
+                }
+
+                return new BaseResponse<List<ReviewAssignmentResponse>>(
+                    $"Found {responses.Count} available submissions to review",
+                    StatusCodeEnum.OK_200,
+                    responses);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting available reviews");
+                return new BaseResponse<List<ReviewAssignmentResponse>>(
+                    $"Error getting available reviews: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
+            }
+        }
     }
 }
