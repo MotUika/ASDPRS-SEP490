@@ -1,7 +1,9 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Repository.IRepository;
 using Service.Interface;
 using Service.IService;
 using Service.RequestAndResponse.BaseResponse;
+using Service.RequestAndResponse.Enums;
 using Service.RequestAndResponse.Request.CourseStudent;
 using Service.RequestAndResponse.Request.Review;
 using Service.RequestAndResponse.Response.Assignment;
@@ -22,19 +24,21 @@ public class StudentReviewController : ControllerBase
     private readonly IReviewService _reviewService;
     private readonly IAssignmentService _assignmentService;
     private readonly ISubmissionService _submissionService;
+    private readonly IAssignmentRepository _assignmentRepository;
 
     public StudentReviewController(
         ICourseStudentService courseStudentService,
         IReviewAssignmentService reviewAssignmentService,
         IReviewService reviewService,
         IAssignmentService assignmentService,
-        ISubmissionService submissionService)
+        ISubmissionService submissionService, IAssignmentRepository assignmentRepository)
     {
         _courseStudentService = courseStudentService;
         _reviewAssignmentService = reviewAssignmentService;
         _reviewService = reviewService;
         _assignmentService = assignmentService;
         _submissionService = submissionService;
+        _assignmentRepository = assignmentRepository;
     }
 
     [HttpGet("courses/{studentId}")]
@@ -131,6 +135,12 @@ public class StudentReviewController : ControllerBase
     public async Task<IActionResult> GetAssignmentRubric(int assignmentId)
     {
         var result = await _assignmentService.GetAssignmentRubricForReviewAsync(assignmentId);
+        if (result.StatusCode == StatusCodeEnum.OK_200 && result.Data != null)
+        {
+            var assignment = await _assignmentRepository.GetByIdAsync(assignmentId);
+            // Thêm thông tin grading scale vào response
+            result.Data.GradingScale = assignment?.GradingScale ?? "Scale10";
+        }
         return StatusCode((int)result.StatusCode, result);
     }
 

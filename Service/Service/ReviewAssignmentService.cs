@@ -1191,12 +1191,18 @@ namespace Service.Service
                         null);
                 }
 
-                // Get all submissions for this assignment excluding reviewer's own submission
+                // Get all submissions excluding reviewer's own
                 var submissions = await _submissionRepository.GetByAssignmentIdAsync(assignmentId);
-                var reviewerSubmissions = submissions.Where(s => s.UserId == reviewerId).Select(s => s.SubmissionId).ToHashSet();
+                var reviewerSubmissions = submissions.Where(s => s.UserId == reviewerId)
+                                                    .Select(s => s.SubmissionId)
+                                                    .ToHashSet(); // HashSet for fast lookup
+                // Get already reviewed submissions  
+                var existingReviews = await _reviewAssignmentRepository.GetByReviewerIdAsync(reviewerId);
+                var reviewedSubmissionIds = existingReviews.Select(ra => ra.SubmissionId)
+                                                          .ToHashSet(); // HashSet for fast lookup
 
                 var availableSubmissions = submissions
-                    .Where(s => !reviewerSubmissions.Contains(s.SubmissionId))
+                    .Where(s => !reviewerSubmissions.Contains(s.SubmissionId) && !reviewedSubmissionIds.Contains(s.SubmissionId))
                     .ToList();
 
                 if (!availableSubmissions.Any())
@@ -1206,12 +1212,6 @@ namespace Service.Service
                         StatusCodeEnum.NotFound_404,
                         null);
                 }
-
-                // Get reviewer's existing review assignments to avoid duplicates
-                var existingReviewAssignments = await _reviewAssignmentRepository.GetByReviewerIdAsync(reviewerId);
-                var reviewedSubmissionIds = existingReviewAssignments
-                    .Select(ra => ra.SubmissionId)
-                    .ToHashSet();
 
                 // Filter out already reviewed submissions
                 var newSubmissions = availableSubmissions
@@ -1231,7 +1231,7 @@ namespace Service.Service
                 var selectedSubmission = newSubmissions[random.Next(newSubmissions.Count)];
 
                 // Create or get existing review assignment
-                var existingAssignment = existingReviewAssignments
+                var existingAssignment = existingReviews
                     .FirstOrDefault(ra => ra.SubmissionId == selectedSubmission.SubmissionId);
 
                 ReviewAssignment reviewAssignment;

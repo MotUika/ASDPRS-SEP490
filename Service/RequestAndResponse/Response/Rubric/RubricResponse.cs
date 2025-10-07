@@ -12,6 +12,7 @@ namespace Service.RequestAndResponse.Response.Rubric
         public string Title { get; set; }
         public bool IsModified { get; set; }
         public int CriteriaCount { get; set; }
+        public string GradingScale { get; set; }
         public List<CriteriaResponse> Criteria { get; set; } = new List<CriteriaResponse>();
     }
 }

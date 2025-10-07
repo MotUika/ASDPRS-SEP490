@@ -652,23 +652,16 @@ namespace Service.Service
             {
                 var submission = await _submissionRepository.GetByIdAsync(submissionId);
                 if (submission == null || submission.UserId != studentId)
-                {
-                    return new BaseResponse<bool>(
-                        "Submission not found or access denied",
-                        StatusCodeEnum.NotFound_404,
-                        false);
-                }
+                    return new BaseResponse<bool>("Access denied", StatusCodeEnum.Forbidden_403, false);
 
                 var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
                 var now = DateTime.UtcNow;
 
-                // Student can modify submission only before the deadline
+                // Cho phép sửa/xóa trước deadline
                 bool canModify = now <= assignment.Deadline;
 
-                return new BaseResponse<bool>(
-                    canModify ? "Can modify submission" : "Cannot modify submission after deadline",
-                    StatusCodeEnum.OK_200,
-                    canModify);
+                return new BaseResponse<bool>(canModify ? "Can modify" : "Cannot modify after deadline",
+                                            StatusCodeEnum.OK_200, canModify);
             }
             catch (Exception ex)
             {
