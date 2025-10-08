@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DataAccessLayer.Migrations
 {
     [DbContext(typeof(ASDPRSContext))]
-    [Migration("20251003150933_InitialCreate")]
+    [Migration("20251008061952_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -235,6 +235,9 @@ namespace DataAccessLayer.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime>("EndDate")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("EnrollmentPassword")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -250,6 +253,9 @@ namespace DataAccessLayer.Migrations
 
                     b.Property<int>("SemesterId")
                         .HasColumnType("int");
+
+                    b.Property<DateTime>("StartDate")
+                        .HasColumnType("datetime2");
 
                     b.HasKey("CourseInstanceId");
 
@@ -1043,8 +1049,8 @@ namespace DataAccessLayer.Migrations
                             Id = 1,
                             AccessFailedCount = 0,
                             CampusId = 1,
-                            ConcurrencyStamp = "44f78e15-aa64-4967-b48a-0a491dd2a545",
-                            CreatedAt = new DateTime(2025, 10, 3, 15, 9, 32, 95, DateTimeKind.Utc).AddTicks(3141),
+                            ConcurrencyStamp = "ccfd58b0-1444-40ba-a217-c9cbfffeaad2",
+                            CreatedAt = new DateTime(2025, 10, 8, 6, 19, 50, 966, DateTimeKind.Utc).AddTicks(1498),
                             Email = "admin@example.com",
                             EmailConfirmed = true,
                             FirstName = "Admin",
@@ -1055,7 +1061,7 @@ namespace DataAccessLayer.Migrations
                             NormalizedUserName = "ADMIN",
                             PasswordHash = "AQAAAAIAAYagAAAAEK95SlxvEPzqxJyTxIof0ufhmHVKdEGcuw7MxCBj92JUehpXlaMI0F4RrX3mzLDNzA==",
                             PhoneNumberConfirmed = false,
-                            SecurityStamp = "6b1d7307-2243-42d8-b089-aebe649b3620",
+                            SecurityStamp = "2577fa44-7d86-4f3b-b8af-2bb8a8882031",
                             StudentCode = "ADMIN001",
                             TwoFactorEnabled = false,
                             UserName = "admin"

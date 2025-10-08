@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Repository.IRepository;
 using Service.Interface;
 using Service.IService;
@@ -268,7 +269,37 @@ public class StudentReviewController : ControllerBase
         var result = await _submissionService.CanStudentModifySubmissionAsync(submissionId, studentId);
         return StatusCode((int)result.StatusCode, result);
     }
+    [HttpGet("course-instance/{courseInstanceId}/assignments-with-tracking")]
+    [Authorize]
+    [SwaggerOperation(
+    Summary = "Lấy danh sách bài tập trong lớp học kèm theo tracking review",
+    Description = "Trả về danh sách bài tập trong một lớp học cụ thể kèm theo thông tin tracking review progress của sinh viên hiện tại"
+)]
+    [SwaggerResponse(200, "Thành công", typeof(BaseResponse<List<AssignmentBasicResponse>>))]
+    [SwaggerResponse(401, "Unauthorized - Token không hợp lệ")]
+    [SwaggerResponse(404, "Không tìm thấy lớp học")]
+    [SwaggerResponse(500, "Lỗi server")]
+    public async Task<IActionResult> GetAssignmentsWithTracking(int courseInstanceId)
+    {
+        var result = await _assignmentService.GetAssignmentsByCourseInstanceBasicAsync(courseInstanceId);
+        return StatusCode((int)result.StatusCode, result);
+    }
 
+    [HttpGet("assignment/{assignmentId}/tracking")]
+    [Authorize]
+    [SwaggerOperation(
+        Summary = "Lấy thông tin tracking review cho bài tập cụ thể",
+        Description = "Trả về thông tin chi tiết về tiến độ review của sinh viên hiện tại cho một bài tập cụ thể, bao gồm số review đã hoàn thành, số review còn lại, và trạng thái hoàn thành"
+    )]
+    [SwaggerResponse(200, "Thành công", typeof(BaseResponse<AssignmentTrackingResponse>))]
+    [SwaggerResponse(401, "Unauthorized - Token không hợp lệ")]
+    [SwaggerResponse(404, "Không tìm thấy bài tập")]
+    [SwaggerResponse(500, "Lỗi server")]
+    public async Task<IActionResult> GetAssignmentTracking(int assignmentId)
+    {
+        var result = await _assignmentService.GetAssignmentTrackingAsync(assignmentId);
+        return StatusCode((int)result.StatusCode, result);
+    }
     private int GetCurrentStudentId()
     {
         var userIdClaim = User.FindFirst("userId");
