@@ -271,8 +271,20 @@ namespace Service.Service
             // 🔸 Đếm sinh viên trong lớp
             var studentCount = await _courseStudentRepository.CountByCourseInstanceIdAsync(courseInstructor.CourseInstanceId);
 
+            string courseStatus; 
             // 🔸 Xác định trạng thái lớp học
-            string status = "Unknown"; // nếu chưa có ngày học thì tạm gán
+            if (courseInstance.StartDate > DateTime.UtcNow)
+            {
+                courseStatus = "Upcoming"; // Chưa bắt đầu
+            }
+            else if (courseInstance.EndDate < DateTime.UtcNow)
+            {
+                courseStatus = "Completed"; // Đã kết thúc
+            }
+            else
+            {
+                courseStatus = "Ongoing"; // Đang diễn ra
+            }
 
 
             return new CourseInstructorResponse
@@ -287,7 +299,7 @@ namespace Service.Service
                 IsMainInstructor = false,
                 CreatedAt = DateTime.UtcNow,
                 StudentCount = studentCount,
-                CourseInstanceStatus = status
+                CourseInstanceStatus = courseStatus
             };
         }
     }
