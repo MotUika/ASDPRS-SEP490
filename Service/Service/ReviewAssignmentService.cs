@@ -34,7 +34,8 @@ namespace Service.Service
         private readonly INotificationService _notificationService;
         private readonly IEmailService _emailService;
         private readonly ILogger<ReviewAssignmentService> _logger;
-
+        private static readonly ThreadLocal<Random> _threadLocalRandom =
+    new ThreadLocal<Random>(() => new Random(Guid.NewGuid().GetHashCode()));
         public ReviewAssignmentService(
             IReviewAssignmentRepository reviewAssignmentRepository,
             ISubmissionRepository submissionRepository,
@@ -1171,6 +1172,7 @@ namespace Service.Service
 
         public async Task<BaseResponse<ReviewAssignmentDetailResponse>> GetRandomReviewAssignmentAsync(int assignmentId, int reviewerId)
         {
+            using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
                 var assignment = await _assignmentRepository.GetByIdAsync(assignmentId);
@@ -1201,9 +1203,7 @@ namespace Service.Service
                 var reviewedSubmissionIds = existingReviews.Select(ra => ra.SubmissionId)
                                                           .ToHashSet(); // HashSet for fast lookup
 
-                var availableSubmissions = submissions
-                    .Where(s => !reviewerSubmissions.Contains(s.SubmissionId) && !reviewedSubmissionIds.Contains(s.SubmissionId))
-                    .ToList();
+                var availableSubmissions = await _reviewAssignmentRepository.GetAvailableSubmissionsForReviewerAsync(assignmentId, reviewerId);
 
                 if (!availableSubmissions.Any())
                 {
@@ -1227,7 +1227,7 @@ namespace Service.Service
                 }
 
                 // Randomly select a submission
-                var random = new Random();
+                var random = _threadLocalRandom.Value;
                 var selectedSubmission = newSubmissions[random.Next(newSubmissions.Count)];
 
                 // Create or get existing review assignment
@@ -1254,7 +1254,7 @@ namespace Service.Service
                 {
                     reviewAssignment = existingAssignment;
                 }
-
+                await transaction.CommitAsync();
                 return await GetReviewAssignmentDetailsAsync(reviewAssignment.ReviewAssignmentId, reviewerId);
             }
             catch (Exception ex)
