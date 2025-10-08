@@ -1,5 +1,7 @@
-﻿using BussinessObject.Models;
+﻿using AutoMapper;
+using BussinessObject.Models;
 using DataAccessLayer;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Repository.IRepository;
 using Repository.Repository;
@@ -10,7 +12,6 @@ using Service.RequestAndResponse.Request.Assignment;
 using Service.RequestAndResponse.Response.Assignment;
 using Service.RequestAndResponse.Response.Criteria;
 using Service.RequestAndResponse.Response.Rubric;
-using AutoMapper;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -32,6 +33,8 @@ namespace Service.Service
         private readonly ASDPRSContext _context;
         private readonly INotificationService _notificationService;
         private readonly ICriteriaFeedbackRepository _criteriaFeedbackRepository;
+        private readonly IHttpContextAccessor _httpContextAccessor;
+
 
         public AssignmentService(
             IAssignmentRepository assignmentRepository,
@@ -45,7 +48,7 @@ namespace Service.Service
             IReviewAssignmentRepository reviewAssignmentRepository,
             ASDPRSContext context,
             INotificationService notificationService,
-            ICriteriaFeedbackRepository criteriaFeedbackRepository)
+            ICriteriaFeedbackRepository criteriaFeedbackRepository, IHttpContextAccessor httpContextAccessor)
         {
             _assignmentRepository = assignmentRepository;
             _courseInstanceRepository = courseInstanceRepository;
@@ -59,6 +62,16 @@ namespace Service.Service
             _context = context;
             _notificationService = notificationService;
             _criteriaFeedbackRepository = criteriaFeedbackRepository;
+            _httpContextAccessor = httpContextAccessor;
+        }
+        private int GetCurrentStudentId()
+        {
+            var userIdClaim = _httpContextAccessor.HttpContext?.User.FindFirst("userId");
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int studentId))
+            {
+                throw new UnauthorizedAccessException("Invalid user token - userId not found");
+            }
+            return studentId;
         }
 
         public async Task<BaseResponse<AssignmentResponse>> CreateAssignmentAsync(CreateAssignmentRequest request)
@@ -694,31 +707,19 @@ namespace Service.Service
                     null);
             }
         }
-        public async Task<BaseResponse<List<AssignmentBasicResponse>>> GetAssignmentsByCourseInstanceBasicAsync(int courseInstanceId, int studentId)
+        public async Task<BaseResponse<List<AssignmentBasicResponse>>> GetAssignmentsByCourseInstanceBasicAsync(int courseInstanceId)
         {
             try
             {
+                // Lấy studentId từ token (sẽ implement sau)
+                var studentId = GetCurrentStudentId();
+
                 var assignments = await _assignmentRepository.GetByCourseInstanceIdAsync(courseInstanceId);
                 var responses = new List<AssignmentBasicResponse>();
 
                 foreach (var assignment in assignments)
                 {
-                    // Đếm số bài review pending và completed
-                    var pendingCount = 0;
-                    var completedCount = 0;
-
-                    // Lấy tất cả submissions của assignment này
-                    var submissions = await _submissionRepository.GetByAssignmentIdAsync(assignment.AssignmentId);
-
-                    // Đếm review assignments của sinh viên hiện tại
-                    foreach (var submission in submissions)
-                    {
-                        var reviewAssignments = await _reviewAssignmentRepository.GetBySubmissionIdAsync(submission.SubmissionId);
-                        var studentReviews = reviewAssignments.Where(ra => ra.ReviewerUserId == studentId);
-
-                        pendingCount += studentReviews.Count(ra => ra.Status != "Completed");
-                        completedCount += studentReviews.Count(ra => ra.Status == "Completed");
-                    }
+                    var tracking = await GetAssignmentReviewTrackingAsync(assignment.AssignmentId, studentId);
 
                     responses.Add(new AssignmentBasicResponse
                     {
@@ -731,8 +732,8 @@ namespace Service.Service
                         Deadline = assignment.Deadline,
                         ReviewDeadline = assignment.ReviewDeadline ?? DateTime.MinValue,
                         NumPeerReviewsRequired = assignment.NumPeerReviewsRequired,
-                        PendingReviewsCount = pendingCount,
-                        CompletedReviewsCount = completedCount
+                        PendingReviewsCount = tracking.PendingCount,
+                        CompletedReviewsCount = tracking.CompletedCount
                     });
                 }
 
@@ -745,6 +746,89 @@ namespace Service.Service
             {
                 return new BaseResponse<List<AssignmentBasicResponse>>(
                     $"Error retrieving assignments: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
+            }
+        }
+
+        private async Task<(int PendingCount, int CompletedCount)> GetAssignmentReviewTrackingAsync(int assignmentId, int studentId)
+        {
+            var pendingCount = 0;
+            var completedCount = 0;
+
+            // Tối ưu: Chỉ lấy review assignments của student này trong assignment này
+            var studentReviewAssignments = await _reviewAssignmentRepository.GetByReviewerIdAsync(studentId);
+
+            // Lọc theo assignment
+            foreach (var reviewAssignment in studentReviewAssignments)
+            {
+                var submission = await _submissionRepository.GetByIdAsync(reviewAssignment.SubmissionId);
+                if (submission?.AssignmentId == assignmentId)
+                {
+                    if (reviewAssignment.Status == "Completed")
+                        completedCount++;
+                    else
+                        pendingCount++;
+                }
+            }
+
+            return (pendingCount, completedCount);
+        }
+
+        public async Task<BaseResponse<AssignmentTrackingResponse>> GetAssignmentTrackingAsync(int assignmentId)
+        {
+            try
+            {
+                var studentId = GetCurrentStudentId();
+                var assignment = await _assignmentRepository.GetByIdAsync(assignmentId);
+
+                if (assignment == null)
+                {
+                    return new BaseResponse<AssignmentTrackingResponse>(
+                        "Assignment not found",
+                        StatusCodeEnum.NotFound_404,
+                        null);
+                }
+
+                var tracking = await GetAssignmentReviewTrackingAsync(assignmentId, studentId);
+
+                var hasMetMinimum = tracking.CompletedCount >= assignment.NumPeerReviewsRequired;
+                var remaining = Math.Max(0, assignment.NumPeerReviewsRequired - tracking.CompletedCount);
+
+                string reviewStatus = tracking.CompletedCount >= assignment.NumPeerReviewsRequired ? "Completed" :
+                                    tracking.CompletedCount > 0 ? "In Progress" : "Not Started";
+
+                decimal completionPercentage = assignment.NumPeerReviewsRequired > 0 ?
+                    (decimal)tracking.CompletedCount / assignment.NumPeerReviewsRequired * 100 : 0;
+
+                var response = new AssignmentTrackingResponse
+                {
+                    AssignmentId = assignment.AssignmentId,
+                    Title = assignment.Title,
+                    Description = assignment.Description,
+                    Guidelines = assignment.Guidelines,
+                    CreatedAt = assignment.CreatedAt,
+                    StartDate = assignment.StartDate ?? DateTime.MinValue,
+                    Deadline = assignment.Deadline,
+                    ReviewDeadline = assignment.ReviewDeadline ?? DateTime.MinValue,
+                    NumPeerReviewsRequired = assignment.NumPeerReviewsRequired,
+                    PendingReviewsCount = tracking.PendingCount,
+                    CompletedReviewsCount = tracking.CompletedCount,
+                    HasMetMinimumReviews = hasMetMinimum,
+                    RemainingReviewsRequired = remaining,
+                    ReviewStatus = reviewStatus,
+                    ReviewCompletionPercentage = Math.Round(completionPercentage, 1)
+                };
+
+                return new BaseResponse<AssignmentTrackingResponse>(
+                    "Assignment tracking retrieved successfully",
+                    StatusCodeEnum.OK_200,
+                    response);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<AssignmentTrackingResponse>(
+                    $"Error retrieving assignment tracking: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
                     null);
             }
@@ -898,8 +982,6 @@ namespace Service.Service
                 return "Scheduled";
             if (now <= assignment.Deadline)
                 return "Active";
-            if (assignment.FinalDeadline.HasValue && now <= assignment.FinalDeadline.Value)
-                return "LateSubmission";
             if (assignment.ReviewDeadline.HasValue && now <= assignment.ReviewDeadline.Value)
                 return "InReview"; // New status for peer review phase
             return "Closed";
