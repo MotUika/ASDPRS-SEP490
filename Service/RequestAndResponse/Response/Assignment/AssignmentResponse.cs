@@ -22,6 +22,8 @@ namespace Service.RequestAndResponse.Response.Assignment
         public decimal InstructorWeight { get; set; }
         public decimal PeerWeight { get; set; }
         public bool IncludeAIScore { get; set; }
+        public decimal Weight { get; set; }
+
 
         // Additional info
         public string CourseName { get; set; }
