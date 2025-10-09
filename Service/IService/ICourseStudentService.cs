@@ -10,7 +10,7 @@ namespace Service.IService
     public interface ICourseStudentService
     {
         Task<BaseResponse<CourseStudentResponse>> CreateCourseStudentAsync(CreateCourseStudentRequest request);
-        Task<BaseResponse<bool>> DeleteCourseStudentAsync(int courseStudentId);
+        Task<BaseResponse<bool>> DeleteCourseStudentAsync(int courseStudentId, int courseInstanceId, int userId);
         Task<BaseResponse<CourseStudentResponse>> GetCourseStudentByIdAsync(int id);
         Task<BaseResponse<List<CourseStudentResponse>>> GetCourseStudentsByCourseInstanceAsync(int courseInstanceId);
         Task<BaseResponse<List<CourseStudentResponse>>> GetCourseStudentsByStudentAsync(int studentId);

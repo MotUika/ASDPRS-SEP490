@@ -193,10 +193,31 @@ namespace Service.Service
             }
         }
 
-        public async Task<BaseResponse<bool>> DeleteCourseStudentAsync(int courseStudentId)
+        public async Task<BaseResponse<bool>> DeleteCourseStudentAsync(int courseStudentId, int courseInstanceId, int userId)
         {
             try
             {
+                // 1. Kiểm tra lớp có tồn tại không
+                var courseInstance = await _courseInstanceRepository.GetByIdAsync(courseInstanceId);
+                if (courseInstance == null)
+                {
+                    return new BaseResponse<bool>(
+                        "Course instance not found",
+                        StatusCodeEnum.NotFound_404,
+                        false);
+                }
+
+                // 2. Kiểm tra user có tồn tại không
+                var user = await _userRepository.GetByIdAsync(userId);
+                if (user == null)
+                {
+                    return new BaseResponse<bool>(
+                        "User not found",
+                        StatusCodeEnum.NotFound_404,
+                        false);
+                }
+
+                // 3. Tìm courseStudent theo id
                 var courseStudent = await _courseStudentRepository.GetByIdAsync(courseStudentId);
                 if (courseStudent == null)
                 {
@@ -206,20 +227,32 @@ namespace Service.Service
                         false);
                 }
 
+                // 4. Kiểm tra xem có khớp cả 3 field không
+                if (courseStudent.UserId != userId || courseStudent.CourseInstanceId != courseInstanceId)
+                {
+                    return new BaseResponse<bool>(
+                        "Mismatch detected: student does not belong to this course instance",
+                        StatusCodeEnum.BadRequest_400,
+                        false);
+                }
+
+                // 5. Tiến hành xóa
                 await _courseStudentRepository.DeleteAsync(courseStudent);
+
                 return new BaseResponse<bool>(
-                    "Course student deleted successfully",
+                    "Student removed from course successfully",
                     StatusCodeEnum.OK_200,
                     true);
             }
             catch (Exception ex)
             {
                 return new BaseResponse<bool>(
-                    $"Error deleting course student: {ex.Message}",
+                    $"Error removing student from course: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
                     false);
             }
         }
+
 
         public async Task<BaseResponse<CourseStudentResponse>> GetCourseStudentByIdAsync(int id)
         {

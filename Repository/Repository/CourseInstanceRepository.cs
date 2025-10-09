@@ -51,5 +51,15 @@ namespace Repository.Repository
                 .Where(ci => ci.CampusId == campusId)
                 .ToListAsync();
         }
+
+        public async Task<CourseInstance> GetByIdWithRelationsAsync(int courseInstanceId)
+        {
+            return await _context.CourseInstances
+                .Include(ci => ci.Course)
+                .Include(ci => ci.Semester)
+                .Include(ci => ci.Campus)
+                .FirstOrDefaultAsync(ci => ci.CourseInstanceId == courseInstanceId);
+        }
+
     }
 }

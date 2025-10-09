@@ -17,5 +17,7 @@ namespace Repository.IRepository
         Task<IEnumerable<CourseInstance>> GetByCourseIdAsync(int courseId);
         Task<IEnumerable<CourseInstance>> GetBySemesterIdAsync(int semesterId);
         Task<IEnumerable<CourseInstance>> GetByCampusIdAsync(int campusId);
+        Task<CourseInstance> GetByIdWithRelationsAsync(int courseInstanceId);
+
     }
 }
