@@ -265,8 +265,10 @@ namespace Service.Service
         // 🔹 Helper: Map dữ liệu sang response (có đếm SV & trạng thái lớp)
         private async Task<CourseInstructorResponse> MapToResponseAsync(CourseInstructor courseInstructor)
         {
-            var courseInstance = await _courseInstanceRepository.GetByIdAsync(courseInstructor.CourseInstanceId);
+           // var courseInstance = await _courseInstanceRepository.GetByIdAsync(courseInstructor.CourseInstanceId);
+            var courseInstance = await _courseInstanceRepository.GetByIdWithRelationsAsync(courseInstructor.CourseInstanceId);
             var user = await _userRepository.GetByIdAsync(courseInstructor.UserId);
+
 
             // 🔸 Đếm sinh viên trong lớp
             var studentCount = await _courseStudentRepository.CountByCourseInstanceIdAsync(courseInstructor.CourseInstanceId);
@@ -286,6 +288,8 @@ namespace Service.Service
                 courseStatus = "Ongoing"; // Đang diễn ra
             }
 
+            var courseName = courseInstance?.Course?.CourseName ?? string.Empty;
+            var semesterName = courseInstance?.Semester?.Name ?? string.Empty;
 
             return new CourseInstructorResponse
             {
@@ -293,6 +297,8 @@ namespace Service.Service
                 CourseInstanceId = courseInstructor.CourseInstanceId,
                 CourseInstanceName = courseInstance?.SectionCode ?? string.Empty,
                 CourseCode = courseInstance?.Course?.CourseCode ?? string.Empty,
+                CourseName = courseName,
+                SemesterName = semesterName,
                 UserId = courseInstructor.UserId,
                 InstructorName = user?.FirstName ?? string.Empty,
                 InstructorEmail = user?.Email ?? string.Empty,
