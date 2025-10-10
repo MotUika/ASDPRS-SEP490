@@ -1,6 +1,7 @@
-﻿using AutoMapper;
+using AutoMapper;
 using BussinessObject.Models;
 using DataAccessLayer;
+using MathNet.Numerics.Distributions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Repository.IRepository;
@@ -896,6 +897,7 @@ namespace Service.Service
         {
             var courseInstance = await _courseInstanceRepository.GetByIdAsync(assignment.CourseInstanceId);
             var submissions = await _submissionRepository.GetByAssignmentIdAsync(assignment.AssignmentId);
+            var students = await _courseStudentRepository.GetByCourseInstanceIdAsync(assignment.CourseInstanceId);
 
             return new AssignmentSummaryResponse
             {
@@ -907,6 +909,7 @@ namespace Service.Service
                 CourseName = courseInstance?.Course?.CourseName ?? string.Empty,
                 SectionCode = courseInstance?.SectionCode ?? string.Empty,
                 SubmissionCount = submissions.Count(),
+                StudentCount = students.Count(),
                 IsOverdue = DateTime.UtcNow > assignment.Deadline,
                 DaysUntilDeadline = (int)(assignment.Deadline - DateTime.UtcNow).TotalDays,
                 Status = GetAssignmentStatus(assignment)
