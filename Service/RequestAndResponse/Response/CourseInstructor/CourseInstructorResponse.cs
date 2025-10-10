@@ -17,5 +17,7 @@ namespace Service.RequestAndResponse.Response.CourseInstructor
         public string CourseInstanceStatus { get; set; }
         public string CourseName { get; set; }         // Tên môn học
         public string SemesterName { get; set; }       // Tên học kỳ
+        public DateTime StartDate { get; set; }
+        public DateTime EndDate { get; set; }
     }
 }

@@ -1,5 +1,7 @@
-﻿using BussinessObject.Models;
+﻿using AutoMapper;
+using BussinessObject.Models;
 using DataAccessLayer;
+using MathNet.Numerics.Distributions;
 using Microsoft.EntityFrameworkCore;
 using Repository.IRepository;
 using Repository.Repository;
@@ -10,7 +12,6 @@ using Service.RequestAndResponse.Request.Assignment;
 using Service.RequestAndResponse.Response.Assignment;
 using Service.RequestAndResponse.Response.Criteria;
 using Service.RequestAndResponse.Response.Rubric;
-using AutoMapper;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -791,6 +792,7 @@ namespace Service.Service
         {
             var courseInstance = await _courseInstanceRepository.GetByIdAsync(assignment.CourseInstanceId);
             var submissions = await _submissionRepository.GetByAssignmentIdAsync(assignment.AssignmentId);
+            var students = await _courseStudentRepository.GetByCourseInstanceIdAsync(assignment.CourseInstanceId);
 
             return new AssignmentSummaryResponse
             {
@@ -802,6 +804,7 @@ namespace Service.Service
                 CourseName = courseInstance?.Course?.CourseName ?? string.Empty,
                 SectionCode = courseInstance?.SectionCode ?? string.Empty,
                 SubmissionCount = submissions.Count(),
+                StudentCount = students.Count(),
                 IsOverdue = DateTime.UtcNow > assignment.Deadline,
                 DaysUntilDeadline = (int)(assignment.Deadline - DateTime.UtcNow).TotalDays,
                 Status = GetAssignmentStatus(assignment)

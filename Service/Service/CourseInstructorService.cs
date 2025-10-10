@@ -299,6 +299,8 @@ namespace Service.Service
                 CourseCode = courseInstance?.Course?.CourseCode ?? string.Empty,
                 CourseName = courseName,
                 SemesterName = semesterName,
+                StartDate = courseInstance.StartDate,
+                EndDate = courseInstance.EndDate,
                 UserId = courseInstructor.UserId,
                 InstructorName = user?.FirstName ?? string.Empty,
                 InstructorEmail = user?.Email ?? string.Empty,

@@ -12,6 +12,7 @@ namespace Service.RequestAndResponse.Response.Assignment
         public string CourseName { get; set; }
         public string SectionCode { get; set; }
         public int SubmissionCount { get; set; }
+        public int StudentCount { get; set; }
         public bool IsOverdue { get; set; }
         public int DaysUntilDeadline { get; set; }
         public string Status { get; set; }
