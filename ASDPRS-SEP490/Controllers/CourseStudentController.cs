@@ -149,6 +149,36 @@ namespace ASDPRS_SEP490.Controllers
             };
         }
 
+        // Import SV từ Excel nhiều lớp
+        [HttpPost("import-multiple")]
+        [SwaggerOperation(
+            Summary = "Import sinh viên vào nhiều lớp từ file Excel",
+            Description = "Import danh sách sinh viên vào nhiều lớp học từ file Excel có nhiều sheet. Mỗi sheet là một lớp, tên sheet phải trùng với SectionCode của lớp"
+        )]
+        [SwaggerResponse(200, "Import thành công", typeof(BaseResponse<MultipleCourseImportResponse>))]
+        [SwaggerResponse(400, "File không hợp lệ hoặc rỗng")]
+        [SwaggerResponse(500, "Lỗi server")]
+        public async Task<IActionResult> ImportStudentsFromMultipleSheets(
+            [FromQuery] int campusId,
+            IFormFile file,
+            [FromQuery] int? changedByUserId)
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest("File is required");
+
+            if (campusId <= 0)
+                return BadRequest("CampusId is required");
+
+            using var stream = file.OpenReadStream();
+            var result = await _courseStudentService.ImportStudentsFromMultipleSheetsAsync(campusId, stream, changedByUserId);
+
+            return result.StatusCode switch
+            {
+                StatusCodeEnum.OK_200 => Ok(result),
+                _ => StatusCode(500, result)
+            };
+        }
+
         // Update trạng thái SV
         [HttpPut("{id}/status")]
         [SwaggerOperation(
