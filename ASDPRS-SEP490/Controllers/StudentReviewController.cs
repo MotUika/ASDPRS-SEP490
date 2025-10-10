@@ -1,7 +1,12 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Repository.IRepository;
+using Service.Interface;
 using Service.IService;
 using Service.RequestAndResponse.BaseResponse;
+using Service.RequestAndResponse.Enums;
 using Service.RequestAndResponse.Request.CourseStudent;
+using Service.RequestAndResponse.Request.Review;
 using Service.RequestAndResponse.Response.Assignment;
 using Service.RequestAndResponse.Response.CourseInstance;
 using Service.RequestAndResponse.Response.Review;
@@ -19,17 +24,22 @@ public class StudentReviewController : ControllerBase
     private readonly IReviewAssignmentService _reviewAssignmentService;
     private readonly IReviewService _reviewService;
     private readonly IAssignmentService _assignmentService;
+    private readonly ISubmissionService _submissionService;
+    private readonly IAssignmentRepository _assignmentRepository;
 
     public StudentReviewController(
         ICourseStudentService courseStudentService,
         IReviewAssignmentService reviewAssignmentService,
         IReviewService reviewService,
-        IAssignmentService assignmentService)
+        IAssignmentService assignmentService,
+        ISubmissionService submissionService, IAssignmentRepository assignmentRepository)
     {
         _courseStudentService = courseStudentService;
         _reviewAssignmentService = reviewAssignmentService;
         _reviewService = reviewService;
         _assignmentService = assignmentService;
+        _submissionService = submissionService;
+        _assignmentRepository = assignmentRepository;
     }
 
     [HttpGet("courses/{studentId}")]
@@ -126,6 +136,12 @@ public class StudentReviewController : ControllerBase
     public async Task<IActionResult> GetAssignmentRubric(int assignmentId)
     {
         var result = await _assignmentService.GetAssignmentRubricForReviewAsync(assignmentId);
+        if (result.StatusCode == StatusCodeEnum.OK_200 && result.Data != null)
+        {
+            var assignment = await _assignmentRepository.GetByIdAsync(assignmentId);
+            // Thêm thông tin grading scale vào response
+            result.Data.GradingScale = assignment?.GradingScale ?? "Scale10";
+        }
         return StatusCode((int)result.StatusCode, result);
     }
 
@@ -196,6 +212,92 @@ public class StudentReviewController : ControllerBase
     {
         var studentId = GetCurrentStudentId();
         var result = await _reviewAssignmentService.GetReviewAssignmentByIdAsync(reviewAssignmentId);
+        return StatusCode((int)result.StatusCode, result);
+    }
+    [HttpGet("assignment/{assignmentId}/random-review")]
+    [SwaggerOperation(
+        Summary = "Get random submission to review",
+        Description = "Get a random submission from the assignment (excluding own submission and already reviewed)"
+    )]
+    [SwaggerResponse(200, "Success", typeof(BaseResponse<ReviewAssignmentDetailResponse>))]
+    [SwaggerResponse(404, "No available submissions")]
+    public async Task<IActionResult> GetRandomReview(int assignmentId)
+    {
+        var studentId = GetCurrentStudentId();
+        var result = await _reviewAssignmentService.GetRandomReviewAssignmentAsync(assignmentId, studentId);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpGet("assignment/{assignmentId}/available-reviews")]
+    [SwaggerOperation(
+        Summary = "Get all available submissions to review",
+        Description = "Get all submissions that student can review (excluding own and already reviewed)"
+    )]
+    [SwaggerResponse(200, "Success", typeof(BaseResponse<List<ReviewAssignmentResponse>>))]
+    public async Task<IActionResult> GetAvailableReviews(int assignmentId)
+    {
+        var studentId = GetCurrentStudentId();
+        var result = await _reviewAssignmentService.GetAvailableReviewsForStudentAsync(assignmentId, studentId);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpPut("review/{reviewId}")]
+    [SwaggerOperation(
+        Summary = "Edit existing review",
+        Description = "Edit a review that was previously submitted (only during review period)"
+    )]
+    [SwaggerResponse(200, "Review updated successfully", typeof(BaseResponse<ReviewResponse>))]
+    [SwaggerResponse(403, "Cannot edit after review deadline")]
+    public async Task<IActionResult> UpdateStudentReview(int reviewId, [FromBody] UpdateStudentReviewRequest request)
+    {
+        request.ReviewId = reviewId;
+        request.ReviewerUserId = GetCurrentStudentId();
+
+        var result = await _reviewService.UpdateStudentReviewAsync(request);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpGet("submission/{submissionId}/can-modify")]
+    [SwaggerOperation(
+        Summary = "Check if student can modify submission",
+        Description = "Check if student can update or delete submission (before deadline)"
+    )]
+    [SwaggerResponse(200, "Success", typeof(BaseResponse<bool>))]
+    public async Task<IActionResult> CanModifySubmission(int submissionId)
+    {
+        var studentId = GetCurrentStudentId();
+        var result = await _submissionService.CanStudentModifySubmissionAsync(submissionId, studentId);
+        return StatusCode((int)result.StatusCode, result);
+    }
+    [HttpGet("course-instance/{courseInstanceId}/assignments-with-tracking")]
+    [Authorize]
+    [SwaggerOperation(
+    Summary = "Lấy danh sách bài tập trong lớp học kèm theo tracking review",
+    Description = "Trả về danh sách bài tập trong một lớp học cụ thể kèm theo thông tin tracking review progress của sinh viên hiện tại"
+)]
+    [SwaggerResponse(200, "Thành công", typeof(BaseResponse<List<AssignmentBasicResponse>>))]
+    [SwaggerResponse(401, "Unauthorized - Token không hợp lệ")]
+    [SwaggerResponse(404, "Không tìm thấy lớp học")]
+    [SwaggerResponse(500, "Lỗi server")]
+    public async Task<IActionResult> GetAssignmentsWithTracking(int courseInstanceId)
+    {
+        var result = await _assignmentService.GetAssignmentsByCourseInstanceBasicAsync(courseInstanceId);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpGet("assignment/{assignmentId}/tracking")]
+    [Authorize]
+    [SwaggerOperation(
+        Summary = "Lấy thông tin tracking review cho bài tập cụ thể",
+        Description = "Trả về thông tin chi tiết về tiến độ review của sinh viên hiện tại cho một bài tập cụ thể, bao gồm số review đã hoàn thành, số review còn lại, và trạng thái hoàn thành"
+    )]
+    [SwaggerResponse(200, "Thành công", typeof(BaseResponse<AssignmentTrackingResponse>))]
+    [SwaggerResponse(401, "Unauthorized - Token không hợp lệ")]
+    [SwaggerResponse(404, "Không tìm thấy bài tập")]
+    [SwaggerResponse(500, "Lỗi server")]
+    public async Task<IActionResult> GetAssignmentTracking(int assignmentId)
+    {
+        var result = await _assignmentService.GetAssignmentTrackingAsync(assignmentId);
         return StatusCode((int)result.StatusCode, result);
     }
     private int GetCurrentStudentId()

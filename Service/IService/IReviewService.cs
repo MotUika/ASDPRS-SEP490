@@ -19,5 +19,6 @@ namespace Service.IService
         Task<BaseResponse<List<ReviewResponse>>> GetReviewsByAssignmentIdAsync(int assignmentId);
         Task<BaseResponse<ReviewResponse>> CreateAIReviewAsync(CreateReviewRequest request);
         Task<BaseResponse<ReviewResponse>> SubmitStudentReviewAsync(SubmitStudentReviewRequest request);
+        Task<BaseResponse<ReviewResponse>> UpdateStudentReviewAsync(UpdateStudentReviewRequest request);
     }
 }

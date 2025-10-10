@@ -122,8 +122,9 @@ builder.Services.AddControllers().AddNewtonsoftJson(options =>
 
 // Register Repository + Service
 builder.Services.ConfigureRepositoryService(builder.Configuration);
-builder.Services.AddHttpClient<IFileStorageService, SupabaseFileStorageService>();
+builder.Services.AddScoped<IFileStorageService, SupabaseFileStorageService>();
 builder.Services.AddSingleton<IDocumentTextExtractor, DocumentTextExtractor>();
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddHttpClient<IGenAIService, GeminiAiService>();
 builder.Services.ConfigureServiceService(builder.Configuration);
 builder.Services.AddScoped(typeof(IBaseRepository<>), typeof(BaseRepository<>));

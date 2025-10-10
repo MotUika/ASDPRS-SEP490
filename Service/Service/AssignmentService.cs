@@ -1,7 +1,8 @@
-﻿using AutoMapper;
+using AutoMapper;
 using BussinessObject.Models;
 using DataAccessLayer;
 using MathNet.Numerics.Distributions;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Repository.IRepository;
 using Repository.Repository;
@@ -32,6 +33,9 @@ namespace Service.Service
         private readonly IReviewAssignmentRepository _reviewAssignmentRepository;
         private readonly ASDPRSContext _context;
         private readonly INotificationService _notificationService;
+        private readonly ICriteriaFeedbackRepository _criteriaFeedbackRepository;
+        private readonly IHttpContextAccessor _httpContextAccessor;
+
 
         public AssignmentService(
             IAssignmentRepository assignmentRepository,
@@ -44,7 +48,8 @@ namespace Service.Service
             ICriteriaRepository criteriaRepository,
             IReviewAssignmentRepository reviewAssignmentRepository,
             ASDPRSContext context,
-            INotificationService notificationService)
+            INotificationService notificationService,
+            ICriteriaFeedbackRepository criteriaFeedbackRepository, IHttpContextAccessor httpContextAccessor)
         {
             _assignmentRepository = assignmentRepository;
             _courseInstanceRepository = courseInstanceRepository;
@@ -57,6 +62,17 @@ namespace Service.Service
             _reviewAssignmentRepository = reviewAssignmentRepository;
             _context = context;
             _notificationService = notificationService;
+            _criteriaFeedbackRepository = criteriaFeedbackRepository;
+            _httpContextAccessor = httpContextAccessor;
+        }
+        private int GetCurrentStudentId()
+        {
+            var userIdClaim = _httpContextAccessor.HttpContext?.User.FindFirst("userId");
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int studentId))
+            {
+                throw new UnauthorizedAccessException("Invalid user token - userId not found");
+            }
+            return studentId;
         }
 
         public async Task<BaseResponse<AssignmentResponse>> CreateAssignmentAsync(CreateAssignmentRequest request)
@@ -84,6 +100,24 @@ namespace Service.Service
                             StatusCodeEnum.NotFound_404,
                             null);
                     }
+                }
+
+                // Validate weights sum to 100
+                if (request.InstructorWeight + request.PeerWeight != 100)
+                {
+                    return new BaseResponse<AssignmentResponse>(
+                        "Instructor weight and peer weight must sum to 100%",
+                        StatusCodeEnum.BadRequest_400,
+                        null);
+                }
+
+                // Validate grading scale
+                if (request.GradingScale != "Scale10" && request.GradingScale != "PassFail")
+                {
+                    return new BaseResponse<AssignmentResponse>(
+                        "Grading scale must be either 'Scale10' or 'PassFail'",
+                        StatusCodeEnum.BadRequest_400,
+                        null);
                 }
 
                 // Validate weights sum to 100
@@ -674,31 +708,19 @@ namespace Service.Service
                     null);
             }
         }
-        public async Task<BaseResponse<List<AssignmentBasicResponse>>> GetAssignmentsByCourseInstanceBasicAsync(int courseInstanceId, int studentId)
+        public async Task<BaseResponse<List<AssignmentBasicResponse>>> GetAssignmentsByCourseInstanceBasicAsync(int courseInstanceId)
         {
             try
             {
+                // Lấy studentId từ token (sẽ implement sau)
+                var studentId = GetCurrentStudentId();
+
                 var assignments = await _assignmentRepository.GetByCourseInstanceIdAsync(courseInstanceId);
                 var responses = new List<AssignmentBasicResponse>();
 
                 foreach (var assignment in assignments)
                 {
-                    // Đếm số bài review pending và completed
-                    var pendingCount = 0;
-                    var completedCount = 0;
-
-                    // Lấy tất cả submissions của assignment này
-                    var submissions = await _submissionRepository.GetByAssignmentIdAsync(assignment.AssignmentId);
-
-                    // Đếm review assignments của sinh viên hiện tại
-                    foreach (var submission in submissions)
-                    {
-                        var reviewAssignments = await _reviewAssignmentRepository.GetBySubmissionIdAsync(submission.SubmissionId);
-                        var studentReviews = reviewAssignments.Where(ra => ra.ReviewerUserId == studentId);
-
-                        pendingCount += studentReviews.Count(ra => ra.Status != "Completed");
-                        completedCount += studentReviews.Count(ra => ra.Status == "Completed");
-                    }
+                    var tracking = await GetAssignmentReviewTrackingAsync(assignment.AssignmentId, studentId);
 
                     responses.Add(new AssignmentBasicResponse
                     {
@@ -711,8 +733,8 @@ namespace Service.Service
                         Deadline = assignment.Deadline,
                         ReviewDeadline = assignment.ReviewDeadline ?? DateTime.MinValue,
                         NumPeerReviewsRequired = assignment.NumPeerReviewsRequired,
-                        PendingReviewsCount = pendingCount,
-                        CompletedReviewsCount = completedCount
+                        PendingReviewsCount = tracking.PendingCount,
+                        CompletedReviewsCount = tracking.CompletedCount
                     });
                 }
 
@@ -725,6 +747,89 @@ namespace Service.Service
             {
                 return new BaseResponse<List<AssignmentBasicResponse>>(
                     $"Error retrieving assignments: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
+            }
+        }
+
+        private async Task<(int PendingCount, int CompletedCount)> GetAssignmentReviewTrackingAsync(int assignmentId, int studentId)
+        {
+            var pendingCount = 0;
+            var completedCount = 0;
+
+            // Tối ưu: Chỉ lấy review assignments của student này trong assignment này
+            var studentReviewAssignments = await _reviewAssignmentRepository.GetByReviewerIdAsync(studentId);
+
+            // Lọc theo assignment
+            foreach (var reviewAssignment in studentReviewAssignments)
+            {
+                var submission = await _submissionRepository.GetByIdAsync(reviewAssignment.SubmissionId);
+                if (submission?.AssignmentId == assignmentId)
+                {
+                    if (reviewAssignment.Status == "Completed")
+                        completedCount++;
+                    else
+                        pendingCount++;
+                }
+            }
+
+            return (pendingCount, completedCount);
+        }
+
+        public async Task<BaseResponse<AssignmentTrackingResponse>> GetAssignmentTrackingAsync(int assignmentId)
+        {
+            try
+            {
+                var studentId = GetCurrentStudentId();
+                var assignment = await _assignmentRepository.GetByIdAsync(assignmentId);
+
+                if (assignment == null)
+                {
+                    return new BaseResponse<AssignmentTrackingResponse>(
+                        "Assignment not found",
+                        StatusCodeEnum.NotFound_404,
+                        null);
+                }
+
+                var tracking = await GetAssignmentReviewTrackingAsync(assignmentId, studentId);
+
+                var hasMetMinimum = tracking.CompletedCount >= assignment.NumPeerReviewsRequired;
+                var remaining = Math.Max(0, assignment.NumPeerReviewsRequired - tracking.CompletedCount);
+
+                string reviewStatus = tracking.CompletedCount >= assignment.NumPeerReviewsRequired ? "Completed" :
+                                    tracking.CompletedCount > 0 ? "In Progress" : "Not Started";
+
+                decimal completionPercentage = assignment.NumPeerReviewsRequired > 0 ?
+                    (decimal)tracking.CompletedCount / assignment.NumPeerReviewsRequired * 100 : 0;
+
+                var response = new AssignmentTrackingResponse
+                {
+                    AssignmentId = assignment.AssignmentId,
+                    Title = assignment.Title,
+                    Description = assignment.Description,
+                    Guidelines = assignment.Guidelines,
+                    CreatedAt = assignment.CreatedAt,
+                    StartDate = assignment.StartDate ?? DateTime.MinValue,
+                    Deadline = assignment.Deadline,
+                    ReviewDeadline = assignment.ReviewDeadline ?? DateTime.MinValue,
+                    NumPeerReviewsRequired = assignment.NumPeerReviewsRequired,
+                    PendingReviewsCount = tracking.PendingCount,
+                    CompletedReviewsCount = tracking.CompletedCount,
+                    HasMetMinimumReviews = hasMetMinimum,
+                    RemainingReviewsRequired = remaining,
+                    ReviewStatus = reviewStatus,
+                    ReviewCompletionPercentage = Math.Round(completionPercentage, 1)
+                };
+
+                return new BaseResponse<AssignmentTrackingResponse>(
+                    "Assignment tracking retrieved successfully",
+                    StatusCodeEnum.OK_200,
+                    response);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<AssignmentTrackingResponse>(
+                    $"Error retrieving assignment tracking: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
                     null);
             }
@@ -880,8 +985,8 @@ namespace Service.Service
                 return "Scheduled";
             if (now <= assignment.Deadline)
                 return "Active";
-            if (assignment.FinalDeadline.HasValue && now <= assignment.FinalDeadline.Value)
-                return "LateSubmission"; // Cho phép nộp muộn với penalty
+            if (assignment.ReviewDeadline.HasValue && now <= assignment.ReviewDeadline.Value)
+                return "InReview"; // New status for peer review phase
             return "Closed";
         }
 
@@ -1089,6 +1194,67 @@ namespace Service.Service
                     StatusCodeEnum.InternalServerError_500,
                     null);
             }
+        }
+        // Thêm method để xử lý điểm số theo thang điểm
+        private decimal CalculateScoreBasedOnGradingScale(decimal rawScore, string gradingScale)
+        {
+            {
+                if (gradingScale == "PassFail")
+                {
+                    // Pass/Fail: >=50% là Pass (100), ngược lại Fail (0)
+                    return rawScore >= 50 ? 100 : 0;
+                }
+                else // Scale10
+                {
+                    // Scale10: giữ nguyên điểm 0-10, làm tròn 1 chữ số
+                    return Math.Round(rawScore, 1);
+                }
+            }
+        }
+
+        // Method để hiển thị điểm theo định dạng
+        public string FormatScoreForDisplay(decimal score, string gradingScale)
+        {
+            if (gradingScale == "PassFail")
+            {
+                return score >= 50 ? "Pass" : "Fail";
+            }
+            else // Scale10
+            {
+                return Math.Round(score, 1).ToString("0.0");
+            }
+        }
+
+        // Cập nhật method tính điểm review
+        private async Task<decimal> CalculateReviewScore(Review review, Assignment assignment)
+        {
+            var criteriaFeedbacks = await _criteriaFeedbackRepository.GetByReviewIdAsync(review.ReviewId);
+
+            if (!criteriaFeedbacks.Any())
+                return 0;
+
+            decimal totalScore = 0;
+            decimal totalWeight = 0;
+
+            foreach (var feedback in criteriaFeedbacks)
+            {
+                var criteria = await _criteriaRepository.GetByIdAsync(feedback.CriteriaId);
+                if (criteria == null) continue;
+
+                decimal score = feedback.ScoreAwarded ?? 0;
+                decimal maxScore = criteria.MaxScore;
+                decimal weight = criteria.Weight;
+
+                // Tính điểm chuẩn hóa theo phần trăm
+                decimal normalizedScore = maxScore > 0 ? (score / maxScore) * 100 : 0;
+                totalScore += normalizedScore * weight;
+                totalWeight += weight;
+            }
+
+            decimal rawScore = totalWeight > 0 ? totalScore / totalWeight : 0;
+
+            // Áp dụng thang điểm
+            return CalculateScoreBasedOnGradingScale(rawScore, assignment.GradingScale);
         }
 
         // Lấy assignment status summary

@@ -301,7 +301,15 @@ namespace Service.Service
                 {
                     return new BaseResponse<SubmissionResponse>("Submission not found", StatusCodeEnum.NotFound_404, null);
                 }
-
+                // Check if student can modify submission
+                var canModify = await CanStudentModifySubmissionAsync(request.SubmissionId, existingSubmission.UserId);
+                if (!canModify.Data)
+                {
+                    return new BaseResponse<SubmissionResponse>(
+                        "Cannot modify submission after deadline",
+                        StatusCodeEnum.Forbidden_403,
+                        null);
+                }
                 // Update file if provided
                 if (request.File != null)
                 {
@@ -387,6 +395,15 @@ namespace Service.Service
                 if (submission == null)
                 {
                     return new BaseResponse<bool>("Submission not found", StatusCodeEnum.NotFound_404, false);
+                }
+                // Check if student can modify submission
+                var canModify = await CanStudentModifySubmissionAsync(submissionId, submission.UserId);
+                if (!canModify.Data)
+                {
+                    return new BaseResponse<bool>(
+                        "Cannot delete submission after deadline",
+                        StatusCodeEnum.Forbidden_403,
+                        false);
                 }
 
                 // Delete associated file (prefer stored object path)
@@ -627,6 +644,32 @@ namespace Service.Service
             }
 
             return response;
+        }
+
+        public async Task<BaseResponse<bool>> CanStudentModifySubmissionAsync(int submissionId, int studentId)
+        {
+            try
+            {
+                var submission = await _submissionRepository.GetByIdAsync(submissionId);
+                if (submission == null || submission.UserId != studentId)
+                    return new BaseResponse<bool>("Access denied", StatusCodeEnum.Forbidden_403, false);
+
+                var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
+                var now = DateTime.UtcNow;
+
+                // Cho phép sửa/xóa trước deadline
+                bool canModify = now <= assignment.Deadline;
+
+                return new BaseResponse<bool>(canModify ? "Can modify" : "Cannot modify after deadline",
+                                            StatusCodeEnum.OK_200, canModify);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<bool>(
+                    $"Error checking submission modification: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    false);
+            }
         }
     }
 }

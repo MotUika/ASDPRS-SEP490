@@ -445,6 +445,8 @@ namespace DataAccessLayer.Migrations
                     CampusId = table.Column<int>(type: "int", nullable: false),
                     SectionCode = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
                     EnrollmentPassword = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    StartDate = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    EndDate = table.Column<DateTime>(type: "datetime2", nullable: false),
                     RequiresApproval = table.Column<bool>(type: "bit", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
                 },
@@ -940,7 +942,7 @@ namespace DataAccessLayer.Migrations
             migrationBuilder.InsertData(
                 table: "AspNetUsers",
                 columns: new[] { "Id", "AccessFailedCount", "AvatarUrl", "CampusId", "ConcurrencyStamp", "CreatedAt", "Email", "EmailConfirmed", "FirstName", "IsActive", "LastName", "LockoutEnabled", "LockoutEnd", "NormalizedEmail", "NormalizedUserName", "PasswordHash", "PhoneNumber", "PhoneNumberConfirmed", "SecurityStamp", "StudentCode", "TwoFactorEnabled", "UserName" },
-                values: new object[] { 1, 0, null, 1, "44f78e15-aa64-4967-b48a-0a491dd2a545", new DateTime(2025, 10, 3, 15, 9, 32, 95, DateTimeKind.Utc).AddTicks(3141), "admin@example.com", true, "Admin", true, "User", true, null, "ADMIN@EXAMPLE.COM", "ADMIN", "AQAAAAIAAYagAAAAEK95SlxvEPzqxJyTxIof0ufhmHVKdEGcuw7MxCBj92JUehpXlaMI0F4RrX3mzLDNzA==", null, false, "6b1d7307-2243-42d8-b089-aebe649b3620", "ADMIN001", false, "admin" });
+                values: new object[] { 1, 0, null, 1, "ccfd58b0-1444-40ba-a217-c9cbfffeaad2", new DateTime(2025, 10, 8, 6, 19, 50, 966, DateTimeKind.Utc).AddTicks(1498), "admin@example.com", true, "Admin", true, "User", true, null, "ADMIN@EXAMPLE.COM", "ADMIN", "AQAAAAIAAYagAAAAEK95SlxvEPzqxJyTxIof0ufhmHVKdEGcuw7MxCBj92JUehpXlaMI0F4RrX3mzLDNzA==", null, false, "2577fa44-7d86-4f3b-b8af-2bb8a8882031", "ADMIN001", false, "admin" });
 
             migrationBuilder.InsertData(
                 table: "AspNetUserRoles",

@@ -19,5 +19,6 @@ namespace Service.Interface
         Task<BaseResponse<SubmissionStatisticsResponse>> GetSubmissionStatisticsAsync(int assignmentId);
         Task<BaseResponse<bool>> CheckSubmissionExistsAsync(int assignmentId, int userId);
         Task<BaseResponse<SubmissionResponse>> GetSubmissionWithDetailsAsync(int submissionId);
+        Task<BaseResponse<bool>> CanStudentModifySubmissionAsync(int submissionId, int studentId);
     }
 }
