@@ -471,7 +471,7 @@ namespace Service.Service
                         null);
                 }
 
-                var courseInstance = await _courseInstanceRepository.GetByIdAsync(courseStudent.CourseInstanceId);
+                var courseInstance = await _courseInstanceRepository.GetByIdWithRelationsAsync(courseStudent.CourseInstanceId);
                 var user = await _userRepository.GetByIdAsync(courseStudent.UserId);
                 User changedByUser = null;
                 if (courseStudent.ChangedByUserId.HasValue)
