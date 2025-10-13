@@ -1,4 +1,5 @@
-﻿using BussinessObject.Models;
+﻿using ASDPRS_SEP490.Middlewares;
+using BussinessObject.Models;
 using DataAccessLayer;
 using DataAccessLayer.BaseDAO;
 using Microsoft.AspNetCore.Authentication;
@@ -235,6 +236,9 @@ builder.Services.AddSwaggerGen(c =>
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
+
+app.UseMiddleware<EnrollmentCheckMiddleware>();
+
 
 // Configure the HTTP request pipeline
 if (app.Environment.IsDevelopment())
