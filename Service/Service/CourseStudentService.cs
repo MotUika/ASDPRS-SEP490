@@ -330,6 +330,21 @@ namespace Service.Service
         {
             try
             {
+                if (!string.IsNullOrEmpty(request.StudentCode) && request.UserId == 0)
+                {
+                    var userByCode = await _userRepository.GetByStudentCodeAsync(request.StudentCode);
+
+                    if (userByCode == null)
+                    {
+                        return new BaseResponse<CourseStudentResponse>(
+                            "Student not found with the provided student code",
+                            StatusCodeEnum.NotFound_404,
+                            null);
+                    }
+
+                    request.UserId = userByCode.Id;
+                }
+
                 // Validate course instance exists
                 var courseInstance = await _courseInstanceRepository.GetByIdAsync(request.CourseInstanceId);
                 if (courseInstance == null)
