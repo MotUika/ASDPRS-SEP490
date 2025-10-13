@@ -102,7 +102,6 @@ namespace Service.Service
                 var response = await MapToSubmissionResponse(createdSubmission);
 
                 _logger.LogInformation($"Submission created successfully. SubmissionId: {createdSubmission.SubmissionId}");
-                await AutoAssignReviewsForNewSubmission(request.AssignmentId);
 
 
                 // Late check
