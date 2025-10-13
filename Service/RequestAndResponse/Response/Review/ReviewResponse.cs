@@ -15,7 +15,10 @@ namespace Service.RequestAndResponse.Response.Review
         public string ReviewType { get; set; }
         public string FeedbackSource { get; set; }
         public bool IsAIReference { get; set; }
-        public string DisplayNote { get; set; } 
+        public string DisplayNote { get; set; }
+        public bool CanEdit { get; set; }
+        public DateTime? EditDeadline { get; set; }
+        public string EditStatus { get; set; }
 
 
         // Additional info from related entities
