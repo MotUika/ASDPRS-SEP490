@@ -7,8 +7,10 @@ namespace Service.RequestAndResponse.Request.CourseStudent
         [Required]
         public int CourseInstanceId { get; set; }
 
-        [Required]
+       
         public int UserId { get; set; }
+
+        public string StudentCode { get; set; }
 
         [StringLength(50)]
         public string Status { get; set; } = "Enrolled";
