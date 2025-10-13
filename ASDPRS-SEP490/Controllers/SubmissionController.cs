@@ -1,10 +1,12 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Service.Interface;
+using Service.IService;
 using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Enums;
 using Service.RequestAndResponse.Request.Submission;
 using Service.RequestAndResponse.Response.Submission;
 using Swashbuckle.AspNetCore.Annotations;
+using System.Security.Claims;
 using System.Threading.Tasks;
 
 namespace ASDPRS_SEP490.Controllers
@@ -16,12 +18,80 @@ namespace ASDPRS_SEP490.Controllers
     public class SubmissionController : ControllerBase
     {
         private readonly ISubmissionService _submissionService;
+        private readonly ICourseStudentService _courseStudentService;
+        private readonly IAssignmentService _assignmentService;
 
-        public SubmissionController(ISubmissionService submissionService)
+        public SubmissionController(ISubmissionService submissionService, ICourseStudentService courseStudentService,
+                                  IAssignmentService assignmentService)
         {
             _submissionService = submissionService;
+            _courseStudentService = courseStudentService;
+            _assignmentService = assignmentService;
+        }
+        private int GetCurrentStudentId()
+        {
+            var userIdClaim = User.FindFirst("userId") ?? User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int studentId))
+            {
+                throw new UnauthorizedAccessException("Invalid user token");
+            }
+            return studentId;
         }
 
+        private async Task<IActionResult> CheckEnrollmentBySubmissionAndExecute(int submissionId, Func<Task<IActionResult>> action)
+        {
+            var studentId = GetCurrentStudentId();
+
+            // Get submission to find assignment and then course instance
+            var submissionRequest = new GetSubmissionByIdRequest { SubmissionId = submissionId };
+            var submissionResult = await _submissionService.GetSubmissionByIdAsync(submissionRequest);
+            if (submissionResult.StatusCode != StatusCodeEnum.OK_200 || submissionResult.Data == null)
+            {
+                return StatusCode((int)submissionResult.StatusCode, submissionResult);
+            }
+
+            var assignmentId = submissionResult.Data.AssignmentId;
+            var assignmentResult = await _assignmentService.GetAssignmentByIdAsync(assignmentId);
+            if (assignmentResult.StatusCode != StatusCodeEnum.OK_200 || assignmentResult.Data == null)
+            {
+                return StatusCode((int)assignmentResult.StatusCode, assignmentResult);
+            }
+
+            var courseInstanceId = assignmentResult.Data.CourseInstanceId;
+            var enrollmentCheck = await _courseStudentService.IsStudentEnrolledAsync(courseInstanceId, studentId);
+            if (!enrollmentCheck.Data)
+            {
+                return StatusCode(403, new BaseResponse<object>(
+                    $"Access denied: {enrollmentCheck.Message}",
+                    StatusCodeEnum.Forbidden_403,
+                    null
+                ));
+            }
+            return await action();
+        }
+
+        private async Task<IActionResult> CheckEnrollmentByAssignmentAndExecute(int assignmentId, Func<Task<IActionResult>> action)
+        {
+            var studentId = GetCurrentStudentId();
+
+            var assignmentResult = await _assignmentService.GetAssignmentByIdAsync(assignmentId);
+            if (assignmentResult.StatusCode != StatusCodeEnum.OK_200 || assignmentResult.Data == null)
+            {
+                return StatusCode((int)assignmentResult.StatusCode, assignmentResult);
+            }
+
+            var courseInstanceId = assignmentResult.Data.CourseInstanceId;
+            var enrollmentCheck = await _courseStudentService.IsStudentEnrolledAsync(courseInstanceId, studentId);
+            if (!enrollmentCheck.Data)
+            {
+                return StatusCode(403, new BaseResponse<object>(
+                    $"Access denied: {enrollmentCheck.Message}",
+                    StatusCodeEnum.Forbidden_403,
+                    null
+                ));
+            }
+            return await action();
+        }
         // Tạo submission mới
         [HttpPost]
         [SwaggerOperation(
@@ -34,12 +104,16 @@ namespace ASDPRS_SEP490.Controllers
         [SwaggerResponse(500, "Lỗi server")]
         public async Task<IActionResult> CreateSubmission([FromForm] CreateSubmissionRequest request)
         {
-            var result = await _submissionService.CreateSubmissionAsync(request);
-            return result.StatusCode switch
+            return await CheckEnrollmentByAssignmentAndExecute(request.AssignmentId, async () =>
             {
-                StatusCodeEnum.Created_201 => CreatedAtAction(nameof(GetSubmissionById), new { id = result.Data?.SubmissionId }, result),
-                _ => StatusCode((int)result.StatusCode, result)
-            };
+                var result = await _submissionService.CreateSubmissionAsync(request);
+                return result.StatusCode switch
+                {
+                    StatusCodeEnum.Created_201 => CreatedAtAction(nameof(GetSubmissionById),
+                        new { id = result.Data?.SubmissionId }, result),
+                    _ => StatusCode((int)result.StatusCode, result)
+                };
+            });
         }
 
         // Sinh viên nộp bài (flow khác với CreateSubmission)
@@ -52,8 +126,11 @@ namespace ASDPRS_SEP490.Controllers
         [SwaggerResponse(400, "File hoặc dữ liệu không hợp lệ")]
         public async Task<IActionResult> SubmitAssignment([FromForm] SubmitAssignmentRequest request)
         {
-            var result = await _submissionService.SubmitAssignmentAsync(request);
-            return StatusCode((int)result.StatusCode, result);
+            return await CheckEnrollmentByAssignmentAndExecute(request.AssignmentId, async () =>
+            {
+                var result = await _submissionService.SubmitAssignmentAsync(request);
+                return StatusCode((int)result.StatusCode, result);
+            });
         }
 
         // Lấy submission theo ID
@@ -66,15 +143,18 @@ namespace ASDPRS_SEP490.Controllers
         [SwaggerResponse(404, "Không tìm thấy bài nộp")]
         public async Task<IActionResult> GetSubmissionById(int id, [FromQuery] bool includeReviews = false, [FromQuery] bool includeAISummaries = false)
         {
-            var request = new GetSubmissionByIdRequest
+            return await CheckEnrollmentBySubmissionAndExecute(id, async () =>
             {
-                SubmissionId = id,
-                IncludeReviews = includeReviews,
-                IncludeAISummaries = includeAISummaries
-            };
+                var request = new GetSubmissionByIdRequest
+                {
+                    SubmissionId = id,
+                    IncludeReviews = includeReviews,
+                    IncludeAISummaries = includeAISummaries
+                };
 
-            var result = await _submissionService.GetSubmissionByIdAsync(request);
-            return StatusCode((int)result.StatusCode, result);
+                var result = await _submissionService.GetSubmissionByIdAsync(request);
+                return StatusCode((int)result.StatusCode, result);
+            });
         }
 
         // Lấy submissions theo filter
@@ -143,8 +223,11 @@ namespace ASDPRS_SEP490.Controllers
         [SwaggerResponse(200, "Thành công", typeof(BaseResponse<SubmissionListResponse>))]
         public async Task<IActionResult> GetSubmissionsByAssignmentId(int assignmentId, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20)
         {
-            var result = await _submissionService.GetSubmissionsByAssignmentIdAsync(assignmentId, pageNumber, pageSize);
-            return StatusCode((int)result.StatusCode, result);
+            return await CheckEnrollmentByAssignmentAndExecute(assignmentId, async () =>
+            {
+                var result = await _submissionService.GetSubmissionsByAssignmentIdAsync(assignmentId, pageNumber, pageSize);
+                return StatusCode((int)result.StatusCode, result);
+            });
         }
 
         // Lấy submissions theo user

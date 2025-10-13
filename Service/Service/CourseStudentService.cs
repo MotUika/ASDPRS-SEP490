@@ -773,6 +773,55 @@ namespace Service.Service
                     null);
             }
         }
+
+        // Trong CourseStudentService
+        public async Task<BaseResponse<bool>> IsStudentEnrolledAsync(int courseInstanceId, int studentId)
+        {
+            try
+            {
+                var courseStudent = await _context.CourseStudents
+                    .FirstOrDefaultAsync(cs => cs.CourseInstanceId == courseInstanceId && cs.UserId == studentId);
+
+                if (courseStudent == null)
+                {
+                    return new BaseResponse<bool>("Student is not enrolled in this course", StatusCodeEnum.Forbidden_403, false);
+                }
+
+                if (courseStudent.Status != "Enrolled")
+                {
+                    return new BaseResponse<bool>($"Student enrollment status is {courseStudent.Status}, not Enrolled", StatusCodeEnum.Forbidden_403, false);
+                }
+
+                return new BaseResponse<bool>("Student is enrolled", StatusCodeEnum.OK_200, true);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<bool>($"Error checking enrollment: {ex.Message}", StatusCodeEnum.InternalServerError_500, false);
+            }
+        }
+
+        public async Task<BaseResponse<CourseStudentResponse>> GetEnrollmentStatusAsync(int courseInstanceId, int studentId)
+        {
+            try
+            {
+                var courseStudent = await _context.CourseStudents
+                    .Include(cs => cs.CourseInstance)
+                    .Include(cs => cs.User)
+                    .FirstOrDefaultAsync(cs => cs.CourseInstanceId == courseInstanceId && cs.UserId == studentId);
+
+                if (courseStudent == null)
+                {
+                    return new BaseResponse<CourseStudentResponse>("Student is not enrolled in this course", StatusCodeEnum.NotFound_404, null);
+                }
+
+                var response = MapToResponse(courseStudent, courseStudent.CourseInstance, courseStudent.User, null);
+                return new BaseResponse<CourseStudentResponse>("Enrollment status retrieved", StatusCodeEnum.OK_200, response);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<CourseStudentResponse>($"Error retrieving enrollment status: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
+            }
+        }
         // Cập nhật method tính điểm assignment
         public async Task<BaseResponse<decimal>> CalculateTotalAssignmentGradeAsync(int courseInstanceId, int studentId)
         {

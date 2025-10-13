@@ -7,6 +7,7 @@ using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Enums;
 using Service.RequestAndResponse.Request.CourseStudent;
 using Service.RequestAndResponse.Request.Review;
+using Service.RequestAndResponse.Request.Submission;
 using Service.RequestAndResponse.Response.Assignment;
 using Service.RequestAndResponse.Response.CourseInstance;
 using Service.RequestAndResponse.Response.Review;
@@ -42,6 +43,7 @@ public class StudentReviewController : ControllerBase
         _assignmentRepository = assignmentRepository;
     }
 
+    
     [HttpGet("courses/{studentId}")]
     [SwaggerOperation(
             Summary = "Lấy danh sách lớp học của sinh viên",
@@ -66,8 +68,21 @@ public class StudentReviewController : ControllerBase
     [SwaggerResponse(500, "Lỗi server")]
     public async Task<IActionResult> GetAssignmentsByCourseInstance(int courseInstanceId, int studentId)
     {
-        var result = await _assignmentService.GetActiveAssignmentsByCourseInstanceAsync(courseInstanceId, studentId);
-        return StatusCode((int)result.StatusCode, result);
+        var currentStudentId = GetCurrentStudentId();
+        if (studentId != currentStudentId)
+        {
+            return StatusCode(403, new BaseResponse<object>(
+                "Access denied: Cannot access other student's data",
+                StatusCodeEnum.Forbidden_403,
+                null
+            ));
+        }
+
+        return await CheckEnrollmentAndExecute(courseInstanceId, async () =>
+        {
+            var result = await _assignmentService.GetActiveAssignmentsByCourseInstanceAsync(courseInstanceId, studentId);
+            return StatusCode((int)result.StatusCode, result);
+        });
     }
 
     [HttpGet("pending-reviews/{studentId}")]
@@ -135,14 +150,16 @@ public class StudentReviewController : ControllerBase
     [SwaggerResponse(500, "Lỗi server")]
     public async Task<IActionResult> GetAssignmentRubric(int assignmentId)
     {
-        var result = await _assignmentService.GetAssignmentRubricForReviewAsync(assignmentId);
-        if (result.StatusCode == StatusCodeEnum.OK_200 && result.Data != null)
+        return await CheckEnrollmentByAssignmentAndExecute(assignmentId, async () =>
         {
-            var assignment = await _assignmentRepository.GetByIdAsync(assignmentId);
-            // Thêm thông tin grading scale vào response
-            result.Data.GradingScale = assignment?.GradingScale ?? "Scale10";
-        }
-        return StatusCode((int)result.StatusCode, result);
+            var result = await _assignmentService.GetAssignmentRubricForReviewAsync(assignmentId);
+            if (result.StatusCode == StatusCodeEnum.OK_200 && result.Data != null)
+            {
+                var assignment = await _assignmentRepository.GetByIdAsync(assignmentId);
+                result.Data.GradingScale = assignment?.GradingScale ?? "Scale10";
+            }
+            return StatusCode((int)result.StatusCode, result);
+        });
     }
 
     [HttpPost("submit-review")]
@@ -159,8 +176,27 @@ public class StudentReviewController : ControllerBase
         var studentId = GetCurrentStudentId();
         request.ReviewerUserId = studentId;
 
-        var result = await _reviewService.SubmitStudentReviewAsync(request);
-        return StatusCode((int)result.StatusCode, result);
+        // Get review assignment to find submission and then assignment
+        var reviewAssignmentResult = await _reviewAssignmentService.GetReviewAssignmentByIdAsync(request.ReviewAssignmentId);
+        if (reviewAssignmentResult.StatusCode != StatusCodeEnum.OK_200 || reviewAssignmentResult.Data == null)
+        {
+            return StatusCode((int)reviewAssignmentResult.StatusCode, reviewAssignmentResult);
+        }
+
+        var submissionId = reviewAssignmentResult.Data.SubmissionId;
+        var submissionRequest = new GetSubmissionByIdRequest { SubmissionId = submissionId };
+        var submissionResult = await _submissionService.GetSubmissionByIdAsync(submissionRequest);
+        if (submissionResult.StatusCode != StatusCodeEnum.OK_200 || submissionResult.Data == null)
+        {
+            return StatusCode((int)submissionResult.StatusCode, submissionResult);
+        }
+
+        var assignmentId = submissionResult.Data.AssignmentId;
+        return await CheckEnrollmentByAssignmentAndExecute(assignmentId, async () =>
+        {
+            var result = await _reviewService.SubmitStudentReviewAsync(request);
+            return StatusCode((int)result.StatusCode, result);
+        });
     }
 
     [HttpGet("completed-reviews/{studentId}")]
@@ -308,5 +344,42 @@ public class StudentReviewController : ControllerBase
             throw new UnauthorizedAccessException("Invalid user token");
         }
         return studentId;
+    }
+    private async Task<IActionResult> CheckEnrollmentAndExecute(int courseInstanceId, Func<Task<IActionResult>> action)
+    {
+        var studentId = GetCurrentStudentId();
+        var enrollmentCheck = await _courseStudentService.IsStudentEnrolledAsync(courseInstanceId, studentId);
+        if (!enrollmentCheck.Data)
+        {
+            return StatusCode(403, new BaseResponse<object>(
+                $"Access denied: {enrollmentCheck.Message}",
+                StatusCodeEnum.Forbidden_403,
+                null
+            ));
+        }
+        return await action();
+    }
+
+    private async Task<IActionResult> CheckEnrollmentByAssignmentAndExecute(int assignmentId, Func<Task<IActionResult>> action)
+    {
+        var studentId = GetCurrentStudentId();
+
+        var assignmentResult = await _assignmentService.GetAssignmentByIdAsync(assignmentId);
+        if (assignmentResult.StatusCode != StatusCodeEnum.OK_200 || assignmentResult.Data == null)
+        {
+            return StatusCode((int)assignmentResult.StatusCode, assignmentResult);
+        }
+
+        var courseInstanceId = assignmentResult.Data.CourseInstanceId;
+        var enrollmentCheck = await _courseStudentService.IsStudentEnrolledAsync(courseInstanceId, studentId);
+        if (!enrollmentCheck.Data)
+        {
+            return StatusCode(403, new BaseResponse<object>(
+                $"Access denied: {enrollmentCheck.Message}",
+                StatusCodeEnum.Forbidden_403,
+                null
+            ));
+        }
+        return await action();
     }
 }
