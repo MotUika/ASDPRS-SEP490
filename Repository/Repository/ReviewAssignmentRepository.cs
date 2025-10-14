@@ -90,15 +90,10 @@ namespace Repository.Repository
         public async Task<List<Submission>> GetAvailableSubmissionsForReviewerAsync(int assignmentId, int reviewerId)
         {
             return await _context.Submissions
-                .FromSqlRaw(@"
-                    SELECT * FROM Submissions s 
-                    WHERE s.AssignmentId = {0} 
-                    AND s.UserId != {1}
-                    AND s.SubmissionId NOT IN (
-                        SELECT ra.SubmissionId FROM ReviewAssignments ra 
-                        WHERE ra.ReviewerUserId = {1}
-                    )
-                    FOR UPDATE", assignmentId, reviewerId)
+                .Where(s => s.AssignmentId == assignmentId
+                           && s.UserId != reviewerId
+                           && !s.ReviewAssignments.Any(ra => ra.ReviewerUserId == reviewerId))
+                .AsNoTracking()
                 .ToListAsync();
         }
     }

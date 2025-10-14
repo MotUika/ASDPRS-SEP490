@@ -30,13 +30,14 @@ namespace Service.Service
             IAISummaryRepository aiSummaryRepository,
             ISubmissionRepository submissionRepository,
             IAssignmentRepository assignmentRepository,
-            IUserRepository userRepository
+            IUserRepository userRepository, ILogger<AISummaryService> logger
             /*IAIService aiService*/)
         {
             _aiSummaryRepository = aiSummaryRepository;
             _submissionRepository = submissionRepository;
             _assignmentRepository = assignmentRepository;
             _userRepository = userRepository;
+            _logger = logger;
             /*_aiService = aiService;*/
         }
 
