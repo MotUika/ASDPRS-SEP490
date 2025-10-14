@@ -852,6 +852,11 @@ namespace Service.Service
         private async Task<decimal> CalculateAssignmentGradeForStudentAsync(int assignmentId, int studentId)
         {
             var assignment = await _assignmentRepository.GetByIdAsync(assignmentId);
+            // Bổ sung: Nếu assignment Cancelled -> 0 điểm
+            if (assignment.Status == "Cancelled")
+            {
+                return 0;
+            }
             var submission = (await _submissionRepository.GetByAssignmentIdAsync(assignmentId))
                 .FirstOrDefault(s => s.UserId == studentId);
 
@@ -881,7 +886,7 @@ namespace Service.Service
 
             return finalScore;
         }
-
+        
         // Method áp dụng penalties
         private async Task<decimal> ApplyPenaltiesAsync(Assignment assignment, Submission submission, int studentId, decimal currentScore)
         {

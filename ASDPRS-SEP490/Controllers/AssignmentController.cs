@@ -246,6 +246,25 @@ namespace ASDPRS_SEP490.Controllers
             };
         }
 
+        // Trong AssignmentController.cs
+        [HttpPost("{id}/publish-grades")]
+        [SwaggerOperation(
+            Summary = "Publish grades for assignment",
+            Description = "Publish final grades after review deadline"
+        )]
+        [SwaggerResponse(200, "Grades published", typeof(BaseResponse<bool>))]
+        public async Task<IActionResult> PublishGrades(int id)
+        {
+            var result = await _assignmentService.PublishGradesAsync(id);
+            return result.StatusCode switch
+            {
+                StatusCodeEnum.OK_200 => Ok(result),
+                StatusCodeEnum.BadRequest_400 => BadRequest(result),
+                StatusCodeEnum.NotFound_404 => NotFound(result),
+                _ => StatusCode(500, result)
+            };
+        }
+
         private int GetCurrentStudentId()
         {
             var userIdClaim = User.FindFirst("userId") ?? User.FindFirst(ClaimTypes.NameIdentifier);
