@@ -10,6 +10,7 @@ using Service.IService;
 using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Enums;
 using Service.RequestAndResponse.Request.Submission;
+using Service.RequestAndResponse.Response.AISummary;
 using Service.RequestAndResponse.Response.Submission;
 using System;
 using System.Collections.Generic;

@@ -9,7 +9,6 @@ namespace Service.RequestAndResponse.Response.AISummary
         public string Content { get; set; }
         public string SummaryType { get; set; }
         public DateTime GeneratedAt { get; set; }
-
         public string AssignmentTitle { get; set; }
         public string CourseName { get; set; }
         public string StudentName { get; set; }

@@ -8,6 +8,7 @@ using Service.RequestAndResponse.Enums;
 using Service.RequestAndResponse.Request.CourseStudent;
 using Service.RequestAndResponse.Request.Review;
 using Service.RequestAndResponse.Request.Submission;
+using Service.RequestAndResponse.Response.AISummary;
 using Service.RequestAndResponse.Response.Assignment;
 using Service.RequestAndResponse.Response.CourseInstance;
 using Service.RequestAndResponse.Response.Review;
@@ -27,13 +28,15 @@ public class StudentReviewController : ControllerBase
     private readonly IAssignmentService _assignmentService;
     private readonly ISubmissionService _submissionService;
     private readonly IAssignmentRepository _assignmentRepository;
+    private readonly ISubmissionRepository _submissionRepository;
+    private readonly IAISummaryService _aISummaryService;
 
     public StudentReviewController(
         ICourseStudentService courseStudentService,
         IReviewAssignmentService reviewAssignmentService,
         IReviewService reviewService,
         IAssignmentService assignmentService,
-        ISubmissionService submissionService, IAssignmentRepository assignmentRepository)
+        ISubmissionService submissionService, IAssignmentRepository assignmentRepository, IAISummaryService aISummaryService)
     {
         _courseStudentService = courseStudentService;
         _reviewAssignmentService = reviewAssignmentService;
@@ -41,6 +44,7 @@ public class StudentReviewController : ControllerBase
         _assignmentService = assignmentService;
         _submissionService = submissionService;
         _assignmentRepository = assignmentRepository;
+        _aISummaryService = aISummaryService;
     }
 
     
@@ -335,6 +339,107 @@ public class StudentReviewController : ControllerBase
     {
         var result = await _assignmentService.GetAssignmentTrackingAsync(assignmentId);
         return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpPost("submission/{submissionId}/generate-ai-summaries")]
+    [SwaggerOperation(
+    Summary = "Tạo AI summaries cho bài nộp",
+    Description = "Kích hoạt AI tạo các summaries (tóm tắt, điểm mạnh, điểm yếu, đề xuất) cho bài nộp trước khi review"
+)]
+    [SwaggerResponse(200, "Tạo AI summaries thành công", typeof(BaseResponse<bool>))]
+    [SwaggerResponse(404, "Không tìm thấy bài nộp")]
+    public async Task<IActionResult> GenerateAISummariesForReview(int submissionId)
+    {
+        try
+        {
+            var studentId = GetCurrentStudentId();
+
+            // Kiểm tra sinh viên có được phân công review bài này không
+            var reviewAssignments = await _reviewAssignmentService.GetReviewAssignmentsBySubmissionIdAsync(submissionId);
+            var canReview = reviewAssignments.Data?.Any(ra => ra.ReviewerUserId == studentId) ?? false;
+
+            if (!canReview)
+            {
+                return StatusCode(403, new BaseResponse<bool>(
+                    "Access denied: You are not assigned to review this submission",
+                    StatusCodeEnum.Forbidden_403,
+                    false
+                ));
+            }
+
+            // Gọi service để tạo AI summaries
+            // Giả sử bạn có IAISummaryService injected
+            var aiSummaryService = HttpContext.RequestServices.GetService<IAISummaryService>();
+            if (aiSummaryService == null)
+            {
+                return StatusCode(500, new BaseResponse<bool>(
+                    "AI Summary service not available",
+                    StatusCodeEnum.InternalServerError_500,
+                    false
+                ));
+            }
+
+            var result = await aiSummaryService.GenerateAllSummaryTypesAsync(submissionId);
+            return StatusCode((int)result.StatusCode, result);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new BaseResponse<bool>(
+                $"Error generating AI summaries: {ex.Message}",
+                StatusCodeEnum.InternalServerError_500,
+                false
+            ));
+        }
+    }
+
+    [HttpGet("submission/{submissionId}/ai-summaries")]
+    [SwaggerOperation(
+        Summary = "Lấy AI summaries của bài nộp",
+        Description = "Lấy các AI summaries (tóm tắt, điểm mạnh, điểm yếu, đề xuất) cho bài nộp đang review"
+    )]
+    [SwaggerResponse(200, "Thành công", typeof(BaseResponse<List<AISummaryResponse>>))]
+    [SwaggerResponse(404, "Không tìm thấy bài nộp hoặc AI summaries")]
+    public async Task<IActionResult> GetAISummariesForReview(int submissionId)
+    {
+        try
+        {
+            var studentId = GetCurrentStudentId();
+
+            // Kiểm tra quyền truy cập
+            var reviewAssignments = await _reviewAssignmentService.GetReviewAssignmentsBySubmissionIdAsync(submissionId);
+            var canReview = reviewAssignments.Data?.Any(ra => ra.ReviewerUserId == studentId) ?? false;
+
+            if (!canReview)
+            {
+                return StatusCode(403, new BaseResponse<List<AISummaryResponse>>(
+                    "Access denied: You are not assigned to review this submission",
+                    StatusCodeEnum.Forbidden_403,
+                    null
+                ));
+            }
+
+            // Lấy AI summaries
+            var aiSummaryService = HttpContext.RequestServices.GetService<IAISummaryService>();
+            if (aiSummaryService == null)
+            {
+                return StatusCode(500, new BaseResponse<List<AISummaryResponse>>(
+                    "AI Summary service not available",
+                    StatusCodeEnum.InternalServerError_500,
+                    null
+                ));
+            }
+
+            var result = await aiSummaryService.GetAISummariesBySubmissionAsync(submissionId);
+            return StatusCode((int)result.StatusCode, result);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new BaseResponse<List<AISummaryResponse>>(
+                $"Error retrieving AI summaries: {ex.Message}",
+                StatusCodeEnum.InternalServerError_500,
+                null
+            ));
+        }
     }
     private int GetCurrentStudentId()
     {
