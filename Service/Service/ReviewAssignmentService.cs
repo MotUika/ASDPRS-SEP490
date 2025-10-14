@@ -1198,7 +1198,7 @@ namespace Service.Service
                 var reviewerSubmissions = submissions.Where(s => s.UserId == reviewerId)
                                                     .Select(s => s.SubmissionId)
                                                     .ToHashSet(); // HashSet for fast lookup
-                // Get already reviewed submissions  
+                                                                  // Get already reviewed submissions  
                 var existingReviews = await _reviewAssignmentRepository.GetByReviewerIdAsync(reviewerId);
                 var reviewedSubmissionIds = existingReviews.Select(ra => ra.SubmissionId)
                                                           .ToHashSet(); // HashSet for fast lookup
@@ -1226,16 +1226,29 @@ namespace Service.Service
                         null);
                 }
 
-                // Randomly select a submission
-                var random = _threadLocalRandom.Value;
-                var selectedSubmission = newSubmissions[random.Next(newSubmissions.Count)];
+                // Bổ sung: Ưu tiên bài ít review nhất (lấy số review hiện có của submission)
+                var submissionsWithReviewCount = newSubmissions.Select(s => new
+                {
+                    Submission = s,
+                    ReviewCount = _context.ReviewAssignments.Count(ra => ra.SubmissionId == s.SubmissionId && ra.Status == "Completed")
+                }).ToList();
 
-                // Create or get existing review assignment
+                // Nhóm theo ReviewCount ít nhất
+                var minReviewCount = submissionsWithReviewCount.Min(x => x.ReviewCount);
+                var prioritySubmissions = submissionsWithReviewCount.Where(x => x.ReviewCount == minReviewCount)
+                                                                   .Select(x => x.Submission)
+                                                                   .ToList();
+
+                // Random trong nhóm ưu tiên
+                var random = _threadLocalRandom.Value;
+                var selectedSubmission = prioritySubmissions[random.Next(prioritySubmissions.Count)];
+
+                // Tạo hoặc lấy review assignment
                 var existingAssignment = existingReviews
                     .FirstOrDefault(ra => ra.SubmissionId == selectedSubmission.SubmissionId);
 
                 ReviewAssignment reviewAssignment;
-
+                
                 if (existingAssignment == null)
                 {
                     reviewAssignment = new ReviewAssignment
@@ -1247,18 +1260,27 @@ namespace Service.Service
                         Deadline = assignment.ReviewDeadline ?? DateTime.UtcNow.AddDays(7),
                         IsAIReview = false
                     };
-
+                    
                     await _reviewAssignmentRepository.AddAsync(reviewAssignment);
                 }
                 else
                 {
                     reviewAssignment = existingAssignment;
                 }
+
+                // Tự động check và update status Overdue nếu quá hạn
+                if (reviewAssignment.Deadline < DateTime.UtcNow && reviewAssignment.Status != "Completed")
+                {
+                    reviewAssignment.Status = "Overdue";
+                    await _reviewAssignmentRepository.UpdateAsync(reviewAssignment);
+                }
+
                 await transaction.CommitAsync();
                 return await GetReviewAssignmentDetailsAsync(reviewAssignment.ReviewAssignmentId, reviewerId);
             }
             catch (Exception ex)
             {
+                await transaction.RollbackAsync();
                 _logger.LogError(ex, "Error getting random review assignment");
                 return new BaseResponse<ReviewAssignmentDetailResponse>(
                     $"Error getting random review assignment: {ex.Message}",
@@ -1266,7 +1288,7 @@ namespace Service.Service
                     null);
             }
         }
-
+        
         public async Task<BaseResponse<List<ReviewAssignmentResponse>>> GetAvailableReviewsForStudentAsync(int assignmentId, int studentId)
         {
             try

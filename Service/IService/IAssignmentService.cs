@@ -29,5 +29,6 @@ namespace Service.IService
         Task<BaseResponse<AssignmentResponse>> UpdateAssignmentTimelineAsync(int assignmentId, UpdateAssignmentTimelineRequest request);
         Task<BaseResponse<AssignmentStatusSummaryResponse>> GetAssignmentStatusSummaryAsync(int courseInstanceId);
         Task<BaseResponse<AssignmentTrackingResponse>> GetAssignmentTrackingAsync(int assignmentId);
+        Task<BaseResponse<bool>> PublishGradesAsync(int assignmentId);
     }
 }

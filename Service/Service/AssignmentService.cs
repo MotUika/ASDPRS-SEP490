@@ -790,7 +790,7 @@ namespace Service.Service
                         StatusCodeEnum.NotFound_404,
                         null);
                 }
-
+                assignment.Status = CalculateAssignmentStatus(assignment);
                 var tracking = await GetAssignmentReviewTrackingAsync(assignmentId, studentId);
 
                 var hasMetMinimum = tracking.CompletedCount >= assignment.NumPeerReviewsRequired;
@@ -834,7 +834,45 @@ namespace Service.Service
                     null);
             }
         }
+        public async Task<BaseResponse<bool>> PublishGradesAsync(int assignmentId)
+        {
+            try
+            {
+                var assignment = await _assignmentRepository.GetByIdAsync(assignmentId);
+                if (assignment == null)
+                {
+                    return new BaseResponse<bool>(
+                        "Assignment not found",
+                        StatusCodeEnum.NotFound_404,
+                        false);
+                }
 
+                // Check if past review deadline
+                if (!assignment.ReviewDeadline.HasValue || DateTime.UtcNow <= assignment.ReviewDeadline.Value)
+                {
+                    return new BaseResponse<bool>(
+                        "Cannot publish grades before review deadline",
+                        StatusCodeEnum.BadRequest_400,
+                        false);
+                }
+
+                assignment.Status = "GradesPublished";
+                await _assignmentRepository.UpdateAsync(assignment);
+
+
+                return new BaseResponse<bool>(
+                    "Grades published successfully",
+                    StatusCodeEnum.OK_200,
+                    true);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<bool>(
+                    $"Error publishing grades: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    false);
+            }
+        }
         private async Task<AssignmentResponse> MapToResponse(Assignment assignment)
         {
             var courseInstance = await _courseInstanceRepository.GetByIdAsync(assignment.CourseInstanceId);
@@ -987,6 +1025,12 @@ namespace Service.Service
                 return "Active";
             if (assignment.ReviewDeadline.HasValue && now <= assignment.ReviewDeadline.Value)
                 return "InReview"; // New status for peer review phase
+                                   // Bổ sung: Check nếu không có submission nào sau deadline -> "Cancelled"
+            var submissions = _context.Submissions.Where(s => s.AssignmentId == assignment.AssignmentId).ToList();
+            if (!submissions.Any())
+            {
+                return "Cancelled";
+            }
             return "Closed";
         }
 
