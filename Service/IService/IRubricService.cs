@@ -18,5 +18,7 @@ namespace Service.IService
         Task<BaseResponse<RubricResponse>> GetRubricWithCriteriaAsync(int rubricId);
         Task<BaseResponse<IEnumerable<RubricResponse>>> GetModifiedRubricsAsync();
         Task<BaseResponse<RubricResponse>> CreateRubricFromTemplateAsync(int templateId, int? assignmentId = null);
+        //Task<BaseResponse<IEnumerable<RubricResponse>>> GetPublicRubricsAsync();
+
     }
 }

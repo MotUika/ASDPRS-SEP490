@@ -268,5 +268,23 @@ namespace API.Controllers
 
             return Ok(response);
         }
+
+        ///// <summary>
+        ///// Lấy danh sách Rubric public
+        ///// </summary>
+        ///// <returns>Danh sách Rubric được chia sẻ công khai</returns>
+        //[HttpGet("public")]
+        //[SwaggerOperation(
+        //    Summary = "Lấy danh sách Rubric public",
+        //    Description = "Trả về danh sách Rubric được chia sẻ công khai để instructor khác có thể tham khảo hoặc sao chép"
+        //)]
+        //[SwaggerResponse(200, "Thành công", typeof(BaseResponse<IEnumerable<RubricResponse>>))]
+        //[SwaggerResponse(500, "Lỗi server")]
+        //public async Task<IActionResult> GetPublicRubrics()
+        //{
+        //    var result = await _rubricService.GetPublicRubricsAsync();
+        //    return StatusCode((int)result.StatusCode, result);
+        //}
+
     }
 }
