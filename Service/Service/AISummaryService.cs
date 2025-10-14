@@ -277,6 +277,7 @@ namespace Service.Service
                         null);
                 }
 
+                // Kiểm tra nếu đã tồn tại
                 if (!request.ForceRegenerate)
                 {
                     var existingSummaries = await _aiSummaryRepository.GetBySubmissionAndTypeAsync(request.SubmissionId, request.SummaryType);
@@ -289,69 +290,63 @@ namespace Service.Service
                             Content = existingSummary.Content,
                             SummaryType = existingSummary.SummaryType,
                             GeneratedAt = existingSummary.GeneratedAt,
-                            WasGenerated = false,
-                            Status = "Existing summary returned",
-                            ModelUsed = "N/A",
-                            GenerationTime = TimeSpan.Zero
+                            WasGenerated = false
                         };
-
-                        return new BaseResponse<AISummaryGenerationResponse>(
-                            "Existing AI summary returned",
-                            StatusCodeEnum.OK_200,
-                            response);
+                        return new BaseResponse<AISummaryGenerationResponse>("Existing summary returned", StatusCodeEnum.OK_200, response);
                     }
                 }
 
-                var startTime = DateTime.UtcNow;
-
-                // 1) Download file stream using file storage service
-                using var fileStream = await _fileStorageService.GetFileStreamAsync(submission.FileUrl ?? submission.FileName);
-                if (fileStream == null)
+                // QUAN TRỌNG: Tải file từ Supabase bằng FileName (path trong storage)
+                // FileName là đường dẫn trong bucket Supabase, FileUrl là URL public
+                var filePath = submission.FileName; // Đây là path trong storage
+                if (string.IsNullOrEmpty(filePath))
                 {
                     return new BaseResponse<AISummaryGenerationResponse>(
-                        "Failed to download file",
+                        "File path not found in submission",
                         StatusCodeEnum.BadRequest_400,
                         null);
                 }
 
-                // 2) Extract text
-                var fileNameForExt = submission.FileName ?? submission.OriginalFileName ?? submission.FileUrl ?? "file";
-                var extractedText = await _documentTextExtractor.ExtractTextAsync(fileStream, fileNameForExt);
+                using var fileStream = await _fileStorageService.GetFileStreamAsync(filePath);
+                if (fileStream == null)
+                {
+                    return new BaseResponse<AISummaryGenerationResponse>(
+                        "Could not download file from storage",
+                        StatusCodeEnum.BadRequest_400,
+                        null);
+                }
+
+                // Trích xuất text từ file
+                var fileName = submission.FileName ?? submission.OriginalFileName;
+                var extractedText = await _documentTextExtractor.ExtractTextAsync(fileStream, fileName);
 
                 if (string.IsNullOrWhiteSpace(extractedText))
                 {
                     return new BaseResponse<AISummaryGenerationResponse>(
-                        "No text could be extracted from file",
+                        "No text could be extracted from the file",
                         StatusCodeEnum.BadRequest_400,
                         null);
                 }
 
-                // 3) Chunk text to respect model limits
-                var chunks = ChunkText(extractedText, 8000); // tune per model token limits
-
-                var chunkSummaries = new List<string>();
-                foreach (var chunk in chunks)
+                // Nếu text quá dài, chunk nó
+                if (extractedText.Length > 30000) // Gemini có giới hạn token
                 {
-                    // call genAI service (service decides model)
-                    var chunkSummary = await _genAIService.SummarizeAsync(chunk, maxOutputTokens: 800);
-                    chunkSummaries.Add(chunkSummary);
+                    extractedText = extractedText.Substring(0, 30000) + "... [document truncated]";
                 }
 
-                // 4) Combine chunk summaries and optionally summarize combined text once more
-                var combined = string.Join("\n\n", chunkSummaries);
-                var finalSummary = await _genAIService.SummarizeAsync(combined, maxOutputTokens: 800);
+                // Gọi Gemini để phân tích
+                var analysisResult = await _genAIService.AnalyzeDocumentAsync(extractedText, request.SummaryType);
 
-                // 5) Save AISummary
+                // Lưu kết quả
                 var aiSummary = new AISummary
                 {
                     SubmissionId = request.SubmissionId,
-                    Content = finalSummary,
+                    Content = analysisResult,
                     SummaryType = request.SummaryType,
                     GeneratedAt = DateTime.UtcNow
                 };
-                await _aiSummaryRepository.AddAsync(aiSummary);
 
-                var generationTime = DateTime.UtcNow - startTime;
+                await _aiSummaryRepository.AddAsync(aiSummary);
 
                 var generationResponse = new AISummaryGenerationResponse
                 {
@@ -360,9 +355,7 @@ namespace Service.Service
                     SummaryType = aiSummary.SummaryType,
                     GeneratedAt = aiSummary.GeneratedAt,
                     WasGenerated = true,
-                    Status = "Successfully generated",
-                    ModelUsed = "gemini (via IGenAIService)",
-                    GenerationTime = generationTime
+                    Status = "Successfully generated using Gemini AI"
                 };
 
                 return new BaseResponse<AISummaryGenerationResponse>(
@@ -372,21 +365,13 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "Error generating AI summary");
+                _logger.LogError(ex, "Error generating AI summary for submission {SubmissionId}", request.SubmissionId);
                 return new BaseResponse<AISummaryGenerationResponse>(
                     $"Error generating AI summary: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
                     null);
             }
         }
-
-        private static IEnumerable<string> ChunkText(string text, int maxChars)
-        {
-            if (string.IsNullOrEmpty(text)) yield break;
-            for (int i = 0; i < text.Length; i += maxChars)
-                yield return text.Substring(i, Math.Min(maxChars, text.Length - i));
-        }
-
         public async Task<BaseResponse<List<AISummaryResponse>>> GetRecentAISummariesAsync(int maxResults = 10)
         {
             try

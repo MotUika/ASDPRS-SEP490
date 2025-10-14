@@ -1,90 +1,103 @@
-﻿using Google.Apis.Auth.OAuth2;
-using Microsoft.Extensions.Configuration;
+﻿using Microsoft.Extensions.Configuration;
 using Service.IService;
-using System.Net.Http.Headers;
+using System;
+using System.Net.Http;
 using System.Text;
 using System.Text.Json;
+using System.Threading.Tasks;
 
 namespace Service.Service
 {
     public class GeminiAiService : IGenAIService
     {
-        private readonly HttpClient _http;
-        private readonly IConfiguration _config;
-        private readonly GoogleCredential _googleCredential;
-        private readonly string _projectId;
-        private readonly string _location;
-        private readonly string _modelId;
+        private readonly HttpClient _httpClient;
+        private readonly string _apiKey;
+        private readonly string _baseUrl = "https://generativelanguage.googleapis.com/v1beta/models/";
 
-        public GeminiAiService(IConfiguration config, HttpClient http)
+        public GeminiAiService(IConfiguration config, HttpClient httpClient)
         {
-            _http = http;
-            _config = config;
-            _projectId = config["GCloud:ProjectId"];
-            _location = config["GCloud:Location"] ?? "us-central1";
-            _modelId = config["GCloud:ModelId"] ?? "models/gemini-1.5-pro"; // adjust
+            _httpClient = httpClient;
+            _apiKey = config["GoogleAI:ApiKey"];
 
-            var saJson = config["GCloud:ServiceAccountJson"];
-            if (string.IsNullOrEmpty(saJson))
-                throw new ArgumentNullException("GCloud:ServiceAccountJson is missing");
-
-            _googleCredential = GoogleCredential.FromJson(saJson).CreateScoped("https://www.googleapis.com/auth/cloud-platform");
-        }
-
-        private async Task<string> GetAccessTokenAsync()
-        {
-            return await _googleCredential.UnderlyingCredential.GetAccessTokenForRequestAsync();
+            if (string.IsNullOrEmpty(_apiKey))
+            {
+                throw new ArgumentNullException("GoogleAI:ApiKey is missing in configuration");
+            }
         }
 
         public async Task<string> SummarizeAsync(string text, string model = null, int maxOutputTokens = 800)
         {
-            model ??= _modelId;
-            var token = await GetAccessTokenAsync();
-            _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            model ??= "gemini-1.5-flash"; // Dùng model nhẹ hơn, nhanh hơn
 
-            // NOTE: payload shape must match Vertex AI Generative API for the model version you use.
-            // This is a simple generic payload; you should adapt to actual API in production.
-            var endpoint = $"https://{_location}-aiplatform.googleapis.com/v1/projects/{_projectId}/locations/{_location}/models/{model}:predict";
-
-            var payload = new
+            var requestBody = new
             {
-                instances = new[] {
-                    new {
-                        // depending on API, the field name may differ ("content" or "input" etc)
-                        content = text
+                contents = new[]
+                {
+                    new
+                    {
+                        parts = new[]
+                        {
+                            new { text = text }
+                        }
                     }
                 },
-                parameters = new
+                generationConfig = new
                 {
                     maxOutputTokens = maxOutputTokens,
                     temperature = 0.2
                 }
             };
 
-            var json = JsonSerializer.Serialize(payload);
-            var resp = await _http.PostAsync(endpoint, new StringContent(json, Encoding.UTF8, "application/json"));
-            resp.EnsureSuccessStatusCode();
-            var respJson = await resp.Content.ReadAsStringAsync();
+            var json = JsonSerializer.Serialize(requestBody);
+            var url = $"{_baseUrl}{model}:generateContent?key={_apiKey}";
 
-            // Parse heuristically; you must check actual response structure and adjust
-            using var doc = JsonDocument.Parse(respJson);
-            // try common path: predictions[0].content
-            if (doc.RootElement.TryGetProperty("predictions", out var preds))
+            var response = await _httpClient.PostAsync(
+                url,
+                new StringContent(json, Encoding.UTF8, "application/json"));
+
+            if (!response.IsSuccessStatusCode)
             {
-                var first = preds[0];
-                if (first.TryGetProperty("content", out var contentEl))
+                var errorContent = await response.Content.ReadAsStringAsync();
+                throw new Exception($"Gemini API error: {response.StatusCode} - {errorContent}");
+            }
+
+            var responseJson = await response.Content.ReadAsStringAsync();
+
+            // Parse response
+            using var doc = JsonDocument.Parse(responseJson);
+            if (doc.RootElement.TryGetProperty("candidates", out var candidates) &&
+                candidates.GetArrayLength() > 0)
+            {
+                var firstCandidate = candidates[0];
+                if (firstCandidate.TryGetProperty("content", out var content))
                 {
-                    return contentEl.GetString() ?? string.Empty;
-                }
-                // alternative
-                if (first.TryGetProperty("output", out var outEl))
-                {
-                    return outEl.ToString();
+                    if (content.TryGetProperty("parts", out var parts) && parts.GetArrayLength() > 0)
+                    {
+                        var firstPart = parts[0];
+                        if (firstPart.TryGetProperty("text", out var textElement))
+                        {
+                            return textElement.GetString() ?? string.Empty;
+                        }
+                    }
                 }
             }
 
-            // fallback: return whole response
-            return respJson;
+            throw new Exception("Failed to parse response from Gemini API");
+        }
+
+        public async Task<string> AnalyzeDocumentAsync(string text, string analysisType)
+        {
+            var prompt = analysisType.ToLower() switch
+            {
+                "overall" => $"Provide a comprehensive overall summary of this academic document. Focus on main arguments, structure, and key findings: {text}",
+                "strengths" => $"Identify and list the key strengths of this academic document. Consider clarity, evidence, structure, and originality: {text}",
+                "weaknesses" => $"Identify and list the main weaknesses or areas for improvement in this academic document. Be constructive: {text}",
+                "recommendations" => $"Provide specific, actionable recommendations to improve this academic document: {text}",
+                "keypoints" => $"Extract the key points and main ideas from this academic document. Be concise: {text}",
+                _ => $"Analyze this academic document and provide detailed insights: {text}"
+            };
+
+            return await SummarizeAsync(prompt, maxOutputTokens: 1000);
         }
     }
 }

@@ -1,5 +1,6 @@
 ﻿using AutoMapper;
 using BussinessObject.Models;
+using Service.RequestAndResponse.Response.AISummary;
 using Service.RequestAndResponse.Response.Submission;
 
 namespace Service.Mapping

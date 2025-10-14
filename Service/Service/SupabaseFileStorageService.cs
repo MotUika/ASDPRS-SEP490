@@ -92,5 +92,28 @@ public class SupabaseFileStorageService : IFileStorageService
         return true;
     }
 
-    public Task<Stream?> GetFileStreamAsync(string fileUrl) => Task.FromResult<Stream?>(null);
+    public async Task<Stream?> GetFileStreamAsync(string filePath)
+    {
+        try
+        {
+            await _client.InitializeAsync();
+            var storage = _client.Storage.From(_bucket);
+
+            // Cách 2: Sử dụng transform options rõ ràng
+            TransformOptions? transformOptions = null;
+            var bytes = await storage.Download(filePath, transformOptions, null);
+
+            if (bytes != null && bytes.Length > 0)
+            {
+                return new MemoryStream(bytes);
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error downloading file from Supabase: {FilePath}", filePath);
+            return null;
+        }
+    }
 }

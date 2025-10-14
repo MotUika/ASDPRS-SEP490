@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Service.RequestAndResponse.Response.AISummary;
+using System;
 using System.Collections.Generic;
 
 namespace Service.RequestAndResponse.Response.Submission
@@ -48,14 +49,6 @@ namespace Service.RequestAndResponse.Response.Submission
         public string Status { get; set; }
         public DateTime? ReviewedAt { get; set; }
         public UserInfoResponse Reviewer { get; set; }
-    }
-
-    public class AISummaryResponse
-    {
-        public int SummaryId { get; set; }
-        public string SummaryContent { get; set; }
-        public string SummaryType { get; set; }
-        public DateTime GeneratedAt { get; set; }
     }
 
     public class RegradeRequestResponse
