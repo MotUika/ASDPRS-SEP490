@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Service.IService;
 using System;
 using System.Net.Http;
@@ -11,13 +12,13 @@ namespace Service.Service
     public class GeminiAiService : IGenAIService
     {
         private readonly HttpClient _httpClient;
-        private readonly string _apiKey;
+        private readonly ILogger<GeminiAiService> _logger;
+        private readonly string _apiKey = "AIzaSyBfzfx2RpGUOiFduvSDFNiw_tqh2ttjqX0";
         private readonly string _baseUrl = "https://generativelanguage.googleapis.com/v1beta/models/";
 
-        public GeminiAiService(IConfiguration config, HttpClient httpClient)
+        public GeminiAiService(HttpClient httpClient, ILogger<GeminiAiService> logger)
         {
             _httpClient = httpClient;
-            _apiKey = config["GoogleAI:ApiKey"];
 
             if (string.IsNullOrEmpty(_apiKey))
             {
@@ -27,7 +28,7 @@ namespace Service.Service
 
         public async Task<string> SummarizeAsync(string text, string model = null, int maxOutputTokens = 800)
         {
-            model ??= "gemini-1.5-flash"; // Dùng model nhẹ hơn, nhanh hơn
+            model ??= "gemini-2.0-flash"; // Dùng model nhẹ hơn, nhanh hơn
 
             var requestBody = new
             {
@@ -84,7 +85,42 @@ namespace Service.Service
 
             throw new Exception("Failed to parse response from Gemini API");
         }
+        public async Task<string> AnalyzeDocumentWithContextAsync(string text, string analysisType, string context)
+        {
+            var prompt = analysisType.ToLower() switch
+            {
+                "overall" =>
+                    $"{context}\n\n" +
+                    $"Based on the above assignment context and rubric, provide a comprehensive overall summary and evaluation of this student submission. " +
+                    $"Focus on how well it meets the assignment requirements and rubric criteria:\n\n{text}",
 
+                "strengths" =>
+                    $"{context}\n\n" +
+                    $"Based on the above assignment context and rubric, identify and list the key strengths of this student submission. " +
+                    $"Focus on areas where it excels according to the rubric criteria:\n\n{text}",
+
+                "weaknesses" =>
+                    $"{context}\n\n" +
+                    $"Based on the above assignment context and rubric, identify and list the main weaknesses or areas for improvement in this student submission. " +
+                    $"Be constructive and specific about how to improve according to the rubric:\n\n{text}",
+
+                "recommendations" =>
+                    $"{context}\n\n" +
+                    $"Based on the above assignment context and rubric, provide specific, actionable recommendations to improve this student submission. " +
+                    $"Focus on concrete steps the student can take to better meet the assignment requirements:\n\n{text}",
+
+                "keypoints" =>
+                    $"{context}\n\n" +
+                    $"Based on the above assignment context, extract and evaluate the key points and main ideas from this student submission. " +
+                    $"Assess how well they address the assignment requirements:\n\n{text}",
+
+                _ =>
+                    $"{context}\n\n" +
+                    $"Based on the above assignment context and rubric, analyze this student submission and provide detailed insights:\n\n{text}"
+            };
+
+            return await SummarizeAsync(prompt, maxOutputTokens: 1200);
+        }
         public async Task<string> AnalyzeDocumentAsync(string text, string analysisType)
         {
             var prompt = analysisType.ToLower() switch
@@ -98,6 +134,54 @@ namespace Service.Service
             };
 
             return await SummarizeAsync(prompt, maxOutputTokens: 1000);
+        }
+        public async Task<string> GenerateReviewAsync(string documentText, string context)
+        {
+            var prompt = $@"**UNIVERSAL DOCUMENT REVIEW**
+
+                    CONTEXT INFORMATION:
+                    {context}
+
+                    DOCUMENT CONTENT:
+                    {documentText}
+
+                    **REVIEW REQUIREMENTS:**
+                    Provide a balanced, field-agnostic evaluation that works for any discipline (business, marketing, communications, engineering, etc.). Focus on universal academic and professional standards.
+
+                    **REVIEW STRUCTURE - Use exactly these sections:**
+
+                    **OVERALL EVALUATION**
+                    [Provide 2-3 concise sentences giving a balanced overall assessment]
+
+                    **⭐CRITERIA ASSESSMENT**
+                    [Rate each criterion from context using 1-5 stars. Example:
+                    - Content Quality: ★★★★☆
+                    - Organization: ★★★☆☆
+                    - Analysis: ★★★★★]
+
+                    **KEY STRENGTHS**
+                    • [Most significant strength]
+                    • [Second key strength] 
+                    • [Third notable strength]
+
+                    **IMPROVEMENT OPPORTUNITIES**
+                    • [Most important area for improvement]
+                    • [Second area to develop]
+                    • [Third suggestion for growth]
+
+                    **RECOMMENDATIONS**
+                    • [Most actionable recommendation]
+                    • [Second practical suggestion]
+
+                    **GUIDELINES:**
+                    - Be objective and evidence-based
+                    - Use simple, clear language
+                    - Focus on what's actually in the document
+                    - Balance positive and constructive feedback
+                    - Keep total under 300 words
+                    - Use bullet points for clarity";
+
+            return await SummarizeAsync(prompt, maxOutputTokens: 600);
         }
     }
 }
