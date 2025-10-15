@@ -5,6 +5,7 @@ using Service.Interface;
 using Service.IService;
 using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Enums;
+using Service.RequestAndResponse.Request.AISummary;
 using Service.RequestAndResponse.Request.CourseStudent;
 using Service.RequestAndResponse.Request.Review;
 using Service.RequestAndResponse.Request.Submission;
@@ -340,107 +341,6 @@ public class StudentReviewController : ControllerBase
         var result = await _assignmentService.GetAssignmentTrackingAsync(assignmentId);
         return StatusCode((int)result.StatusCode, result);
     }
-
-    [HttpPost("submission/{submissionId}/generate-ai-summaries")]
-    [SwaggerOperation(
-    Summary = "Tạo AI summaries cho bài nộp",
-    Description = "Kích hoạt AI tạo các summaries (tóm tắt, điểm mạnh, điểm yếu, đề xuất) cho bài nộp trước khi review"
-)]
-    [SwaggerResponse(200, "Tạo AI summaries thành công", typeof(BaseResponse<bool>))]
-    [SwaggerResponse(404, "Không tìm thấy bài nộp")]
-    public async Task<IActionResult> GenerateAISummariesForReview(int submissionId)
-    {
-        try
-        {
-            var studentId = GetCurrentStudentId();
-
-            // Kiểm tra sinh viên có được phân công review bài này không
-            var reviewAssignments = await _reviewAssignmentService.GetReviewAssignmentsBySubmissionIdAsync(submissionId);
-            var canReview = reviewAssignments.Data?.Any(ra => ra.ReviewerUserId == studentId) ?? false;
-
-            if (!canReview)
-            {
-                return StatusCode(403, new BaseResponse<bool>(
-                    "Access denied: You are not assigned to review this submission",
-                    StatusCodeEnum.Forbidden_403,
-                    false
-                ));
-            }
-
-            // Gọi service để tạo AI summaries
-            // Giả sử bạn có IAISummaryService injected
-            var aiSummaryService = HttpContext.RequestServices.GetService<IAISummaryService>();
-            if (aiSummaryService == null)
-            {
-                return StatusCode(500, new BaseResponse<bool>(
-                    "AI Summary service not available",
-                    StatusCodeEnum.InternalServerError_500,
-                    false
-                ));
-            }
-
-            var result = await aiSummaryService.GenerateAllSummaryTypesAsync(submissionId);
-            return StatusCode((int)result.StatusCode, result);
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new BaseResponse<bool>(
-                $"Error generating AI summaries: {ex.Message}",
-                StatusCodeEnum.InternalServerError_500,
-                false
-            ));
-        }
-    }
-
-    [HttpGet("submission/{submissionId}/ai-summaries")]
-    [SwaggerOperation(
-        Summary = "Lấy AI summaries của bài nộp",
-        Description = "Lấy các AI summaries (tóm tắt, điểm mạnh, điểm yếu, đề xuất) cho bài nộp đang review"
-    )]
-    [SwaggerResponse(200, "Thành công", typeof(BaseResponse<List<AISummaryResponse>>))]
-    [SwaggerResponse(404, "Không tìm thấy bài nộp hoặc AI summaries")]
-    public async Task<IActionResult> GetAISummariesForReview(int submissionId)
-    {
-        try
-        {
-            var studentId = GetCurrentStudentId();
-
-            // Kiểm tra quyền truy cập
-            var reviewAssignments = await _reviewAssignmentService.GetReviewAssignmentsBySubmissionIdAsync(submissionId);
-            var canReview = reviewAssignments.Data?.Any(ra => ra.ReviewerUserId == studentId) ?? false;
-
-            if (!canReview)
-            {
-                return StatusCode(403, new BaseResponse<List<AISummaryResponse>>(
-                    "Access denied: You are not assigned to review this submission",
-                    StatusCodeEnum.Forbidden_403,
-                    null
-                ));
-            }
-
-            // Lấy AI summaries
-            var aiSummaryService = HttpContext.RequestServices.GetService<IAISummaryService>();
-            if (aiSummaryService == null)
-            {
-                return StatusCode(500, new BaseResponse<List<AISummaryResponse>>(
-                    "AI Summary service not available",
-                    StatusCodeEnum.InternalServerError_500,
-                    null
-                ));
-            }
-
-            var result = await aiSummaryService.GetAISummariesBySubmissionAsync(submissionId);
-            return StatusCode((int)result.StatusCode, result);
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new BaseResponse<List<AISummaryResponse>>(
-                $"Error retrieving AI summaries: {ex.Message}",
-                StatusCodeEnum.InternalServerError_500,
-                null
-            ));
-        }
-    }
     private int GetCurrentStudentId()
     {
         var userIdClaim = User.FindFirst("userId");
@@ -486,5 +386,110 @@ public class StudentReviewController : ControllerBase
             ));
         }
         return await action();
+    }
+
+    [HttpPost("submission/{submissionId}/generate-review")]
+    [SwaggerOperation(
+    Summary = "Tạo AI Review tổng quát cho bài nộp",
+    Description = "Tạo review phù hợp mọi ngành học với đánh giá dựa trên nội dung bài và tiêu chí"
+)]
+    [SwaggerResponse(201, "Tạo review thành công", typeof(BaseResponse<AISummaryGenerationResponse>))]
+    [SwaggerResponse(404, "Không tìm thấy bài nộp")]
+    public async Task<IActionResult> GenerateUniversalReview(int submissionId)
+    {
+        try
+        {
+            var studentId = GetCurrentStudentId();
+
+            // Kiểm tra quyền review bài này
+            var reviewAssignments = await _reviewAssignmentService.GetReviewAssignmentsBySubmissionIdAsync(submissionId);
+            var canReview = reviewAssignments.Data?.Any(ra => ra.ReviewerUserId == studentId) ?? false;
+
+            if (!canReview)
+            {
+                return StatusCode(403, new BaseResponse<AISummaryGenerationResponse>(
+                    "Access denied: You are not assigned to review this submission",
+                    StatusCodeEnum.Forbidden_403,
+                    null
+                ));
+            }
+
+            var aiSummaryService = HttpContext.RequestServices.GetService<IAISummaryService>();
+            if (aiSummaryService == null)
+            {
+                return StatusCode(500, new BaseResponse<AISummaryGenerationResponse>(
+                    "AI Summary service not available",
+                    StatusCodeEnum.InternalServerError_500,
+                    null
+                ));
+            }
+
+            var request = new GenerateReviewRequest
+            {
+                SubmissionId = submissionId,
+                ReplaceExisting = true
+            };
+
+            var result = await aiSummaryService.GenerateReviewAsync(request);
+            return StatusCode((int)result.StatusCode, result);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new BaseResponse<AISummaryGenerationResponse>(
+                $"Error generating universal AI review: {ex.Message}",
+                StatusCodeEnum.InternalServerError_500,
+                null
+            ));
+        }
+    }
+
+    [HttpGet("submission/{submissionId}/Total-AI-review")]
+    [SwaggerOperation(
+        Summary = "Lấy AI Review tổng quát của bài nộp",
+        Description = "Lấy review AI phù hợp mọi ngành học cho bài nộp đang review"
+    )]
+    [SwaggerResponse(200, "Thành công", typeof(BaseResponse<AISummaryResponse>))]
+    [SwaggerResponse(404, "Không tìm thấy review")]
+    public async Task<IActionResult> GetUniversalReview(int submissionId)
+    {
+        try
+        {
+            var studentId = GetCurrentStudentId();
+
+            // Kiểm tra quyền
+            var reviewAssignments = await _reviewAssignmentService.GetReviewAssignmentsBySubmissionIdAsync(submissionId);
+            var canReview = reviewAssignments.Data?.Any(ra => ra.ReviewerUserId == studentId) ?? false;
+
+            if (!canReview)
+            {
+                return StatusCode(403, new BaseResponse<AISummaryResponse>(
+                    "Access denied: You are not assigned to review this submission",
+                    StatusCodeEnum.Forbidden_403,
+                    null
+                ));
+            }
+
+            var aiSummaryService = HttpContext.RequestServices.GetService<IAISummaryService>();
+            if (aiSummaryService == null)
+            {
+                return StatusCode(500, new BaseResponse<AISummaryResponse>(
+                    "AI Summary service not available",
+                    StatusCodeEnum.InternalServerError_500,
+                    null
+                ));
+            }
+
+            // Lấy review tổng quát
+            var result = await aiSummaryService.GetAISummaryBySubmissionAndTypeAsync(submissionId, "UniversalReview");
+            return StatusCode((int)result.StatusCode, result);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new BaseResponse<AISummaryResponse>(
+                $"Error retrieving universal AI review: {ex.Message}",
+                StatusCodeEnum.InternalServerError_500,
+                null
+            ));
+        }
     }
 }
