@@ -214,5 +214,28 @@ namespace API.Controllers
             var response = await _reviewService.GetReviewsByAssignmentIdAsync(assignmentId);
             return StatusCode((int)response.StatusCode, response);
         }
+
+        [HttpGet("completed/{reviewerId}")]
+        [SwaggerOperation(
+            Summary = "Lấy danh sách review đã hoàn thành",
+            Description = "Trả về tất cả review mà reviewer đã hoàn thành, có thể chỉnh sửa nếu trong thời gian review"
+        )]
+        [SwaggerResponse(200, "Thành công", typeof(BaseResponse<List<ReviewResponse>>))]
+        public async Task<IActionResult> GetCompletedReviewsByReviewer(int reviewerId)
+        {
+            var response = await _reviewService.GetCompletedReviewsByReviewerAsync(reviewerId);
+            return StatusCode((int)response.StatusCode, response);
+        }
+
+        [HttpGet("completed/assignment/{assignmentId}/{reviewerId}")]
+        [SwaggerOperation(
+            Summary = "Lấy review đã hoàn thành theo assignment",
+            Description = "Trả về review đã hoàn thành của reviewer trong assignment cụ thể"
+        )]
+        public async Task<IActionResult> GetCompletedReviewsByAssignment(int assignmentId, int reviewerId)
+        {
+            var response = await _reviewService.GetCompletedReviewsByAssignmentAsync(assignmentId, reviewerId);
+            return StatusCode((int)response.StatusCode, response);
+        }
     }
 }

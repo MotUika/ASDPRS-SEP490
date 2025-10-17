@@ -10,6 +10,7 @@ using Service.IService;
 using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Enums;
 using Service.RequestAndResponse.Request.Submission;
+using Service.RequestAndResponse.Response.AISummary;
 using Service.RequestAndResponse.Response.Submission;
 using System;
 using System.Collections.Generic;
@@ -102,7 +103,6 @@ namespace Service.Service
                 var response = await MapToSubmissionResponse(createdSubmission);
 
                 _logger.LogInformation($"Submission created successfully. SubmissionId: {createdSubmission.SubmissionId}");
-                await AutoAssignReviewsForNewSubmission(request.AssignmentId);
 
 
                 // Late check

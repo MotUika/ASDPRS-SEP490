@@ -644,6 +644,96 @@ namespace Service.Service
             }
         }
 
+        // Thêm vào IReviewService và ReviewService
+        public async Task<BaseResponse<List<ReviewResponse>>> GetCompletedReviewsByReviewerAsync(int reviewerId)
+        {
+            try
+            {
+                var allReviews = await _reviewRepository.GetByReviewerIdAsync(reviewerId);
+                var completedReviews = allReviews.Where(r => r.ReviewedAt.HasValue).ToList();
+
+                var responses = new List<ReviewResponse>();
+                foreach (var review in completedReviews)
+                {
+                    var response = await MapToResponseAsync(review);
+
+                    // Kiểm tra xem có thể chỉnh sửa không (trong thời gian review)
+                    var reviewAssignment = await _reviewAssignmentRepository.GetByIdAsync(review.ReviewAssignmentId);
+                    var submission = await _submissionRepository.GetByIdAsync(reviewAssignment.SubmissionId);
+                    var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
+
+                    response.CanEdit = assignment.ReviewDeadline.HasValue &&
+                                      DateTime.UtcNow <= assignment.ReviewDeadline.Value;
+                    response.EditDeadline = assignment.ReviewDeadline;
+
+                    responses.Add(response);
+                }
+
+                return new BaseResponse<List<ReviewResponse>>(
+                    "Completed reviews retrieved successfully",
+                    StatusCodeEnum.OK_200,
+                    responses);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<List<ReviewResponse>>(
+                    $"Error retrieving completed reviews: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
+            }
+        }
+
+        public async Task<BaseResponse<List<ReviewResponse>>> GetCompletedReviewsByAssignmentAsync(int assignmentId, int reviewerId)
+        {
+            try
+            {
+                var allReviews = await _reviewRepository.GetByReviewerIdAsync(reviewerId);
+                var completedReviews = allReviews
+                    .Where(r => r.ReviewedAt.HasValue)
+                    .ToList();
+
+                // Lọc theo assignment
+                var filteredReviews = new List<Review>();
+                foreach (var review in completedReviews)
+                {
+                    var reviewAssignment = await _reviewAssignmentRepository.GetByIdAsync(review.ReviewAssignmentId);
+                    var submission = await _submissionRepository.GetByIdAsync(reviewAssignment.SubmissionId);
+                    if (submission.AssignmentId == assignmentId)
+                    {
+                        filteredReviews.Add(review);
+                    }
+                }
+
+                var responses = new List<ReviewResponse>();
+                foreach (var review in filteredReviews)
+                {
+                    var response = await MapToResponseAsync(review);
+
+                    var reviewAssignment = await _reviewAssignmentRepository.GetByIdAsync(review.ReviewAssignmentId);
+                    var submission = await _submissionRepository.GetByIdAsync(reviewAssignment.SubmissionId);
+                    var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
+
+                    response.CanEdit = assignment.ReviewDeadline.HasValue &&
+                                      DateTime.UtcNow <= assignment.ReviewDeadline.Value;
+                    response.EditDeadline = assignment.ReviewDeadline;
+
+                    responses.Add(response);
+                }
+
+                return new BaseResponse<List<ReviewResponse>>(
+                    "Completed reviews for assignment retrieved successfully",
+                    StatusCodeEnum.OK_200,
+                    responses);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<List<ReviewResponse>>(
+                    $"Error retrieving completed reviews for assignment: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
+            }
+        }
+
         private async Task<decimal> CalculateReviewScoreFromRequest(SubmitStudentReviewRequest request, Assignment assignment)
         {
             decimal totalScore = 0;

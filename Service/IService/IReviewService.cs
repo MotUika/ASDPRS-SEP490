@@ -20,5 +20,8 @@ namespace Service.IService
         Task<BaseResponse<ReviewResponse>> CreateAIReviewAsync(CreateReviewRequest request);
         Task<BaseResponse<ReviewResponse>> SubmitStudentReviewAsync(SubmitStudentReviewRequest request);
         Task<BaseResponse<ReviewResponse>> UpdateStudentReviewAsync(UpdateStudentReviewRequest request);
+        Task<BaseResponse<List<ReviewResponse>>> GetCompletedReviewsByReviewerAsync(int reviewerId);
+        Task<BaseResponse<List<ReviewResponse>>> GetCompletedReviewsByAssignmentAsync(int assignmentId, int reviewerId);
+
     }
 }

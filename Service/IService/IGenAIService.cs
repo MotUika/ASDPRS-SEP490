@@ -8,10 +8,9 @@ namespace Service.IService
 {
     public interface IGenAIService
     {
-        /// <summary>
-        /// Summarize given text (single chunk). Return summary text.
-        /// </summary>
         Task<string> SummarizeAsync(string text, string model = null, int maxOutputTokens = 800);
+        Task<string> AnalyzeDocumentAsync(string text, string analysisType);
+        Task<string> GenerateReviewAsync(string documentText, string context);
     }
 
 }

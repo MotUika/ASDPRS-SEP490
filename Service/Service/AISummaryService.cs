@@ -1,6 +1,7 @@
 ﻿using BussinessObject.Models;
 using Microsoft.Extensions.Logging;
 using Repository.IRepository;
+using Repository.Repository;
 using Service.Interface;
 using Service.IService;
 using Service.RequestAndResponse.BaseResponse;
@@ -10,6 +11,7 @@ using Service.RequestAndResponse.Response.AISummary;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace Service.Service
@@ -26,18 +28,28 @@ namespace Service.Service
         private readonly IFileStorageService _fileStorageService;
         private readonly IGenAIService _genAIService;
         private readonly ILogger<AISummaryService> _logger;
+        private readonly IRubricRepository _rubricRepository;
+        private readonly ICriteriaRepository _criteriaRepository;
         public AISummaryService(
             IAISummaryRepository aiSummaryRepository,
             ISubmissionRepository submissionRepository,
             IAssignmentRepository assignmentRepository,
-            IUserRepository userRepository
-            /*IAIService aiService*/)
+            IUserRepository userRepository, ILogger<AISummaryService> logger,
+            IDocumentTextExtractor documentTextExtractor,
+    IFileStorageService fileStorageService,
+    IGenAIService genAIService, IRubricRepository rubricRepository,           // Thêm này
+    ICriteriaRepository criteriaRepository)
         {
             _aiSummaryRepository = aiSummaryRepository;
             _submissionRepository = submissionRepository;
             _assignmentRepository = assignmentRepository;
             _userRepository = userRepository;
-            /*_aiService = aiService;*/
+            _logger = logger;
+            _documentTextExtractor = documentTextExtractor;
+            _fileStorageService = fileStorageService;
+            _genAIService = genAIService;
+            _rubricRepository = rubricRepository;
+            _criteriaRepository = criteriaRepository;
         }
 
         public async Task<BaseResponse<AISummaryResponse>> CreateAISummaryAsync(CreateAISummaryRequest request)
@@ -63,11 +75,16 @@ namespace Service.Service
                         StatusCodeEnum.Conflict_409,
                         null);
                 }
+                var content = request.Content;
+                if (content.Length > 2000)
+                {
+                    content = content.Substring(0, 2000);
+                }
 
                 var aiSummary = new AISummary
                 {
                     SubmissionId = request.SubmissionId,
-                    Content = request.Content,
+                    Content = content,
                     SummaryType = request.SummaryType,
                     GeneratedAt = DateTime.UtcNow
                 };
@@ -102,9 +119,16 @@ namespace Service.Service
                         null);
                 }
 
-                // Update fields if provided
                 if (!string.IsNullOrEmpty(request.Content))
-                    aiSummary.Content = request.Content;
+                {
+                    var content = request.Content;
+                    if (content.Length > 2000)
+                    {
+                        content = content.Substring(0, 2000);
+                    }
+                    aiSummary.Content = content;
+                }
+
 
                 if (!string.IsNullOrEmpty(request.SummaryType))
                     aiSummary.SummaryType = request.SummaryType;
@@ -277,6 +301,9 @@ namespace Service.Service
                         null);
                 }
 
+                _logger.LogInformation($"Processing submission {submission.SubmissionId}, FileName: {submission.FileName}, FileUrl: {submission.FileUrl}");
+
+                // Kiểm tra nếu đã tồn tại
                 if (!request.ForceRegenerate)
                 {
                     var existingSummaries = await _aiSummaryRepository.GetBySubmissionAndTypeAsync(request.SubmissionId, request.SummaryType);
@@ -289,69 +316,75 @@ namespace Service.Service
                             Content = existingSummary.Content,
                             SummaryType = existingSummary.SummaryType,
                             GeneratedAt = existingSummary.GeneratedAt,
-                            WasGenerated = false,
-                            Status = "Existing summary returned",
-                            ModelUsed = "N/A",
-                            GenerationTime = TimeSpan.Zero
+                            WasGenerated = false
                         };
-
-                        return new BaseResponse<AISummaryGenerationResponse>(
-                            "Existing AI summary returned",
-                            StatusCodeEnum.OK_200,
-                            response);
+                        return new BaseResponse<AISummaryGenerationResponse>("Existing summary returned", StatusCodeEnum.OK_200, response);
                     }
                 }
 
-                var startTime = DateTime.UtcNow;
-
-                // 1) Download file stream using file storage service
-                using var fileStream = await _fileStorageService.GetFileStreamAsync(submission.FileUrl ?? submission.FileName);
-                if (fileStream == null)
+                // SỬA: Sử dụng FileUrl trực tiếp thay vì extract path
+                if (string.IsNullOrEmpty(submission.FileUrl))
                 {
                     return new BaseResponse<AISummaryGenerationResponse>(
-                        "Failed to download file",
+                        "File URL not found in submission",
                         StatusCodeEnum.BadRequest_400,
                         null);
                 }
 
-                // 2) Extract text
-                var fileNameForExt = submission.FileName ?? submission.OriginalFileName ?? submission.FileUrl ?? "file";
-                var extractedText = await _documentTextExtractor.ExtractTextAsync(fileStream, fileNameForExt);
+                _logger.LogInformation($"Using FileUrl directly: {submission.FileUrl}");
+
+                // Tải file trực tiếp từ FileUrl
+                using var fileStream = await _fileStorageService.GetFileStreamAsync(submission.FileUrl);
+                if (fileStream == null)
+                {
+                    return new BaseResponse<AISummaryGenerationResponse>(
+                        "Could not download file from storage using public URL",
+                        StatusCodeEnum.BadRequest_400,
+                        null);
+                }
+
+                // Trích xuất text từ file
+                var fileName = submission.FileName ?? submission.OriginalFileName;
+                var extractedText = await _documentTextExtractor.ExtractTextAsync(fileStream, fileName);
 
                 if (string.IsNullOrWhiteSpace(extractedText))
                 {
                     return new BaseResponse<AISummaryGenerationResponse>(
-                        "No text could be extracted from file",
+                        "No text could be extracted from the file",
                         StatusCodeEnum.BadRequest_400,
                         null);
                 }
 
-                // 3) Chunk text to respect model limits
-                var chunks = ChunkText(extractedText, 8000); // tune per model token limits
+                _logger.LogInformation($"Text extracted successfully: {extractedText.Length} characters");
 
-                var chunkSummaries = new List<string>();
-                foreach (var chunk in chunks)
+                // Nếu text quá dài, chunk nó
+                if (extractedText.Length > 30000)
                 {
-                    // call genAI service (service decides model)
-                    var chunkSummary = await _genAIService.SummarizeAsync(chunk, maxOutputTokens: 800);
-                    chunkSummaries.Add(chunkSummary);
+                    extractedText = extractedText.Substring(0, 30000) + "... [document truncated]";
+                    _logger.LogInformation($"Text truncated to 30000 characters");
                 }
 
-                // 4) Combine chunk summaries and optionally summarize combined text once more
-                var combined = string.Join("\n\n", chunkSummaries);
-                var finalSummary = await _genAIService.SummarizeAsync(combined, maxOutputTokens: 800);
+                _logger.LogInformation($"Calling AI service for analysis type: {request.SummaryType}");
+                var analysisResult = await _genAIService.AnalyzeDocumentAsync(extractedText, request.SummaryType);
+                _logger.LogInformation($"AI analysis completed: {analysisResult.Length} characters");
 
-                // 5) Save AISummary
+                // TRUNCATE CONTENT TO FIT DATABASE COLUMN
+                if (analysisResult.Length > 2000)
+                {
+                    analysisResult = analysisResult.Substring(0, 2000);
+                    _logger.LogInformation($"AI analysis result truncated to 2000 characters");
+                }
+
+                // Save result
                 var aiSummary = new AISummary
                 {
                     SubmissionId = request.SubmissionId,
-                    Content = finalSummary,
+                    Content = analysisResult,
                     SummaryType = request.SummaryType,
                     GeneratedAt = DateTime.UtcNow
                 };
-                await _aiSummaryRepository.AddAsync(aiSummary);
 
-                var generationTime = DateTime.UtcNow - startTime;
+                await _aiSummaryRepository.AddAsync(aiSummary);
 
                 var generationResponse = new AISummaryGenerationResponse
                 {
@@ -360,9 +393,7 @@ namespace Service.Service
                     SummaryType = aiSummary.SummaryType,
                     GeneratedAt = aiSummary.GeneratedAt,
                     WasGenerated = true,
-                    Status = "Successfully generated",
-                    ModelUsed = "gemini (via IGenAIService)",
-                    GenerationTime = generationTime
+                    Status = "Successfully generated using Gemini AI"
                 };
 
                 return new BaseResponse<AISummaryGenerationResponse>(
@@ -372,21 +403,13 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "Error generating AI summary");
+                _logger.LogError(ex, "Error generating AI summary for submission {SubmissionId}", request.SubmissionId);
                 return new BaseResponse<AISummaryGenerationResponse>(
                     $"Error generating AI summary: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
                     null);
             }
         }
-
-        private static IEnumerable<string> ChunkText(string text, int maxChars)
-        {
-            if (string.IsNullOrEmpty(text)) yield break;
-            for (int i = 0; i < text.Length; i += maxChars)
-                yield return text.Substring(i, Math.Min(maxChars, text.Length - i));
-        }
-
         public async Task<BaseResponse<List<AISummaryResponse>>> GetRecentAISummariesAsync(int maxResults = 10)
         {
             try
@@ -464,6 +487,157 @@ namespace Service.Service
                     StatusCodeEnum.InternalServerError_500,
                     false);
             }
+        }
+        public async Task<BaseResponse<AISummaryGenerationResponse>> GenerateReviewAsync(GenerateReviewRequest request)
+        {
+            try
+            {
+                var submission = await _submissionRepository.GetByIdAsync(request.SubmissionId);
+                if (submission == null)
+                {
+                    return new BaseResponse<AISummaryGenerationResponse>(
+                        "Submission not found",
+                        StatusCodeEnum.NotFound_404,
+                        null);
+                }
+
+                var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
+                if (assignment == null)
+                {
+                    return new BaseResponse<AISummaryGenerationResponse>(
+                        "Assignment not found",
+                        StatusCodeEnum.NotFound_404,
+                        null);
+                }
+
+                // Lấy thông tin rubric và criteria
+                Rubric rubric = null;
+                List<Criteria> criteria = null;
+                if (assignment.RubricId.HasValue)
+                {
+                    rubric = await _rubricRepository.GetByIdAsync(assignment.RubricId.Value);
+                    if (rubric != null)
+                    {
+                        criteria = (await _criteriaRepository.GetByRubricIdAsync(rubric.RubricId)).ToList();
+                    }
+                }
+
+                _logger.LogInformation($"Processing submission {submission.SubmissionId} for universal AI review");
+
+                // Tải file và trích xuất text
+                using var fileStream = await _fileStorageService.GetFileStreamAsync(submission.FileUrl);
+                if (fileStream == null)
+                {
+                    return new BaseResponse<AISummaryGenerationResponse>(
+                        "Could not download file from storage",
+                        StatusCodeEnum.BadRequest_400,
+                        null);
+                }
+
+                var fileName = submission.FileName ?? submission.OriginalFileName;
+                var extractedText = await _documentTextExtractor.ExtractTextAsync(fileStream, fileName);
+
+                if (string.IsNullOrWhiteSpace(extractedText))
+                {
+                    return new BaseResponse<AISummaryGenerationResponse>(
+                        "No text could be extracted from the file",
+                        StatusCodeEnum.BadRequest_400,
+                        null);
+                }
+
+                // Giới hạn độ dài text để tiết kiệm token
+                if (extractedText.Length > 12000)
+                {
+                    extractedText = extractedText.Substring(0, 12000) + "...";
+                }
+
+                // Tạo context tổng quát
+                var context = BuildUniversalContext(assignment, rubric, criteria);
+
+                _logger.LogInformation($"Calling AI service for universal review generation");
+
+                // Gọi AI service với prompt tổng quát
+                var reviewContent = await _genAIService.GenerateReviewAsync(extractedText, context);
+
+                _logger.LogInformation($"Universal AI review generated: {reviewContent.Length} characters");
+
+                // Giới hạn độ dài kết quả
+                if (reviewContent.Length > 1800)
+                {
+                    reviewContent = reviewContent.Substring(0, 1800);
+                }
+
+                // Xóa review cũ nếu có
+                if (request.ReplaceExisting)
+                {
+                    var existingReviews = await _aiSummaryRepository.GetBySubmissionAndTypeAsync(request.SubmissionId, "UniversalReview");
+                    foreach (var existing in existingReviews)
+                    {
+                        await _aiSummaryRepository.DeleteAsync(existing);
+                    }
+                }
+
+                // Lưu review mới
+                var aiReview = new AISummary
+                {
+                    SubmissionId = request.SubmissionId,
+                    Content = reviewContent,
+                    SummaryType = "UniversalReview", // Loại review tổng quát
+                    GeneratedAt = DateTime.UtcNow
+                };
+
+                await _aiSummaryRepository.AddAsync(aiReview);
+
+                var generationResponse = new AISummaryGenerationResponse
+                {
+                    SummaryId = aiReview.SummaryId,
+                    Content = aiReview.Content,
+                    SummaryType = aiReview.SummaryType,
+                    GeneratedAt = aiReview.GeneratedAt,
+                    WasGenerated = true,
+                    Status = "Universal review generated successfully"
+                };
+
+                return new BaseResponse<AISummaryGenerationResponse>(
+                    "AI review generated successfully",
+                    StatusCodeEnum.Created_201,
+                    generationResponse);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error generating universal AI review for submission {SubmissionId}", request.SubmissionId);
+                return new BaseResponse<AISummaryGenerationResponse>(
+                    $"Error generating AI review: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
+            }
+        }
+
+        private string BuildUniversalContext(Assignment assignment, Rubric rubric, List<Criteria> criteria)
+        {
+            var contextBuilder = new StringBuilder();
+
+            // Thông tin bài tập cơ bản
+            contextBuilder.AppendLine($"Assignment: {assignment.Title}");
+
+            if (!string.IsNullOrEmpty(assignment.Description))
+            {
+                var shortDesc = assignment.Description.Length > 80 ?
+                    assignment.Description.Substring(0, 80) + "..." : assignment.Description;
+                contextBuilder.AppendLine($"Description: {shortDesc}");
+            }
+
+            // Tiêu chí đánh giá tổng quát (nếu có)
+            if (criteria != null && criteria.Any())
+            {
+                contextBuilder.AppendLine("Evaluation Criteria:");
+                foreach (var criterion in criteria.Take(4)) // Giới hạn 4 tiêu chí
+                {
+                    contextBuilder.AppendLine($"- {criterion.Title} (Weight: {criterion.Weight}%)");
+                }
+            }
+
+            return contextBuilder.ToString();
         }
 
         private async Task<AISummaryResponse> MapToResponse(AISummary aiSummary)

@@ -1,11 +1,11 @@
 ﻿using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Service.Interface;
 using Supabase;
 using Supabase.Storage;
 using System;
 using System.IO;
+using System.Net.Http;
 using System.Threading.Tasks;
 
 public class SupabaseFileStorageService : IFileStorageService
@@ -13,14 +13,16 @@ public class SupabaseFileStorageService : IFileStorageService
     private readonly Supabase.Client _client;
     private readonly ILogger<SupabaseFileStorageService> _logger;
     private readonly string _bucket;
+    private readonly HttpClient _httpClient;
 
-    public SupabaseFileStorageService(ILogger<SupabaseFileStorageService> logger)
+    public SupabaseFileStorageService(ILogger<SupabaseFileStorageService> logger, HttpClient httpClient)
     {
         _logger = logger;
+        _httpClient = httpClient;
 
         var url = "https://yznanpovvpvcqtblwggk.supabase.co";
-        var key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6bmFucG92dnB2Y3F0Ymx3Z2drIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1OTU2NjU1NywiZXhwIjoyMDc1MTQyNTU3fQ.LivBDEuCI7VOVbjArzbI3aDdZkSEpwnOXISEE87nTxE"; // ⚠️ Service Role Key, không phải anon key
-        _bucket = "files"; // Tên bucket bạn tạo trong Supabase Storage
+        var key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6bmFucG92dnB2Y3F0Ymx3Z2drIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1OTU2NjU1NywiZXhwIjoyMDc1MTQyNTU3fQ.LivBDEuCI7VOVbjArzbI3aDdZkSEpwnOXISEE87nTxE";
+        _bucket = "files";
 
         _client = new Supabase.Client(url, key, new SupabaseOptions
         {
@@ -53,7 +55,6 @@ public class SupabaseFileStorageService : IFileStorageService
             var bytes = memoryStream.ToArray();
 
             await storage.Upload(bytes, path, new Supabase.Storage.FileOptions { Upsert = true });
-
 
             string fileUrl = makePublic
                 ? storage.GetPublicUrl(path)
@@ -92,5 +93,107 @@ public class SupabaseFileStorageService : IFileStorageService
         return true;
     }
 
-    public Task<Stream?> GetFileStreamAsync(string fileUrl) => Task.FromResult<Stream?>(null);
+    public async Task<Stream?> GetFileStreamAsync(string filePathOrUrl)
+    {
+        try
+        {
+            // Nếu là URL public, tải trực tiếp từ URL
+            if (filePathOrUrl.StartsWith("http"))
+            {
+                _logger.LogInformation($"Downloading from public URL: {filePathOrUrl}");
+                return await DownloadFromPublicUrlAsync(filePathOrUrl);
+            }
+
+            // Nếu là đường dẫn trong storage, thử các cách khác nhau
+            await _client.InitializeAsync();
+            var storage = _client.Storage.From(_bucket);
+
+            _logger.LogInformation($"Attempting to download file from storage: {filePathOrUrl}");
+
+            // Thử các path khác nhau
+            var possiblePaths = new[]
+            {
+                filePathOrUrl,
+                $"submissions/{filePathOrUrl}",
+                filePathOrUrl.Replace("files/", "") // Loại bỏ prefix files/ nếu có
+            };
+
+            foreach (var path in possiblePaths)
+            {
+                try
+                {
+                    _logger.LogInformation($"Trying path: {path}");
+
+                    // SỬA: Chỉ định rõ ràng parameters để tránh ambiguous call
+                    TransformOptions? transformOptions = null;
+                    var bytes = await storage.Download(path, transformOptions: transformOptions, onProgress: null);
+
+                    if (bytes != null && bytes.Length > 0)
+                    {
+                        _logger.LogInformation($"File found at: {path}, Size: {bytes.Length} bytes");
+                        return new MemoryStream(bytes);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning($"Failed to download from {path}: {ex.Message}");
+                }
+            }
+
+            _logger.LogError($"File not found in any of the attempted paths: {filePathOrUrl}");
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error downloading file from Supabase: {FilePath}", filePathOrUrl);
+            return null;
+        }
+    }
+
+    private async Task<Stream?> DownloadFromPublicUrlAsync(string publicUrl)
+    {
+        try
+        {
+            // Loại bỏ query parameters nếu có
+            var cleanUrl = publicUrl.Split('?')[0];
+
+            _logger.LogInformation($"Downloading from cleaned URL: {cleanUrl}");
+
+            var response = await _httpClient.GetAsync(cleanUrl);
+            if (response.IsSuccessStatusCode)
+            {
+                var stream = await response.Content.ReadAsStreamAsync();
+                _logger.LogInformation($"Successfully downloaded from public URL, stream length: {stream.Length}");
+                return stream;
+            }
+            else
+            {
+                _logger.LogError($"Failed to download from public URL: {response.StatusCode}");
+                return null;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error downloading from public URL: {PublicUrl}", publicUrl);
+            return null;
+        }
+    }
+
+    public async Task<byte[]?> GetFileBytesAsync(string filePath)
+    {
+        try
+        {
+            await _client.InitializeAsync();
+            var storage = _client.Storage.From(_bucket);
+
+            // SỬA: Chỉ định rõ ràng parameters để tránh ambiguous call
+            TransformOptions? transformOptions = null;
+            return await storage.Download(filePath, transformOptions: transformOptions, onProgress: null);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error downloading file bytes from Supabase: {FilePath}", filePath);
+            return null;
+        }
+    }
 }
