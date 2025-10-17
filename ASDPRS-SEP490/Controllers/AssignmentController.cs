@@ -1,17 +1,12 @@
-﻿using MathNet.Numerics.Distributions;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Service.IService;
 using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Enums;
 using Service.RequestAndResponse.Request.Assignment;
 using Service.RequestAndResponse.Response.Assignment;
-using Service.RequestAndResponse.Response.Rubric;
 using Swashbuckle.AspNetCore.Annotations;
-using System.Collections.Generic;
-using Service.Service;
 using System;
-using System.Security.Claims;
-
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace ASDPRS_SEP490.Controllers
@@ -23,12 +18,10 @@ namespace ASDPRS_SEP490.Controllers
     public class AssignmentController : ControllerBase
     {
         private readonly IAssignmentService _assignmentService;
-        private readonly ICourseStudentService _courseStudentService;
 
-        public AssignmentController(IAssignmentService assignmentService, ICourseStudentService courseStudentService)
+        public AssignmentController(IAssignmentService assignmentService)
         {
             _assignmentService = assignmentService;
-            _courseStudentService = courseStudentService;
         }
 
         // ===================== CRUD =====================
@@ -81,32 +74,26 @@ namespace ASDPRS_SEP490.Controllers
         [SwaggerOperation(Summary = "Lấy thông tin bài tập theo ID", Description = "Trả về thông tin chi tiết của bài tập dựa trên ID")]
         public async Task<IActionResult> GetAssignmentById(int id)
         {
-            return await CheckEnrollmentByAssignmentAndExecute(id, async () =>
+            var result = await _assignmentService.GetAssignmentByIdAsync(id);
+            return result.StatusCode switch
             {
-                var result = await _assignmentService.GetAssignmentByIdAsync(id);
-                return result.StatusCode switch
-                {
-                    StatusCodeEnum.OK_200 => Ok(result),
-                    StatusCodeEnum.NotFound_404 => NotFound(result),
-                    _ => StatusCode(500, result)
-                };
-            });
+                StatusCodeEnum.OK_200 => Ok(result),
+                StatusCodeEnum.NotFound_404 => NotFound(result),
+                _ => StatusCode(500, result)
+            };
         }
 
         [HttpGet("{id}/details")]
         [SwaggerOperation(Summary = "Lấy chi tiết bài tập kèm rubric", Description = "Trả về thông tin bài tập bao gồm rubric và các tiêu chí")]
         public async Task<IActionResult> GetAssignmentWithDetails(int id)
         {
-            return await CheckEnrollmentByAssignmentAndExecute(id, async () =>
+            var result = await _assignmentService.GetAssignmentWithDetailsAsync(id);
+            return result.StatusCode switch
             {
-                var result = await _assignmentService.GetAssignmentWithDetailsAsync(id);
-                return result.StatusCode switch
-                {
-                    StatusCodeEnum.OK_200 => Ok(result),
-                    StatusCodeEnum.NotFound_404 => NotFound(result),
-                    _ => StatusCode(500, result)
-                };
-            });
+                StatusCodeEnum.OK_200 => Ok(result),
+                StatusCodeEnum.NotFound_404 => NotFound(result),
+                _ => StatusCode(500, result)
+            };
         }
 
         // ===================== FILTER BY COURSE / USER =====================
@@ -115,15 +102,12 @@ namespace ASDPRS_SEP490.Controllers
         [SwaggerOperation(Summary = "Lấy danh sách bài tập theo lớp học phần")]
         public async Task<IActionResult> GetAssignmentsByCourseInstance(int courseInstanceId)
         {
-            return await CheckEnrollmentAndExecute(courseInstanceId, async () =>
+            var result = await _assignmentService.GetAssignmentsByCourseInstanceAsync(courseInstanceId);
+            return result.StatusCode switch
             {
-                var result = await _assignmentService.GetAssignmentsByCourseInstanceAsync(courseInstanceId);
-                return result.StatusCode switch
-                {
-                    StatusCodeEnum.OK_200 => Ok(result),
-                    _ => StatusCode(500, result)
-                };
-            });
+                StatusCodeEnum.OK_200 => Ok(result),
+                _ => StatusCode(500, result)
+            };
         }
 
         [HttpGet("instructor/{instructorId}")]
@@ -142,17 +126,6 @@ namespace ASDPRS_SEP490.Controllers
         [SwaggerOperation(Summary = "Lấy danh sách bài tập theo sinh viên")]
         public async Task<IActionResult> GetAssignmentsByStudent(int studentId)
         {
-            // Verify the requested studentId matches the current user
-            var currentStudentId = GetCurrentStudentId();
-            if (studentId != currentStudentId)
-            {
-                return StatusCode(403, new BaseResponse<object>(
-                    "Access denied: Cannot access other student's assignments",
-                    StatusCodeEnum.Forbidden_403,
-                    null
-                ));
-            }
-
             var result = await _assignmentService.GetAssignmentsByStudentAsync(studentId);
             return result.StatusCode switch
             {
@@ -322,73 +295,5 @@ namespace ASDPRS_SEP490.Controllers
                 _ => StatusCode(500, result)
             };
         }
-
-        // Trong AssignmentController.cs
-        [HttpPost("{id}/publish-grades")]
-        [SwaggerOperation(
-            Summary = "Publish grades for assignment",
-            Description = "Publish final grades after review deadline"
-        )]
-        [SwaggerResponse(200, "Grades published", typeof(BaseResponse<bool>))]
-        public async Task<IActionResult> PublishGrades(int id)
-        {
-            var result = await _assignmentService.PublishGradesAsync(id);
-            return result.StatusCode switch
-            {
-                StatusCodeEnum.OK_200 => Ok(result),
-                StatusCodeEnum.BadRequest_400 => BadRequest(result),
-                StatusCodeEnum.NotFound_404 => NotFound(result),
-                _ => StatusCode(500, result)
-            };
-        }
-
-        private int GetCurrentStudentId()
-        {
-            var userIdClaim = User.FindFirst("userId") ?? User.FindFirst(ClaimTypes.NameIdentifier);
-            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int studentId))
-            {
-                throw new UnauthorizedAccessException("Invalid user token");
-            }
-            return studentId;
-        }
-        private async Task<IActionResult> CheckEnrollmentAndExecute(int courseInstanceId, Func<Task<IActionResult>> action)
-        {
-            var studentId = GetCurrentStudentId();
-            var enrollmentCheck = await _courseStudentService.IsStudentEnrolledAsync(courseInstanceId, studentId);
-            if (!enrollmentCheck.Data)
-            {
-                return StatusCode(403, new BaseResponse<object>(
-                    $"Access denied: {enrollmentCheck.Message}",
-                    StatusCodeEnum.Forbidden_403,
-                    null
-                ));
-            }
-            return await action();
-        }
-
-        private async Task<IActionResult> CheckEnrollmentByAssignmentAndExecute(int assignmentId, Func<Task<IActionResult>> action)
-        {
-            var studentId = GetCurrentStudentId();
-
-            // Get assignment to find course instance
-            var assignmentResult = await _assignmentService.GetAssignmentByIdAsync(assignmentId);
-            if (assignmentResult.StatusCode != StatusCodeEnum.OK_200 || assignmentResult.Data == null)
-            {
-                return StatusCode((int)assignmentResult.StatusCode, assignmentResult);
-            }
-
-            var courseInstanceId = assignmentResult.Data.CourseInstanceId;
-            var enrollmentCheck = await _courseStudentService.IsStudentEnrolledAsync(courseInstanceId, studentId);
-            if (!enrollmentCheck.Data)
-            {
-                return StatusCode(403, new BaseResponse<object>(
-                    $"Access denied: {enrollmentCheck.Message}",
-                    StatusCodeEnum.Forbidden_403,
-                    null
-                ));
-            }
-            return await action();
-        }
-
     }
 }
