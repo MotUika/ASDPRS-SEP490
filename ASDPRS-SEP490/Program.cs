@@ -14,6 +14,7 @@ using Repository;
 using Repository.BaseRepository;
 using Repository.IBaseRepository;
 using Service;
+using Service.BackgroundJobs;
 using Service.Interface;
 using Service.IService;
 using Service.Service;
@@ -128,6 +129,7 @@ builder.Services.AddSingleton<IDocumentTextExtractor, DocumentTextExtractor>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddHttpClient<IGenAIService, GeminiAiService>();
 builder.Services.ConfigureServiceService(builder.Configuration);
+builder.Services.AddHostedService<AssignmentStatusUpdater>(); // Background job to update assignment statuses
 builder.Services.AddScoped(typeof(IBaseRepository<>), typeof(BaseRepository<>));
 
 // Configure CORS

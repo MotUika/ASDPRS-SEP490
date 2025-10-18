@@ -16,6 +16,7 @@ namespace Service.RequestAndResponse.Response.Assignment
         public DateTime? StartDate { get; set; }
         public DateTime Deadline { get; set; }
         public DateTime? ReviewDeadline { get; set; }
+        public DateTime? FinalDeadline { get; set; }
         public int NumPeerReviewsRequired { get; set; }
         public bool AllowCrossClass { get; set; }
         public bool IsBlindReview { get; set; }
@@ -33,6 +34,8 @@ namespace Service.RequestAndResponse.Response.Assignment
         public RubricResponse Rubric { get; set; }
         public int SubmissionCount { get; set; }
         public int ReviewCount { get; set; }
+        public string Status { get; set; }       // trạng thái thực (Active, Closed, InReview,...)
+        public string UiStatus { get; set; }     // hiển thị cho UI (Due Soon, Overdue,...)
         public bool IsActive => StartDate == null || DateTime.UtcNow >= StartDate;
         public bool IsOverdue => DateTime.UtcNow > Deadline;
         public int DaysUntilDeadline => (int)(Deadline - DateTime.UtcNow).TotalDays;
