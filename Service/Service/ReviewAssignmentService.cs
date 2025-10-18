@@ -899,6 +899,7 @@ namespace Service.Service
                     AssignedAt = reviewAssignment.AssignedAt,
                     Deadline = reviewAssignment.Deadline,
                     AssignmentTitle = assignment.Title,
+                    AssignmentDescription = assignment.Description,
                     StudentName = "Anonymous",
                     FileUrl = submission.FileUrl ?? string.Empty,
                     FileName = submission.FileName ?? string.Empty,
