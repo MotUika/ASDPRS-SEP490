@@ -13,6 +13,7 @@ namespace Service.RequestAndResponse.Response.ReviewAssignment
         public ReviewAssignmentResponse ReviewAssignment { get; set; }
         public SubmissionResponse Submission { get; set; }
         public string AssignmentTitle { get; set; }
+        public string AssignmentDescription { get; set; }
         public List<CriteriaResponse> RubricCriteria { get; set; }
         public bool IsBlindReview { get; set; }
     }

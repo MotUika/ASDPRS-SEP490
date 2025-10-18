@@ -153,7 +153,7 @@ namespace Service.Service
                     **OVERALL EVALUATION**
                     [Provide 2-3 concise sentences giving a balanced overall assessment]
 
-                    **⭐CRITERIA ASSESSMENT**
+                    **CRITERIA ASSESSMENT**
                     [Rate each criterion from context using 1-5 stars. Example:
                     - Content Quality: ★★★★☆
                     - Organization: ★★★☆☆
