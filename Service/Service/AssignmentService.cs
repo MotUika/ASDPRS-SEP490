@@ -139,6 +139,7 @@ namespace Service.Service
                     CreatedAt = DateTime.UtcNow,
                     StartDate = request.StartDate,
                     Deadline = request.Deadline,
+                    FinalDeadline = request.FinalDeadline,
                     ReviewDeadline = request.ReviewDeadline,
                     NumPeerReviewsRequired = request.NumPeerReviewsRequired,
                     AllowCrossClass = request.AllowCrossClass,
@@ -147,7 +148,8 @@ namespace Service.Service
                     PeerWeight = request.PeerWeight,
                     GradingScale = request.GradingScale,
                     Weight = request.Weight,
-                    IncludeAIScore = request.IncludeAIScore
+                    IncludeAIScore = request.IncludeAIScore,
+                    Status = AssignmentStatusEnum.Draft.ToString()
                 };
 
                 await _assignmentRepository.AddAsync(assignment);
@@ -245,6 +247,9 @@ namespace Service.Service
 
                 if (request.ReviewDeadline.HasValue)
                     assignment.ReviewDeadline = request.ReviewDeadline.Value;
+
+                if (request.FinalDeadline.HasValue)
+                    assignment.FinalDeadline = request.FinalDeadline.Value;
 
                 if (request.NumPeerReviewsRequired.HasValue)
                     assignment.NumPeerReviewsRequired = request.NumPeerReviewsRequired.Value;
@@ -914,6 +919,7 @@ namespace Service.Service
                 StartDate = assignment.StartDate,
                 Deadline = assignment.Deadline,
                 ReviewDeadline = assignment.ReviewDeadline,
+                FinalDeadline = assignment.FinalDeadline,
                 NumPeerReviewsRequired = assignment.NumPeerReviewsRequired,
                 AllowCrossClass = assignment.AllowCrossClass,
                 IsBlindReview = assignment.IsBlindReview,
@@ -927,7 +933,9 @@ namespace Service.Service
                 CampusName = courseInstance?.Campus?.CampusName ?? string.Empty,
                 Rubric = rubricResponse,
                 SubmissionCount = submissions.Count(),
-                ReviewCount = reviews.Count
+                ReviewCount = reviews.Count,
+                Status = assignment.Status,
+                UiStatus = GetUiStatus(assignment)
             };
         }
 
@@ -944,26 +952,37 @@ namespace Service.Service
                 Description = assignment.Description,
                 Deadline = assignment.Deadline,
                 ReviewDeadline = assignment.ReviewDeadline,
+                FinalDeadline = assignment.FinalDeadline,
                 CourseName = courseInstance?.Course?.CourseName ?? string.Empty,
                 SectionCode = courseInstance?.SectionCode ?? string.Empty,
                 SubmissionCount = submissions.Count(),
                 StudentCount = students.Count(),
                 IsOverdue = DateTime.UtcNow > assignment.Deadline,
                 DaysUntilDeadline = (int)(assignment.Deadline - DateTime.UtcNow).TotalDays,
-                Status = GetAssignmentStatus(assignment)
+                Status = assignment.Status,
+                UiStatus = GetUiStatus(assignment)
             };
         }
 
-        private string GetAssignmentStatus(Assignment assignment)
+        private string GetUiStatus(Assignment assignment)
         {
-            if (assignment.StartDate.HasValue && DateTime.UtcNow < assignment.StartDate.Value)
-                return "Upcoming";
-            if (DateTime.UtcNow > assignment.Deadline)
-                return "Overdue";
-            if (DateTime.UtcNow > assignment.Deadline.AddDays(-7))
-                return "Due Soon";
-            return "Active";
+            var now = DateTime.UtcNow;
+
+            // Chỉ hiển thị phụ khi đang Active
+            if (assignment.Status == AssignmentStatusEnum.Active.ToString())
+            {
+                if (now > assignment.Deadline)
+                    return "Overdue";
+
+                var daysLeft = (assignment.Deadline - now).TotalDays;
+                if (daysLeft <= 3)
+                    return "Due Soon";
+            }
+
+            // Còn lại hiển thị status thật
+            return assignment.Status;
         }
+
 
         private async Task<decimal> CalculateSubmissionRateAsync(int assignmentId, int courseInstanceId)
         {
@@ -1014,25 +1033,29 @@ namespace Service.Service
 
             return distribution;
         }
-        // Helper method để tính toán trạng thái assignment dựa trên timeline
         private string CalculateAssignmentStatus(Assignment assignment)
         {
             var now = DateTime.UtcNow;
 
             if (assignment.StartDate.HasValue && now < assignment.StartDate.Value)
-                return "Scheduled";
+                return AssignmentStatusEnum.Scheduled.ToString();
+
             if (now <= assignment.Deadline)
-                return "Active";
+                return AssignmentStatusEnum.Active.ToString();
+
             if (assignment.ReviewDeadline.HasValue && now <= assignment.ReviewDeadline.Value)
-                return "InReview"; // New status for peer review phase
-                                   // Bổ sung: Check nếu không có submission nào sau deadline -> "Cancelled"
+                return AssignmentStatusEnum.InReview.ToString();
+
+            if (assignment.FinalDeadline.HasValue && now <= assignment.FinalDeadline.Value)
+                return AssignmentStatusEnum.InReview.ToString(); // GV vẫn có thể chấm
+
             var submissions = _context.Submissions.Where(s => s.AssignmentId == assignment.AssignmentId).ToList();
             if (!submissions.Any())
-            {
-                return "Cancelled";
-            }
-            return "Closed";
+                return AssignmentStatusEnum.Cancelled.ToString();
+
+            return AssignmentStatusEnum.Closed.ToString();
         }
+
 
         public async Task<BaseResponse<IEnumerable<AssignmentResponse>>> GetActiveAssignmentsByCourseInstanceAsync(int courseInstanceId, int? studentId = null)
         {
@@ -1120,7 +1143,7 @@ namespace Service.Service
                     GradingScale = sourceAssignment.GradingScale,
                     Weight = sourceAssignment.Weight,
                     IncludeAIScore = sourceAssignment.IncludeAIScore,
-                    Status = "Draft",
+                    Status = AssignmentStatusEnum.Draft.ToString(),
                     ClonedFromAssignmentId = sourceAssignmentId,
                     CreatedAt = DateTime.UtcNow
                 };
@@ -1335,5 +1358,76 @@ namespace Service.Service
                     null);
             }
         }
+
+        public async Task<BaseResponse<AssignmentResponse>> PublishAssignmentAsync(int assignmentId)
+        {
+            try
+            {
+                var assignment = await _assignmentRepository.GetByIdAsync(assignmentId);
+                if (assignment == null)
+                {
+                    return new BaseResponse<AssignmentResponse>(
+                        "Assignment not found",
+                        StatusCodeEnum.NotFound_404,
+                        null);
+                }
+
+                // Chỉ cho phép publish từ trạng thái Draft
+                if (assignment.Status != AssignmentStatusEnum.Draft.ToString())
+                {
+                    return new BaseResponse<AssignmentResponse>(
+                        $"Only Draft assignments can be published (current: {assignment.Status})",
+                        StatusCodeEnum.BadRequest_400,
+                        null);
+                }
+
+                // Kiểm tra logic chuyển trạng thái
+                if (assignment.StartDate.HasValue && DateTime.UtcNow < assignment.StartDate.Value)
+                {
+                    assignment.Status = AssignmentStatusEnum.Scheduled.ToString();
+                }
+                else
+                {
+                    assignment.Status = AssignmentStatusEnum.Active.ToString();
+                }
+
+                await _assignmentRepository.UpdateAsync(assignment);
+
+                var response = await MapToResponse(assignment);
+                return new BaseResponse<AssignmentResponse>(
+                    $"Assignment published successfully (Status: {assignment.Status})",
+                    StatusCodeEnum.OK_200,
+                    response);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<AssignmentResponse>(
+                    $"Error publishing assignment: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
+            }
+        }
+
+        public async Task AutoUpdateScheduledAssignmentsAsync()
+        {
+            var now = DateTime.UtcNow;
+            var scheduledAssignments = await _context.Assignments
+                .Where(a => a.Status == AssignmentStatusEnum.Scheduled.ToString() &&
+                            a.StartDate.HasValue &&
+                            a.StartDate <= now)
+                .ToListAsync();
+
+            foreach (var assignment in scheduledAssignments)
+            {
+                assignment.Status = AssignmentStatusEnum.Active.ToString();
+            }
+
+            if (scheduledAssignments.Any())
+            {
+                await _context.SaveChangesAsync();
+            }
+        }
+
+
     }
 }

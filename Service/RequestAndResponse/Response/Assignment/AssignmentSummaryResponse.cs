@@ -9,6 +9,7 @@ namespace Service.RequestAndResponse.Response.Assignment
         public string Description { get; set; }
         public DateTime Deadline { get; set; }
         public DateTime? ReviewDeadline { get; set; }
+        public DateTime? FinalDeadline { get; set; }
         public string CourseName { get; set; }
         public string SectionCode { get; set; }
         public int SubmissionCount { get; set; }
@@ -16,5 +17,7 @@ namespace Service.RequestAndResponse.Response.Assignment
         public bool IsOverdue { get; set; }
         public int DaysUntilDeadline { get; set; }
         public string Status { get; set; }
+        // Trạng thái phụ để hiển thị UI (Due Soon, Overdue, v.v.)
+        public string UiStatus { get; set; }
     }
 }

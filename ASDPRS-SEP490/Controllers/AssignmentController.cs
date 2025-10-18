@@ -160,6 +160,25 @@ namespace ASDPRS_SEP490.Controllers
             };
         }
 
+        [HttpPut("{assignmentId}/publish")]
+        [SwaggerOperation(Summary = "Publish bài tập", Description = "Chuyển bài tập từ trạng thái Draft sang Scheduled hoặc Active tùy theo StartDate")]
+        [SwaggerResponse(200, "Publish thành công", typeof(BaseResponse<AssignmentResponse>))]
+        [SwaggerResponse(400, "Bài tập không ở trạng thái Draft")]
+        [SwaggerResponse(404, "Không tìm thấy bài tập")]
+        [SwaggerResponse(500, "Lỗi server")]
+        public async Task<IActionResult> PublishAssignment(int assignmentId)
+        {
+            var result = await _assignmentService.PublishAssignmentAsync(assignmentId);
+            return result.StatusCode switch
+            {
+                StatusCodeEnum.OK_200 => Ok(result),
+                StatusCodeEnum.BadRequest_400 => BadRequest(result),
+                StatusCodeEnum.NotFound_404 => NotFound(result),
+                _ => StatusCode(500, result)
+            };
+        }
+
+
         // ===================== DEADLINE & RUBRIC =====================
 
         [HttpPut("{id}/extend-deadline")]

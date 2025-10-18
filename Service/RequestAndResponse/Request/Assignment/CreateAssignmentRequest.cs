@@ -27,6 +27,8 @@ namespace Service.RequestAndResponse.Request.Assignment
 
         public DateTime? ReviewDeadline { get; set; }
 
+        public DateTime? FinalDeadline { get; set; }
+
         [Required]
         [Range(0, 10)]
         public int NumPeerReviewsRequired { get; set; } = 0;

@@ -1,4 +1,5 @@
-﻿using Service.RequestAndResponse.BaseResponse;
+﻿using Microsoft.AspNetCore.Mvc;
+using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Request.Assignment;
 using Service.RequestAndResponse.Response.Assignment;
 using Service.RequestAndResponse.Response.Rubric;
@@ -30,5 +31,7 @@ namespace Service.IService
         Task<BaseResponse<AssignmentStatusSummaryResponse>> GetAssignmentStatusSummaryAsync(int courseInstanceId);
         Task<BaseResponse<AssignmentTrackingResponse>> GetAssignmentTrackingAsync(int assignmentId);
         Task<BaseResponse<bool>> PublishGradesAsync(int assignmentId);
+        Task<BaseResponse<AssignmentResponse>> PublishAssignmentAsync(int assignmentId);
+
     }
 }
