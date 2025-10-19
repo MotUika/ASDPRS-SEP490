@@ -52,5 +52,35 @@ namespace Repository.Repository
                             .ThenInclude(cf => cf.Criteria)
                 .FirstOrDefaultAsync(s => s.SubmissionId == submissionId);
         }
+
+        public async Task<Submission> GetByAssignmentAndUserAsync(int assignmentId, int userId)
+        {
+            return await _context.Submissions
+                .Include(s => s.Assignment)
+                .Include(s => s.User)
+                .Include(s => s.ReviewAssignments)
+                .FirstOrDefaultAsync(s => s.AssignmentId == assignmentId && s.UserId == userId);
+        }
+
+        public async Task<IEnumerable<Submission>> GetByCourseInstanceAndUserAsync(int courseInstanceId, int userId)
+        {
+            return await _context.Submissions
+                .Include(s => s.Assignment)
+                .Include(s => s.User)
+                .Include(s => s.ReviewAssignments)
+                .Where(s => s.Assignment.CourseInstanceId == courseInstanceId && s.UserId == userId)
+                .ToListAsync();
+        }
+
+        public async Task<IEnumerable<Submission>> GetByUserAndSemesterAsync(int userId, int semesterId)
+        {
+            return await _context.Submissions
+                .Include(s => s.Assignment)
+                    .ThenInclude(a => a.CourseInstance)
+                .Include(s => s.User)
+                .Include(s => s.ReviewAssignments)
+                .Where(s => s.UserId == userId && s.Assignment.CourseInstance.SemesterId == semesterId)
+                .ToListAsync();
+        }
     }
 }

@@ -15,6 +15,7 @@ using Service.RequestAndResponse.Response.CourseInstance;
 using Service.RequestAndResponse.Response.Review;
 using Service.RequestAndResponse.Response.ReviewAssignment;
 using Service.RequestAndResponse.Response.Rubric;
+using Service.RequestAndResponse.Response.Submission;
 using Swashbuckle.AspNetCore.Annotations;
 
 [ApiController]
@@ -487,6 +488,79 @@ public class StudentReviewController : ControllerBase
         {
             return StatusCode(500, new BaseResponse<AISummaryResponse>(
                 $"Error retrieving universal AI review: {ex.Message}",
+                StatusCodeEnum.InternalServerError_500,
+                null
+            ));
+        }
+    }
+
+    [HttpGet("assignment/{assignmentId}/user/{userId}")]
+    [SwaggerOperation(
+    Summary = "Lấy bài nộp của user trong assignment cụ thể",
+    Description = "Trả về bài nộp của một user cụ thể trong assignment cụ thể"
+)]
+    [SwaggerResponse(200, "Thành công", typeof(BaseResponse<SubmissionResponse>))]
+    [SwaggerResponse(404, "Không tìm thấy bài nộp")]
+    public async Task<IActionResult> GetSubmissionByAssignmentAndUser(int assignmentId, int userId)
+    {
+        return await CheckEnrollmentByAssignmentAndExecute(assignmentId, async () =>
+        {
+            var result = await _submissionService.GetSubmissionByAssignmentAndUserAsync(assignmentId, userId);
+            return StatusCode((int)result.StatusCode, result);
+        });
+    }
+
+    [HttpGet("course-instance/{courseInstanceId}/user/{userId}")]
+    [SwaggerOperation(
+        Summary = "Lấy tất cả bài nộp của user trong lớp học cụ thể",
+        Description = "Trả về tất cả bài nộp của một user trong một lớp học (course instance) cụ thể"
+    )]
+    [SwaggerResponse(200, "Thành công", typeof(BaseResponse<List<SubmissionResponse>>))]
+    public async Task<IActionResult> GetSubmissionsByCourseInstanceAndUser(int courseInstanceId, int userId)
+    {
+        return await CheckEnrollmentAndExecute(courseInstanceId, async () =>
+        {
+            var result = await _submissionService.GetSubmissionsByCourseInstanceAndUserAsync(courseInstanceId, userId);
+            return StatusCode((int)result.StatusCode, result);
+        });
+    }
+
+    [HttpGet("user/{userId}/semester/{semesterId}")]
+    [SwaggerOperation(
+        Summary = "Lấy tất cả bài nộp của user theo kỳ học",
+        Description = "Trả về tất cả bài nộp của một user được filter theo kỳ học (semester)"
+    )]
+    [SwaggerResponse(200, "Thành công", typeof(BaseResponse<List<SubmissionResponse>>))]
+    public async Task<IActionResult> GetSubmissionsByUserAndSemester(int userId, int semesterId)
+    {
+        try
+        {
+            // Kiểm tra quyền truy cập - chỉ cho phép xem bài nộp của chính mình
+            var currentStudentId = GetCurrentStudentId();
+            if (userId != currentStudentId)
+            {
+                return StatusCode(403, new BaseResponse<object>(
+                    "Access denied: Cannot access other student's submissions",
+                    StatusCodeEnum.Forbidden_403,
+                    null
+                ));
+            }
+
+            var result = await _submissionService.GetSubmissionsByUserAndSemesterAsync(userId, semesterId);
+            return StatusCode((int)result.StatusCode, result);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(401, new BaseResponse<object>(
+                ex.Message,
+                StatusCodeEnum.Unauthorized_401,
+                null
+            ));
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new BaseResponse<object>(
+                $"Error retrieving submissions: {ex.Message}",
                 StatusCodeEnum.InternalServerError_500,
                 null
             ));

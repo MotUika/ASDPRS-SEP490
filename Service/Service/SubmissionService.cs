@@ -671,5 +671,87 @@ namespace Service.Service
                     false);
             }
         }
+        public async Task<BaseResponse<SubmissionResponse>> GetSubmissionByAssignmentAndUserAsync(int assignmentId, int userId)
+        {
+            try
+            {
+                var submission = await _submissionRepository.GetByAssignmentAndUserAsync(assignmentId, userId);
+                if (submission == null)
+                {
+                    return new BaseResponse<SubmissionResponse>(
+                        "Submission not found for this assignment and user",
+                        StatusCodeEnum.NotFound_404,
+                        null);
+                }
+
+                var response = await MapToSubmissionResponse(submission);
+                return new BaseResponse<SubmissionResponse>(
+                    "Submission retrieved successfully",
+                    StatusCodeEnum.OK_200,
+                    response);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error retrieving submission for assignment {assignmentId} and user {userId}");
+                return new BaseResponse<SubmissionResponse>(
+                    "An error occurred while retrieving the submission",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
+            }
+        }
+
+        public async Task<BaseResponse<List<SubmissionResponse>>> GetSubmissionsByCourseInstanceAndUserAsync(int courseInstanceId, int userId)
+        {
+            try
+            {
+                var submissions = await _submissionRepository.GetByCourseInstanceAndUserAsync(courseInstanceId, userId);
+                var responses = new List<SubmissionResponse>();
+
+                foreach (var submission in submissions)
+                {
+                    responses.Add(await MapToSubmissionResponse(submission));
+                }
+
+                return new BaseResponse<List<SubmissionResponse>>(
+                    "Submissions retrieved successfully",
+                    StatusCodeEnum.OK_200,
+                    responses);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error retrieving submissions for course instance {courseInstanceId} and user {userId}");
+                return new BaseResponse<List<SubmissionResponse>>(
+                    "An error occurred while retrieving submissions",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
+            }
+        }
+
+        public async Task<BaseResponse<List<SubmissionResponse>>> GetSubmissionsByUserAndSemesterAsync(int userId, int semesterId)
+        {
+            try
+            {
+                var submissions = await _submissionRepository.GetByUserAndSemesterAsync(userId, semesterId);
+                var responses = new List<SubmissionResponse>();
+
+                foreach (var submission in submissions)
+                {
+                    responses.Add(await MapToSubmissionResponse(submission));
+                }
+
+                return new BaseResponse<List<SubmissionResponse>>(
+                    "Submissions retrieved successfully",
+                    StatusCodeEnum.OK_200,
+                    responses);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error retrieving submissions for user {userId} and semester {semesterId}");
+                return new BaseResponse<List<SubmissionResponse>>(
+                    "An error occurred while retrieving submissions",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
+            }
+        }
     }
 }
