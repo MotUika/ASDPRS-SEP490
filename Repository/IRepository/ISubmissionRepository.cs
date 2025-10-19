@@ -17,5 +17,8 @@ namespace Repository.IRepository
         Task<IEnumerable<Submission>> GetByAssignmentIdAsync(int assignmentId);
         Task<IEnumerable<Submission>> GetByUserIdAsync(int userId);
         Task<Submission> GetSubmissionWithReviewsAsync(int submissionId);
+        Task<Submission> GetByAssignmentAndUserAsync(int assignmentId, int userId);
+        Task<IEnumerable<Submission>> GetByCourseInstanceAndUserAsync(int courseInstanceId, int userId);
+        Task<IEnumerable<Submission>> GetByUserAndSemesterAsync(int userId, int semesterId);
     }
 }
