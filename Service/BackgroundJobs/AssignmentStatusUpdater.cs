@@ -35,18 +35,16 @@ namespace Service.BackgroundJobs
                 using var scope = _scopeFactory.CreateScope();
                 var context = scope.ServiceProvider.GetRequiredService<ASDPRSContext>();
 
-                // Lấy tất cả assignments cần cập nhật (trừ Draft và Archived)
                 var assignments = await context.Assignments
-                    .Where(a => a.Status != AssignmentStatusEnum.Draft.ToString() &&
-                               a.Status != AssignmentStatusEnum.Archived.ToString())
-                    .Include(a => a.Submissions) // Include submissions để kiểm tra số lượng
+                    .Where(a => a.Status != AssignmentStatusEnum.Draft.ToString()) // Chỉ loại Draft
+                    .Include(a => a.Submissions)
                     .ToListAsync();
 
                 var updatedCount = 0;
 
                 foreach (var assignment in assignments)
                 {
-                    var newStatus = CalculateAssignmentStatus(assignment);
+                    var newStatus = CalculateAssignmentStatus(assignment, context);
                     if (assignment.Status != newStatus)
                     {
                         assignment.Status = newStatus;
@@ -66,7 +64,7 @@ namespace Service.BackgroundJobs
             }
         }
 
-        private string CalculateAssignmentStatus(Assignment assignment)
+        private string CalculateAssignmentStatus(Assignment assignment, ASDPRSContext context)
         {
             var now = DateTime.UtcNow;
 
@@ -87,7 +85,7 @@ namespace Service.BackgroundJobs
                 return AssignmentStatusEnum.InReview.ToString();
 
             // 5. Kiểm tra bài nộp để quyết định Closed hay Cancelled
-            var hasSubmissions = assignment.Submissions?.Any() == true;
+            var hasSubmissions = context.Submissions.Any(s => s.AssignmentId == assignment.AssignmentId);
 
             if (!hasSubmissions)
                 return AssignmentStatusEnum.Cancelled.ToString();
