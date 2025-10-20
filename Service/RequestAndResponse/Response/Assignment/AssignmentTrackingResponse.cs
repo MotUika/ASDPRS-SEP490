@@ -16,12 +16,14 @@ namespace Service.RequestAndResponse.Response.Assignment
         public DateTime StartDate { get; set; }
         public DateTime Deadline { get; set; }
         public DateTime ReviewDeadline { get; set; }
+        public DateTime FinalDeadline { get; set; }
+        public string Status { get; set; }
         public int NumPeerReviewsRequired { get; set; }
         public int PendingReviewsCount { get; set; }
         public int CompletedReviewsCount { get; set; }
         public bool HasMetMinimumReviews { get; set; }
         public int RemainingReviewsRequired { get; set; }
-        public string ReviewStatus { get; set; } // "Completed", "In Progress", "Not Started"
+        public string ReviewStatus { get; set; }
         public decimal ReviewCompletionPercentage { get; set; }
     }
 }

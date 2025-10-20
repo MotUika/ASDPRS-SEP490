@@ -16,6 +16,8 @@ namespace Service.RequestAndResponse.Response.Assignment
         public DateTime StartDate { get; set; }
         public DateTime Deadline { get; set; }
         public DateTime ReviewDeadline { get; set; }
+        public DateTime FinalDeadline { get; set; }
+        public string Status { get; set; }
         public int NumPeerReviewsRequired { get; set; }
         public int PendingReviewsCount { get; set; }
         public int CompletedReviewsCount { get; set; }

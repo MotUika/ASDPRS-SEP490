@@ -737,6 +737,8 @@ namespace Service.Service
                         StartDate = assignment.StartDate ?? DateTime.MinValue,
                         Deadline = assignment.Deadline,
                         ReviewDeadline = assignment.ReviewDeadline ?? DateTime.MinValue,
+                        FinalDeadline = assignment.FinalDeadline ?? DateTime.MinValue,
+                        Status = assignment.Status,
                         NumPeerReviewsRequired = assignment.NumPeerReviewsRequired,
                         PendingReviewsCount = tracking.PendingCount,
                         CompletedReviewsCount = tracking.CompletedCount
@@ -817,6 +819,8 @@ namespace Service.Service
                     StartDate = assignment.StartDate ?? DateTime.MinValue,
                     Deadline = assignment.Deadline,
                     ReviewDeadline = assignment.ReviewDeadline ?? DateTime.MinValue,
+                    FinalDeadline = assignment.FinalDeadline ?? DateTime.MinValue,
+                    Status = assignment.Status,
                     NumPeerReviewsRequired = assignment.NumPeerReviewsRequired,
                     PendingReviewsCount = tracking.PendingCount,
                     CompletedReviewsCount = tracking.CompletedCount,
