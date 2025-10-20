@@ -17,6 +17,7 @@ namespace Service.RequestAndResponse.Response.ReviewAssignment
         public DateTime Deadline { get; set; }
         public string AssignmentTitle { get; set; }
         public string AssignmentDescription { get; set; }
+        public string AssignmentGuidelines { get; set; }
         public string StudentName { get; set; }
         public string FileUrl { get; set; }
         public string FileName { get; set; }

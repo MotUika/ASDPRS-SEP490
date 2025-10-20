@@ -24,7 +24,9 @@ namespace Service.RequestAndResponse.Response.ReviewAssignment
 
         // New properties for student review flow
         public string AssignmentDescription { get; set; }
+        public string AssignmentGuidelines { get; set; }
         public DateTime AssignmentDeadline { get; set; }
+        public string AssignmentStatus { get; set; }
         public string CourseCode { get; set; }
         public string SectionCode { get; set; }
         public string FileUrl { get; set; }
