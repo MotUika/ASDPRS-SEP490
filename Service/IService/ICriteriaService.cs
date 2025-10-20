@@ -15,5 +15,6 @@ namespace Service.IService
         Task<BaseResponse<bool>> DeleteCriteriaAsync(int id);
         Task<BaseResponse<IEnumerable<CriteriaResponse>>> GetCriteriaByRubricIdAsync(int rubricId);
         Task<BaseResponse<IEnumerable<CriteriaResponse>>> GetCriteriaByTemplateIdAsync(int criteriaTemplateId);
+        Task<BaseResponse<decimal>> ValidateTotalWeightAsync(int rubricId);
     }
 }
