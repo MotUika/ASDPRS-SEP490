@@ -10,7 +10,6 @@ using System.Text;
 using System.Threading.Tasks;
 using BussinessObject.Models;
 
-
 namespace Service.BackgroundJobs
 {
     public class AssignmentStatusUpdater : IHostedService, IDisposable
@@ -25,47 +24,75 @@ namespace Service.BackgroundJobs
 
         public Task StartAsync(CancellationToken cancellationToken)
         {
-            // Cập nhật mỗi 1 giờ 1 lần (có thể chỉnh)
-            _timer = new Timer(UpdateStatuses, null, TimeSpan.Zero, TimeSpan.FromSeconds(10));
-
+            _timer = new Timer(UpdateStatuses, null, TimeSpan.Zero, TimeSpan.FromMinutes(5));
             return Task.CompletedTask;
         }
 
         private async void UpdateStatuses(object state)
         {
-            using var scope = _scopeFactory.CreateScope();
-            var context = scope.ServiceProvider.GetRequiredService<ASDPRSContext>();
-            var assignments = await context.Assignments.ToListAsync();
-
-            foreach (var a in assignments)
+            try
             {
-                var newStatus = CalculateAssignmentStatus(a);
-                if (a.Status != newStatus)
+                using var scope = _scopeFactory.CreateScope();
+                var context = scope.ServiceProvider.GetRequiredService<ASDPRSContext>();
+
+                // Lấy tất cả assignments cần cập nhật (trừ Draft và Archived)
+                var assignments = await context.Assignments
+                    .Where(a => a.Status != AssignmentStatusEnum.Draft.ToString() &&
+                               a.Status != AssignmentStatusEnum.Archived.ToString())
+                    .Include(a => a.Submissions) // Include submissions để kiểm tra số lượng
+                    .ToListAsync();
+
+                var updatedCount = 0;
+
+                foreach (var assignment in assignments)
                 {
-                    a.Status = newStatus;
+                    var newStatus = CalculateAssignmentStatus(assignment);
+                    if (assignment.Status != newStatus)
+                    {
+                        assignment.Status = newStatus;
+                        updatedCount++;
+                    }
+                }
+
+                if (updatedCount > 0)
+                {
+                    await context.SaveChangesAsync();
+                    Console.WriteLine($"Updated {updatedCount} assignment statuses at {DateTime.UtcNow}");
                 }
             }
-
-            await context.SaveChangesAsync();
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error updating assignment statuses: {ex.Message}");
+            }
         }
 
         private string CalculateAssignmentStatus(Assignment assignment)
         {
             var now = DateTime.UtcNow;
 
+            // 1. Upcoming - chưa đến StartDate
             if (assignment.StartDate.HasValue && now < assignment.StartDate.Value)
                 return AssignmentStatusEnum.Upcoming.ToString();
 
-            if (now >= assignment.StartDate && now <= assignment.Deadline)
+            // 2. Active - đang trong thời gian nộp bài
+            if (now <= assignment.Deadline)
                 return AssignmentStatusEnum.Active.ToString();
 
+            // 3. InReview - đang trong thời gian review
             if (assignment.ReviewDeadline.HasValue && now <= assignment.ReviewDeadline.Value)
                 return AssignmentStatusEnum.InReview.ToString();
 
+            // 4. Vẫn còn thời gian cho GV chấm (FinalDeadline)
             if (assignment.FinalDeadline.HasValue && now <= assignment.FinalDeadline.Value)
-                return AssignmentStatusEnum.Closed.ToString();
+                return AssignmentStatusEnum.InReview.ToString();
 
-            return AssignmentStatusEnum.Archived.ToString();
+            // 5. Kiểm tra bài nộp để quyết định Closed hay Cancelled
+            var hasSubmissions = assignment.Submissions?.Any() == true;
+
+            if (!hasSubmissions)
+                return AssignmentStatusEnum.Cancelled.ToString();
+
+            return AssignmentStatusEnum.Closed.ToString();
         }
 
         public Task StopAsync(CancellationToken cancellationToken)
@@ -74,6 +101,10 @@ namespace Service.BackgroundJobs
             return Task.CompletedTask;
         }
 
-        public void Dispose() => _timer?.Dispose();
+        public void Dispose()
+        {
+            _timer?.Dispose();
+            GC.SuppressFinalize(this);
+        }
     }
 }
