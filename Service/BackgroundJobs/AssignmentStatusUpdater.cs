@@ -54,7 +54,7 @@ namespace Service.BackgroundJobs
             var now = DateTime.UtcNow;
 
             if (assignment.StartDate.HasValue && now < assignment.StartDate.Value)
-                return AssignmentStatusEnum.Scheduled.ToString();
+                return AssignmentStatusEnum.Upcoming.ToString();
 
             if (now >= assignment.StartDate && now <= assignment.Deadline)
                 return AssignmentStatusEnum.Active.ToString();

@@ -1042,7 +1042,7 @@ namespace Service.Service
             var now = DateTime.UtcNow;
 
             if (assignment.StartDate.HasValue && now < assignment.StartDate.Value)
-                return AssignmentStatusEnum.Scheduled.ToString();
+                return AssignmentStatusEnum.Upcoming.ToString();
 
             if (now <= assignment.Deadline)
                 return AssignmentStatusEnum.Active.ToString();
@@ -1342,7 +1342,7 @@ namespace Service.Service
                 {
                     TotalAssignments = assignments.Count,
                     DraftCount = assignments.Count(a => a.Status == "Draft"),
-                    ScheduledCount = assignments.Count(a => a.Status == "Scheduled"),
+                    UpcomingCount = assignments.Count(a => a.Status == "Upcoming"),
                     ActiveCount = assignments.Count(a => a.Status == "Active"),
                     LateSubmissionCount = assignments.Count(a => a.Status == "LateSubmission"),
                     ClosedCount = assignments.Count(a => a.Status == "Closed"),
@@ -1388,7 +1388,7 @@ namespace Service.Service
                 // Kiểm tra logic chuyển trạng thái
                 if (assignment.StartDate.HasValue && DateTime.UtcNow < assignment.StartDate.Value)
                 {
-                    assignment.Status = AssignmentStatusEnum.Scheduled.ToString();
+                    assignment.Status = AssignmentStatusEnum.Upcoming.ToString();
                 }
                 else
                 {
@@ -1412,21 +1412,21 @@ namespace Service.Service
             }
         }
 
-        public async Task AutoUpdateScheduledAssignmentsAsync()
+        public async Task AutoUpdateUpcomingAssignmentsAsync()
         {
             var now = DateTime.UtcNow;
-            var scheduledAssignments = await _context.Assignments
-                .Where(a => a.Status == AssignmentStatusEnum.Scheduled.ToString() &&
+            var UpcomingAssignments = await _context.Assignments
+                .Where(a => a.Status == AssignmentStatusEnum.Upcoming.ToString() &&
                             a.StartDate.HasValue &&
                             a.StartDate <= now)
                 .ToListAsync();
 
-            foreach (var assignment in scheduledAssignments)
+            foreach (var assignment in UpcomingAssignments)
             {
                 assignment.Status = AssignmentStatusEnum.Active.ToString();
             }
 
-            if (scheduledAssignments.Any())
+            if (UpcomingAssignments.Any())
             {
                 await _context.SaveChangesAsync();
             }
