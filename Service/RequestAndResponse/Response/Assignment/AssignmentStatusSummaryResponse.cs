@@ -10,7 +10,7 @@ namespace Service.RequestAndResponse.Response.Assignment
     {
         public int TotalAssignments { get; set; }
         public int DraftCount { get; set; }
-        public int ScheduledCount { get; set; }
+        public int UpcomingCount { get; set; }
         public int ActiveCount { get; set; }
         public int LateSubmissionCount { get; set; }
         public int ClosedCount { get; set; }

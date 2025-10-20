@@ -3,7 +3,7 @@
     public enum AssignmentStatusEnum
     {
         Draft,
-        Scheduled,
+        Upcoming,
         Active,
         InReview,
         Closed,

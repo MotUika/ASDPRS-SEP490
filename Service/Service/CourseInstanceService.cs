@@ -386,7 +386,7 @@ namespace Service.Service
         private string CalculateAssignmentStatus(Assignment assignment, DateTime now)
         {
             if (assignment.StartDate.HasValue && now < assignment.StartDate.Value)
-                return "Scheduled";
+                return "Upcoming";
             if (now <= assignment.Deadline)
                 return "Active";
             if (assignment.FinalDeadline.HasValue && now <= assignment.FinalDeadline.Value)

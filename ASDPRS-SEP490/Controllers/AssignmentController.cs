@@ -161,7 +161,7 @@ namespace ASDPRS_SEP490.Controllers
         }
 
         [HttpPut("{assignmentId}/publish")]
-        [SwaggerOperation(Summary = "Publish bài tập", Description = "Chuyển bài tập từ trạng thái Draft sang Scheduled hoặc Active tùy theo StartDate")]
+        [SwaggerOperation(Summary = "Publish bài tập", Description = "Chuyển bài tập từ trạng thái Draft sang Upcoming hoặc Active tùy theo StartDate")]
         [SwaggerResponse(200, "Publish thành công", typeof(BaseResponse<AssignmentResponse>))]
         [SwaggerResponse(400, "Bài tập không ở trạng thái Draft")]
         [SwaggerResponse(404, "Không tìm thấy bài tập")]
