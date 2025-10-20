@@ -69,9 +69,35 @@ namespace Service.Service
                 if (assignment == null)
                     return new BaseResponse<SubmissionResponse>("Assignment not found", StatusCodeEnum.NotFound_404, null);
 
+                
+                if (assignment.Status != AssignmentStatusEnum.Active.ToString())
+                {
+                    return new BaseResponse<SubmissionResponse>(
+                        $"Cannot submit assignment. Assignment status is: {assignment.Status}. Only Active assignments can be submitted.",
+                        StatusCodeEnum.BadRequest_400,
+                        null);
+                }
+
                 var user = await _userRepository.GetByIdAsync(request.UserId);
                 if (user == null)
                     return new BaseResponse<SubmissionResponse>("User not found", StatusCodeEnum.NotFound_404, null);
+
+                var now = DateTime.UtcNow;
+                if (assignment.StartDate.HasValue && now < assignment.StartDate.Value)
+                {
+                    return new BaseResponse<SubmissionResponse>(
+                        $"Cannot submit assignment before start date: {assignment.StartDate.Value}",
+                        StatusCodeEnum.BadRequest_400,
+                        null);
+                }
+
+                if (now > (assignment.FinalDeadline ?? assignment.Deadline))
+                {
+                    return new BaseResponse<SubmissionResponse>(
+                        $"Cannot submit assignment after final deadline: {assignment.FinalDeadline ?? assignment.Deadline}",
+                        StatusCodeEnum.BadRequest_400,
+                        null);
+                }
 
                 var existingSubmission = await _submissionRepository.GetAllAsync();
                 if (existingSubmission.Any(s => s.AssignmentId == request.AssignmentId && s.UserId == request.UserId))
@@ -79,7 +105,6 @@ namespace Service.Service
                     return new BaseResponse<SubmissionResponse>("User has already submitted for this assignment", StatusCodeEnum.Conflict_409, null);
                 }
 
-                // Upload file to Supabase (via IFileStorageService)
                 var uploadResult = await _fileStorageService.UploadFileAsync(request.File, folder: $"submissions/{request.AssignmentId}/{request.UserId}", makePublic: request.IsPublic);
                 if (!uploadResult.Success)
                 {
@@ -104,7 +129,6 @@ namespace Service.Service
 
                 _logger.LogInformation($"Submission created successfully. SubmissionId: {createdSubmission.SubmissionId}");
 
-
                 // Late check
                 if (submission.SubmittedAt > assignment.Deadline && submission.SubmittedAt <= (assignment.FinalDeadline ?? DateTime.MaxValue))
                 {
@@ -120,7 +144,7 @@ namespace Service.Service
                 return new BaseResponse<SubmissionResponse>("An error occurred while creating the submission", StatusCodeEnum.InternalServerError_500, null);
             }
         }
-
+        
         private async Task AutoAssignReviewsForNewSubmission(int assignmentId)
         {
             try
@@ -142,16 +166,36 @@ namespace Service.Service
         }
         public async Task<BaseResponse<SubmissionResponse>> SubmitAssignmentAsync(SubmitAssignmentRequest request)
         {
-            var createRequest = new CreateSubmissionRequest
+            try
             {
-                AssignmentId = request.AssignmentId,
-                UserId = request.UserId,
-                File = request.File,
-                Keywords = request.Keywords,
-                IsPublic = request.IsPublic
-            };
+                var assignment = await _assignmentRepository.GetByIdAsync(request.AssignmentId);
+                if (assignment == null)
+                    return new BaseResponse<SubmissionResponse>("Assignment not found", StatusCodeEnum.NotFound_404, null);
 
-            return await CreateSubmissionAsync(createRequest);
+                if (assignment.Status != AssignmentStatusEnum.Active.ToString())
+                {
+                    return new BaseResponse<SubmissionResponse>(
+                        $"Cannot submit assignment. Assignment status is: {assignment.Status}",
+                        StatusCodeEnum.BadRequest_400,
+                        null);
+                }
+
+                var createRequest = new CreateSubmissionRequest
+                {
+                    AssignmentId = request.AssignmentId,
+                    UserId = request.UserId,
+                    File = request.File,
+                    Keywords = request.Keywords,
+                    IsPublic = request.IsPublic
+                };
+
+                return await CreateSubmissionAsync(createRequest);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error submitting assignment");
+                return new BaseResponse<SubmissionResponse>("An error occurred while submitting the assignment", StatusCodeEnum.InternalServerError_500, null);
+            }
         }
         public async Task<BaseResponse<bool>> ExtendStudentDeadlineAsync(int submissionId, DateTime newDeadline)
         {
@@ -657,7 +701,14 @@ namespace Service.Service
                 var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
                 var now = DateTime.UtcNow;
 
-                // Cho phép sửa/xóa trước deadline
+                if (assignment.Status != AssignmentStatusEnum.Active.ToString())
+                {
+                    return new BaseResponse<bool>(
+                        $"Cannot modify submission. Assignment status is: {assignment.Status}",
+                        StatusCodeEnum.Forbidden_403,
+                        false);
+                }
+
                 bool canModify = now <= assignment.Deadline;
 
                 return new BaseResponse<bool>(canModify ? "Can modify" : "Cannot modify after deadline",
