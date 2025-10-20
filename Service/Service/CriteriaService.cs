@@ -87,10 +87,29 @@ namespace Service.Service
         {
             try
             {
+                // 🟩 Kiểm tra tổng trọng số hiện tại
+                var totalWeight = await _context.Criteria
+                    .Where(c => c.RubricId == request.RubricId)
+                    .SumAsync(c => c.Weight);
+
+                // 🟩 Nếu thêm vào mà vượt quá 100% thì chặn lại
+                if (totalWeight + request.Weight > 100)
+                {
+                    return new BaseResponse<CriteriaResponse>(
+                        $"❌ Cannot add criteria. Total weight would exceed 100%. Current total: {totalWeight}%",
+                        StatusCodeEnum.BadRequest_400,
+                        null
+                    );
+                }
                 var criteria = _mapper.Map<Criteria>(request);
                 var createdCriteria = await _criteriaRepository.AddAsync(criteria);
                 var response = _mapper.Map<CriteriaResponse>(createdCriteria);
 
+                // Validate total weight after creation
+                var validateResult = await ValidateTotalWeightAsync(createdCriteria.RubricId);
+                var message = validateResult.Data == 100
+                    ? "✅ Criteria created successfully. Total weight = 100%"
+                    : $"⚠️ Criteria created successfully. Current total weight = {validateResult.Data}% (should be 100%)";
                 return new BaseResponse<CriteriaResponse>("Criteria created successfully", StatusCodeEnum.Created_201, response);
             }
             catch (Exception ex)
@@ -109,9 +128,30 @@ namespace Service.Service
                     return new BaseResponse<CriteriaResponse>("Criteria not found", StatusCodeEnum.NotFound_404, null);
                 }
 
+                // 🟩 Tính tổng weight hiện tại (loại trừ chính criteria đang update)
+                var currentTotalWeight = await _context.Criteria
+                    .Where(c => c.RubricId == existingCriteria.RubricId && c.CriteriaId != existingCriteria.CriteriaId)
+                    .SumAsync(c => c.Weight);
+
+                // 🟩 Kiểm tra nếu update vượt quá 100%
+                if (currentTotalWeight + request.Weight > 100)
+                {
+                    return new BaseResponse<CriteriaResponse>(
+                        $"❌ Cannot update criteria. Total weight would exceed 100%. Current total (excluding this one): {currentTotalWeight}%",
+                        StatusCodeEnum.BadRequest_400,
+                        null
+                    );
+                }
+
                 _mapper.Map(request, existingCriteria);
                 var updatedCriteria = await _criteriaRepository.UpdateAsync(existingCriteria);
                 var response = _mapper.Map<CriteriaResponse>(updatedCriteria);
+
+                // Validate total weight after update
+                var validateResult = await ValidateTotalWeightAsync(updatedCriteria.RubricId);
+                var message = validateResult.Data == 100
+                    ? "✅ Criteria updated successfully. Total weight = 100%"
+                    : $"⚠️ Criteria updated successfully. Current total weight = {validateResult.Data}% (should be 100%)";
 
                 return new BaseResponse<CriteriaResponse>("Criteria updated successfully", StatusCodeEnum.OK_200, response);
             }
@@ -169,5 +209,34 @@ namespace Service.Service
                 return new BaseResponse<IEnumerable<CriteriaResponse>>($"Error retrieving criteria: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
+
+        public async Task<BaseResponse<decimal>> ValidateTotalWeightAsync(int rubricId)
+        {
+            try
+            {
+                var totalWeight = await _context.Criteria
+                    .Where(c => c.RubricId == rubricId)
+                    .SumAsync(c => c.Weight);
+
+                var message = totalWeight == 100
+                    ? "✅ Total criteria weight equals 100%"
+                    : $"⚠️ Current total weight is {totalWeight}% (should be 100%)";
+
+                return new BaseResponse<decimal>(
+                    message,
+                    StatusCodeEnum.OK_200,
+                    totalWeight
+                );
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<decimal>(
+                    $"Error calculating total weight: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    0
+                );
+            }
         }
+
     }
+}

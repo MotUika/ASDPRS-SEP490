@@ -129,5 +129,17 @@ namespace API.Controllers
             var result = await _criteriaService.GetCriteriaByTemplateIdAsync(templateId);
             return StatusCode((int)result.StatusCode, result);
         }
+
+        [HttpGet("rubric/{rubricId}/validate-weight")]
+        [SwaggerOperation(
+            Summary = "Kiểm tra tổng trọng số criteria trong rubric",
+            Description = "Trả về tổng phần trăm trọng số của tất cả các criteria trong rubric được chỉ định."
+        )]
+        [SwaggerResponse(200, "Thành công", typeof(BaseResponse<decimal>))]
+        public async Task<IActionResult> ValidateCriteriaWeights(int rubricId)
+        {
+            var result = await _criteriaService.ValidateTotalWeightAsync(rubricId);
+            return Ok(result);
+        }
     }
 }
