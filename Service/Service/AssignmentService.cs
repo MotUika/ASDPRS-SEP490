@@ -1037,7 +1037,7 @@ namespace Service.Service
 
             return distribution;
         }
-        private string CalculateAssignmentStatus(Assignment assignment, ASDPRSContext context)
+        private string CalculateAssignmentStatus(Assignment assignment
         {
             var now = DateTime.UtcNow;
 
@@ -1048,11 +1048,6 @@ namespace Service.Service
             // 2. Active - đang trong thời gian nộp bài
             if (now <= assignment.Deadline)
                 return AssignmentStatusEnum.Active.ToString();
-
-            // 3. Kiểm tra nếu không có bài nộp thì Cancelled
-            var hasSubmissions = context.Submissions.Any(s => s.AssignmentId == assignment.AssignmentId);
-            if (!hasSubmissions)
-                return AssignmentStatusEnum.Cancelled.ToString();
 
             // 4. InReview - cho STUDENT: từ sau Deadline đến ReviewDeadline
             if (now <= assignment.ReviewDeadline)
