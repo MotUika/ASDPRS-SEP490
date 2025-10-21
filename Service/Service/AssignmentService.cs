@@ -930,6 +930,7 @@ namespace Service.Service
                 InstructorWeight = assignment.InstructorWeight,
                 PeerWeight = assignment.PeerWeight,
                 Weight = assignment.Weight,
+                GradingScale = assignment.GradingScale,
                 IncludeAIScore = assignment.IncludeAIScore,
                 CourseName = courseInstance?.Course?.CourseName ?? string.Empty,
                 CourseCode = courseInstance?.Course?.CourseCode ?? string.Empty,
