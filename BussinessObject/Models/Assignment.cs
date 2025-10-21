@@ -29,7 +29,7 @@ public class Assignment
     public DateTime? StartDate { get; set; }  // Thời điểm bắt đầu được nộp
     [Required]
     public DateTime Deadline { get; set; }    // Hạn cuối nộp
-    public DateTime? FinalDeadline { get; set; } // Hết được nộp (nếu có)
+    public DateTime? FinalDeadline { get; set; }
 
     public DateTime? ReviewDeadline { get; set; }
 
