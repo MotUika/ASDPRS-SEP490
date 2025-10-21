@@ -24,6 +24,7 @@ namespace Service.RequestAndResponse.Response.Assignment
         public decimal PeerWeight { get; set; }
         public bool IncludeAIScore { get; set; }
         public decimal Weight { get; set; }
+        public string GradingScale { get; set; }
 
 
         // Additional info
