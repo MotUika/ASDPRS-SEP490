@@ -776,7 +776,7 @@ namespace Service.Service
 
                 foreach (var ra in reviewAssignments)
                 {
-                    if (ra.Status == "Pending" || ra.Status == "Assigned" || ra.Status == "In Progress")
+                    if (ra.Status == "Assigned")
                     {
                         if (ra.Deadline < DateTime.UtcNow && ra.Status != "Completed")
                         {

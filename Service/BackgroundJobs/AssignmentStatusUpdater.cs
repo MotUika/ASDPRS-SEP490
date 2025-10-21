@@ -76,20 +76,16 @@ namespace Service.BackgroundJobs
             if (now <= assignment.Deadline)
                 return AssignmentStatusEnum.Active.ToString();
 
-            // 3. InReview - đang trong thời gian review
-            if (assignment.ReviewDeadline.HasValue && now <= assignment.ReviewDeadline.Value)
-                return AssignmentStatusEnum.InReview.ToString();
-
-            // 4. Vẫn còn thời gian cho GV chấm (FinalDeadline)
-            if (assignment.FinalDeadline.HasValue && now <= assignment.FinalDeadline.Value)
-                return AssignmentStatusEnum.InReview.ToString();
-
-            // 5. Kiểm tra bài nộp để quyết định Closed hay Cancelled
+            // 3. Kiểm tra nếu không có bài nộp thì Cancelled
             var hasSubmissions = context.Submissions.Any(s => s.AssignmentId == assignment.AssignmentId);
-
             if (!hasSubmissions)
                 return AssignmentStatusEnum.Cancelled.ToString();
 
+            // 4. InReview - cho STUDENT: từ sau Deadline đến ReviewDeadline
+            if (now <= assignment.ReviewDeadline)
+                return AssignmentStatusEnum.InReview.ToString();
+
+            // 5. Closed - sau ReviewDeadline
             return AssignmentStatusEnum.Closed.ToString();
         }
 
