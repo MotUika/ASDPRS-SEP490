@@ -1037,7 +1037,7 @@ namespace Service.Service
 
             return distribution;
         }
-        private string CalculateAssignmentStatus(Assignment assignment
+        private string CalculateAssignmentStatus(Assignment assignment)
         {
             var now = DateTime.UtcNow;
 
