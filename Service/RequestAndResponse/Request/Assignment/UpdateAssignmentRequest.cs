@@ -29,6 +29,7 @@ namespace Service.RequestAndResponse.Request.Assignment
 
         [Range(0, 10)]
         public int? NumPeerReviewsRequired { get; set; }
+        public decimal? PassThreshold { get; set; } = 50;
 
         public bool? AllowCrossClass { get; set; }
 
@@ -40,8 +41,6 @@ namespace Service.RequestAndResponse.Request.Assignment
         [Range(0, 100)]
         public decimal? PeerWeight { get; set; }
         public string? GradingScale { get; set; }
-        public decimal? Weight { get; set; }
-        public decimal? LateSubmissionPenalty { get; set; }
         public decimal? MissingReviewPenalty { get; set; }
         public bool? IncludeAIScore { get; set; }
     }

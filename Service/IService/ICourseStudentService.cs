@@ -22,8 +22,8 @@ namespace Service.IService
         Task<BaseResponse<List<CourseStudentResponse>>> ImportStudentsFromExcelAsync(int courseInstanceId, Stream fileStream, int? changedByUserId);
         Task<BaseResponse<MultipleCourseImportResponse>> ImportStudentsFromMultipleSheetsAsync(int campusId, Stream fileStream, int? changedByUserId);
         Task<BaseResponse<List<CourseInstanceResponse>>> GetStudentCoursesAsync(int studentId);
-        Task<BaseResponse<decimal>> CalculateTotalAssignmentGradeAsync(int courseInstanceId, int studentId);
-        Task<BaseResponse<bool>> IsStudentEnrolledAsync(int courseInstanceId, int studentId);
+/*        Task<BaseResponse<decimal>> CalculateTotalAssignmentGradeAsync(int courseInstanceId, int studentId);
+*/        Task<BaseResponse<bool>> IsStudentEnrolledAsync(int courseInstanceId, int studentId);
         Task<BaseResponse<CourseStudentResponse>> GetEnrollmentStatusAsync(int courseInstanceId, int studentId);
     }
 }

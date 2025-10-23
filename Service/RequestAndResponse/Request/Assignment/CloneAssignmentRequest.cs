@@ -13,7 +13,6 @@ namespace Service.RequestAndResponse.Request.Assignment
         public DateTime? NewDeadline { get; set; }
         public DateTime? NewFinalDeadline { get; set; }
         public DateTime? NewReviewDeadline { get; set; }
-        public decimal? LateSubmissionPenalty { get; set; }
         public decimal? MissingReviewPenalty { get; set; }
     }
 }

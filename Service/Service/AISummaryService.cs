@@ -22,14 +22,13 @@ namespace Service.Service
         private readonly ISubmissionRepository _submissionRepository;
         private readonly IAssignmentRepository _assignmentRepository;
         private readonly IUserRepository _userRepository;
-        /*        private readonly IAIService _aiService; // Assuming an AI service interface for Gemini integration
-        */
         private readonly IDocumentTextExtractor _documentTextExtractor;
         private readonly IFileStorageService _fileStorageService;
         private readonly IGenAIService _genAIService;
         private readonly ILogger<AISummaryService> _logger;
         private readonly IRubricRepository _rubricRepository;
         private readonly ICriteriaRepository _criteriaRepository;
+        private readonly ISystemConfigService _systemConfigService;
         public AISummaryService(
             IAISummaryRepository aiSummaryRepository,
             ISubmissionRepository submissionRepository,
@@ -37,8 +36,8 @@ namespace Service.Service
             IUserRepository userRepository, ILogger<AISummaryService> logger,
             IDocumentTextExtractor documentTextExtractor,
     IFileStorageService fileStorageService,
-    IGenAIService genAIService, IRubricRepository rubricRepository,           // Thêm này
-    ICriteriaRepository criteriaRepository)
+    IGenAIService genAIService, IRubricRepository rubricRepository,
+    ICriteriaRepository criteriaRepository, ISystemConfigService systemConfigService)
         {
             _aiSummaryRepository = aiSummaryRepository;
             _submissionRepository = submissionRepository;
@@ -50,6 +49,7 @@ namespace Service.Service
             _genAIService = genAIService;
             _rubricRepository = rubricRepository;
             _criteriaRepository = criteriaRepository;
+            _systemConfigService = systemConfigService;
         }
 
         public async Task<BaseResponse<AISummaryResponse>> CreateAISummaryAsync(CreateAISummaryRequest request)
@@ -357,17 +357,26 @@ namespace Service.Service
 
                 _logger.LogInformation($"Text extracted successfully: {extractedText.Length} characters");
 
-                // Nếu text quá dài, chunk nó
-                if (extractedText.Length > 30000)
-                {
-                    extractedText = extractedText.Substring(0, 30000) + "... [document truncated]";
-                    _logger.LogInformation($"Text truncated to 30000 characters");
-                }
+                var maxTokensConfig = await _systemConfigService.GetSystemConfigAsync("AISummaryMaxTokens");
+                var maxWordsConfig = await _systemConfigService.GetSystemConfigAsync("AISummaryMaxWords");
 
+                int maxTokens = int.Parse(maxTokensConfig ?? "1000");
+                int maxWords = int.Parse(maxWordsConfig ?? "200");
+
+                // Giới hạn text đầu vào
+                if (extractedText.Length > maxTokens)
+                {
+                    extractedText = extractedText.Substring(0, maxTokens) + "... [document truncated]";
+                }
                 _logger.LogInformation($"Calling AI service for analysis type: {request.SummaryType}");
                 var analysisResult = await _genAIService.AnalyzeDocumentAsync(extractedText, request.SummaryType);
                 _logger.LogInformation($"AI analysis completed: {analysisResult.Length} characters");
-
+                // Giới hạn số từ đầu ra
+                if (analysisResult.Split(' ').Length > maxWords)
+                {
+                    var words = analysisResult.Split(' ').Take(maxWords).ToArray();
+                    analysisResult = string.Join(" ", words) + "...";
+                }
                 // TRUNCATE CONTENT TO FIT DATABASE COLUMN
                 if (analysisResult.Length > 2000)
                 {
