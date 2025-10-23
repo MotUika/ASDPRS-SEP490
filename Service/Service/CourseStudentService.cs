@@ -822,7 +822,7 @@ namespace Service.Service
                 return new BaseResponse<CourseStudentResponse>($"Error retrieving enrollment status: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
-        // Cập nhật method tính điểm assignment
+/*        // Cập nhật method tính điểm assignment
         public async Task<BaseResponse<decimal>> CalculateTotalAssignmentGradeAsync(int courseInstanceId, int studentId)
         {
             try
@@ -846,7 +846,7 @@ namespace Service.Service
             {
                 return new BaseResponse<decimal>(ex.Message, StatusCodeEnum.InternalServerError_500, 0);
             }
-        }
+        }*/
 
         // Method tính điểm cho từng assignment
         private async Task<decimal> CalculateAssignmentGradeForStudentAsync(int assignmentId, int studentId)

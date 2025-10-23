@@ -18,6 +18,8 @@ namespace Service.RequestAndResponse.Response.Assignment
         public DateTime? ReviewDeadline { get; set; }
         public DateTime? FinalDeadline { get; set; }
         public int NumPeerReviewsRequired { get; set; }
+        public decimal? PassThreshold { get; set; } = 50;
+        public decimal? MissingReviewPenalty { get; set; } = 0;
         public bool AllowCrossClass { get; set; }
         public bool IsBlindReview { get; set; }
         public decimal InstructorWeight { get; set; }

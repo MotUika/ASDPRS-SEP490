@@ -419,7 +419,7 @@ namespace DataAccessLayer.Migrations
                     Title = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
                     Description = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
                     Weight = table.Column<int>(type: "int", nullable: false),
-                    MaxScore = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    MaxScore = table.Column<decimal>(type: "decimal(5,2)", precision: 5, scale: 2, nullable: false),
                     ScoringType = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
                     ScoreLabel = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false)
                 },
@@ -492,10 +492,11 @@ namespace DataAccessLayer.Migrations
                     NumPeerReviewsRequired = table.Column<int>(type: "int", nullable: false),
                     AllowCrossClass = table.Column<bool>(type: "bit", nullable: false),
                     IsBlindReview = table.Column<bool>(type: "bit", nullable: false),
-                    InstructorWeight = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    InstructorWeight = table.Column<decimal>(type: "decimal(5,2)", precision: 5, scale: 2, nullable: false),
                     GradingScale = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
-                    Weight = table.Column<decimal>(type: "decimal(5,2)", precision: 5, scale: 2, nullable: false),
-                    PeerWeight = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    PeerWeight = table.Column<decimal>(type: "decimal(5,2)", precision: 5, scale: 2, nullable: false),
+                    PassThreshold = table.Column<decimal>(type: "decimal(5,2)", precision: 5, scale: 2, nullable: true),
+                    MissingReviewPenalty = table.Column<decimal>(type: "decimal(5,2)", precision: 5, scale: 2, nullable: true),
                     IncludeAIScore = table.Column<bool>(type: "bit", nullable: false),
                     Status = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
                     ClonedFromAssignmentId = table.Column<int>(type: "int", nullable: true)
@@ -553,7 +554,7 @@ namespace DataAccessLayer.Migrations
                     UserId = table.Column<int>(type: "int", nullable: false),
                     EnrolledAt = table.Column<DateTime>(type: "datetime2", nullable: false),
                     Status = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    FinalGrade = table.Column<decimal>(type: "decimal(18,2)", nullable: true),
+                    FinalGrade = table.Column<decimal>(type: "decimal(5,2)", precision: 5, scale: 2, nullable: true),
                     IsPassed = table.Column<bool>(type: "bit", nullable: false),
                     StatusChangedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     ChangedByUserId = table.Column<int>(type: "int", nullable: true)
@@ -653,7 +654,7 @@ namespace DataAccessLayer.Migrations
                     Title = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
                     Description = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
                     Weight = table.Column<int>(type: "int", nullable: false),
-                    MaxScore = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    MaxScore = table.Column<decimal>(type: "decimal(5,2)", precision: 5, scale: 2, nullable: false),
                     ScoringType = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
                     ScoreLabel = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
                     IsModified = table.Column<bool>(type: "bit", nullable: false)
@@ -829,7 +830,7 @@ namespace DataAccessLayer.Migrations
                     ReviewId = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
                     ReviewAssignmentId = table.Column<int>(type: "int", nullable: false),
-                    OverallScore = table.Column<decimal>(type: "decimal(18,2)", nullable: true),
+                    OverallScore = table.Column<decimal>(type: "decimal(5,2)", precision: 5, scale: 2, nullable: true),
                     GeneralFeedback = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: false),
                     ReviewedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     ReviewType = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
@@ -854,7 +855,7 @@ namespace DataAccessLayer.Migrations
                         .Annotation("SqlServer:Identity", "1, 1"),
                     ReviewId = table.Column<int>(type: "int", nullable: false),
                     CriteriaId = table.Column<int>(type: "int", nullable: false),
-                    ScoreAwarded = table.Column<decimal>(type: "decimal(18,2)", nullable: true),
+                    ScoreAwarded = table.Column<decimal>(type: "decimal(5,2)", precision: 5, scale: 2, nullable: true),
                     Feedback = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
                     FeedbackSource = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false)
                 },
@@ -942,12 +943,23 @@ namespace DataAccessLayer.Migrations
             migrationBuilder.InsertData(
                 table: "AspNetUsers",
                 columns: new[] { "Id", "AccessFailedCount", "AvatarUrl", "CampusId", "ConcurrencyStamp", "CreatedAt", "Email", "EmailConfirmed", "FirstName", "IsActive", "LastName", "LockoutEnabled", "LockoutEnd", "NormalizedEmail", "NormalizedUserName", "PasswordHash", "PhoneNumber", "PhoneNumberConfirmed", "SecurityStamp", "StudentCode", "TwoFactorEnabled", "UserName" },
-                values: new object[] { 1, 0, null, 1, "ccfd58b0-1444-40ba-a217-c9cbfffeaad2", new DateTime(2025, 10, 8, 6, 19, 50, 966, DateTimeKind.Utc).AddTicks(1498), "admin@example.com", true, "Admin", true, "User", true, null, "ADMIN@EXAMPLE.COM", "ADMIN", "AQAAAAIAAYagAAAAEK95SlxvEPzqxJyTxIof0ufhmHVKdEGcuw7MxCBj92JUehpXlaMI0F4RrX3mzLDNzA==", null, false, "2577fa44-7d86-4f3b-b8af-2bb8a8882031", "ADMIN001", false, "admin" });
+                values: new object[] { 1, 0, null, 1, "e5cdedef-78e0-4c5e-b4d0-411fb8ed6608", new DateTime(2025, 10, 23, 7, 11, 40, 513, DateTimeKind.Utc).AddTicks(8881), "admin@example.com", true, "Admin", true, "User", true, null, "ADMIN@EXAMPLE.COM", "ADMIN", "AQAAAAIAAYagAAAAEK95SlxvEPzqxJyTxIof0ufhmHVKdEGcuw7MxCBj92JUehpXlaMI0F4RrX3mzLDNzA==", null, false, "5c93463f-f720-4ee0-9621-c752bf13bd06", "ADMIN001", false, "admin" });
 
             migrationBuilder.InsertData(
                 table: "AspNetUserRoles",
                 columns: new[] { "RoleId", "UserId" },
                 values: new object[] { 1, 1 });
+
+            migrationBuilder.InsertData(
+                table: "SystemConfigs",
+                columns: new[] { "ConfigId", "ConfigKey", "ConfigValue", "Description", "UpdatedAt", "UpdatedByUserId" },
+                values: new object[,]
+                {
+                    { 100, "ScorePrecision", "0.5", "Độ chính xác điểm số (0.25, 0.5, 1.0)", new DateTime(2025, 10, 23, 7, 11, 40, 513, DateTimeKind.Utc).AddTicks(8933), 1 },
+                    { 101, "AISummaryMaxTokens", "1000", "Số token tối đa cho AI summary", new DateTime(2025, 10, 23, 7, 11, 40, 513, DateTimeKind.Utc).AddTicks(8938), 1 },
+                    { 102, "AISummaryMaxWords", "200", "Số từ tối đa cho AI summary", new DateTime(2025, 10, 23, 7, 11, 40, 513, DateTimeKind.Utc).AddTicks(8939), 1 },
+                    { 103, "DefaultPassThreshold", "50", "Ngưỡng điểm mặc định để Pass", new DateTime(2025, 10, 23, 7, 11, 40, 513, DateTimeKind.Utc).AddTicks(8940), 1 }
+                });
 
             migrationBuilder.CreateIndex(
                 name: "IX_AcademicYears_CampusId",

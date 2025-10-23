@@ -67,16 +67,26 @@ namespace DataAccessLayer.Migrations
                         .HasColumnType("bit");
 
                     b.Property<decimal>("InstructorWeight")
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
 
                     b.Property<bool>("IsBlindReview")
                         .HasColumnType("bit");
 
+                    b.Property<decimal?>("MissingReviewPenalty")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
                     b.Property<int>("NumPeerReviewsRequired")
                         .HasColumnType("int");
 
+                    b.Property<decimal?>("PassThreshold")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
                     b.Property<decimal>("PeerWeight")
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
 
                     b.Property<DateTime?>("ReviewDeadline")
                         .HasColumnType("datetime2");
@@ -96,10 +106,6 @@ namespace DataAccessLayer.Migrations
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
-
-                    b.Property<decimal>("Weight")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("decimal(5,2)");
 
                     b.HasKey("AssignmentId");
 
@@ -306,7 +312,8 @@ namespace DataAccessLayer.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<decimal?>("FinalGrade")
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
 
                     b.Property<bool>("IsPassed")
                         .HasColumnType("bit");
@@ -352,7 +359,8 @@ namespace DataAccessLayer.Migrations
                         .HasColumnType("bit");
 
                     b.Property<decimal>("MaxScore")
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
 
                     b.Property<int>("RubricId")
                         .HasColumnType("int");
@@ -409,7 +417,8 @@ namespace DataAccessLayer.Migrations
                         .HasColumnType("int");
 
                     b.Property<decimal?>("ScoreAwarded")
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
 
                     b.HasKey("CriteriaFeedbackId");
 
@@ -434,7 +443,8 @@ namespace DataAccessLayer.Migrations
                         .HasColumnType("nvarchar(500)");
 
                     b.Property<decimal>("MaxScore")
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
 
                     b.Property<string>("ScoreLabel")
                         .IsRequired()
@@ -752,7 +762,8 @@ namespace DataAccessLayer.Migrations
                         .HasColumnType("nvarchar(1000)");
 
                     b.Property<decimal?>("OverallScore")
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
 
                     b.Property<int>("ReviewAssignmentId")
                         .HasColumnType("int");
@@ -943,6 +954,44 @@ namespace DataAccessLayer.Migrations
                     b.HasIndex("UpdatedByUserId");
 
                     b.ToTable("SystemConfigs");
+
+                    b.HasData(
+                        new
+                        {
+                            ConfigId = 100,
+                            ConfigKey = "ScorePrecision",
+                            ConfigValue = "0.5",
+                            Description = "Độ chính xác điểm số (0.25, 0.5, 1.0)",
+                            UpdatedAt = new DateTime(2025, 10, 23, 7, 11, 40, 513, DateTimeKind.Utc).AddTicks(8933),
+                            UpdatedByUserId = 1
+                        },
+                        new
+                        {
+                            ConfigId = 101,
+                            ConfigKey = "AISummaryMaxTokens",
+                            ConfigValue = "1000",
+                            Description = "Số token tối đa cho AI summary",
+                            UpdatedAt = new DateTime(2025, 10, 23, 7, 11, 40, 513, DateTimeKind.Utc).AddTicks(8938),
+                            UpdatedByUserId = 1
+                        },
+                        new
+                        {
+                            ConfigId = 102,
+                            ConfigKey = "AISummaryMaxWords",
+                            ConfigValue = "200",
+                            Description = "Số từ tối đa cho AI summary",
+                            UpdatedAt = new DateTime(2025, 10, 23, 7, 11, 40, 513, DateTimeKind.Utc).AddTicks(8939),
+                            UpdatedByUserId = 1
+                        },
+                        new
+                        {
+                            ConfigId = 103,
+                            ConfigKey = "DefaultPassThreshold",
+                            ConfigValue = "50",
+                            Description = "Ngưỡng điểm mặc định để Pass",
+                            UpdatedAt = new DateTime(2025, 10, 23, 7, 11, 40, 513, DateTimeKind.Utc).AddTicks(8940),
+                            UpdatedByUserId = 1
+                        });
                 });
 
             modelBuilder.Entity("BussinessObject.Models.User", b =>
@@ -1046,8 +1095,8 @@ namespace DataAccessLayer.Migrations
                             Id = 1,
                             AccessFailedCount = 0,
                             CampusId = 1,
-                            ConcurrencyStamp = "ccfd58b0-1444-40ba-a217-c9cbfffeaad2",
-                            CreatedAt = new DateTime(2025, 10, 8, 6, 19, 50, 966, DateTimeKind.Utc).AddTicks(1498),
+                            ConcurrencyStamp = "e5cdedef-78e0-4c5e-b4d0-411fb8ed6608",
+                            CreatedAt = new DateTime(2025, 10, 23, 7, 11, 40, 513, DateTimeKind.Utc).AddTicks(8881),
                             Email = "admin@example.com",
                             EmailConfirmed = true,
                             FirstName = "Admin",
@@ -1058,7 +1107,7 @@ namespace DataAccessLayer.Migrations
                             NormalizedUserName = "ADMIN",
                             PasswordHash = "AQAAAAIAAYagAAAAEK95SlxvEPzqxJyTxIof0ufhmHVKdEGcuw7MxCBj92JUehpXlaMI0F4RrX3mzLDNzA==",
                             PhoneNumberConfirmed = false,
-                            SecurityStamp = "2577fa44-7d86-4f3b-b8af-2bb8a8882031",
+                            SecurityStamp = "5c93463f-f720-4ee0-9621-c752bf13bd06",
                             StudentCode = "ADMIN001",
                             TwoFactorEnabled = false,
                             UserName = "admin"

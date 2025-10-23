@@ -49,10 +49,11 @@ public class Assignment
     public string GradingScale { get; set; } = "Scale10";  // "PassFail" or "Scale10"
 
     [Required]
-    public decimal Weight { get; set; } = 0;  // Percentage weight in course (0-100)
-
-    [Required]
     public decimal PeerWeight { get; set; } = 0;
+
+    public decimal? PassThreshold { get; set; } = 50; // Default 50%
+
+    public decimal? MissingReviewPenalty { get; set; } = 0;
 
     [Required]
     public bool IncludeAIScore { get; set; } = false;

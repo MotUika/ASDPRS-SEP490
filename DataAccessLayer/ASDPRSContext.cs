@@ -188,6 +188,11 @@ namespace DataAccessLayer
                 .HasForeignKey(cs => cs.ChangedByUserId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            modelBuilder.Entity<CourseStudent>(entity =>
+            {
+                entity.Property(cs => cs.FinalGrade)
+                    .HasPrecision(5, 2);
+            });
             // SystemConfig
             modelBuilder.Entity<SystemConfig>()
                 .HasOne(sc => sc.UpdatedByUser)
@@ -218,10 +223,6 @@ namespace DataAccessLayer
                 .Property(a => a.GradingScale)
                 .HasMaxLength(50);
 
-            modelBuilder.Entity<Assignment>()
-                .Property(a => a.Weight)
-                .HasPrecision(5, 2);
-
             // Self-referencing relationship for cloning
             modelBuilder.Entity<Assignment>()
                 .HasOne(a => a.ClonedFromAssignment)
@@ -229,6 +230,20 @@ namespace DataAccessLayer
                 .HasForeignKey(a => a.ClonedFromAssignmentId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            modelBuilder.Entity<Assignment>(entity =>
+            {
+                entity.Property(a => a.InstructorWeight)
+                    .HasPrecision(5, 2);
+
+                entity.Property(a => a.PeerWeight)
+                    .HasPrecision(5, 2);
+
+                entity.Property(a => a.PassThreshold)
+                    .HasPrecision(5, 2);
+
+                entity.Property(a => a.MissingReviewPenalty)
+                    .HasPrecision(5, 2);
+            });
             // Indexes for performance
             modelBuilder.Entity<Assignment>()
                 .HasIndex(a => a.Status);
@@ -283,6 +298,26 @@ namespace DataAccessLayer
                 .WithOne(cf => cf.Criteria)
                 .HasForeignKey(cf => cf.CriteriaId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Criteria>(entity =>
+            {
+                entity.Property(c => c.MaxScore)
+                    .HasPrecision(5, 2);
+            });
+
+            // CriteriaTemplate
+            modelBuilder.Entity<CriteriaTemplate>(entity =>
+            {
+                entity.Property(ct => ct.MaxScore)
+                    .HasPrecision(5, 2);
+            });
+
+            // CriteriaFeedback
+            modelBuilder.Entity<CriteriaFeedback>(entity =>
+            {
+                entity.Property(cf => cf.ScoreAwarded)
+                    .HasPrecision(5, 2);
+            });
 
             // Submission
             modelBuilder.Entity<Submission>()
@@ -342,6 +377,12 @@ namespace DataAccessLayer
                 .HasForeignKey(de => de.SourceId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("FK_DocumentEmbeddings_Review");
+
+            modelBuilder.Entity<Review>(entity =>
+            {
+                entity.Property(r => r.OverallScore)
+                    .HasPrecision(5, 2);
+            });
 
             // AISummary
             modelBuilder.Entity<AISummary>()
@@ -429,10 +470,47 @@ namespace DataAccessLayer
                     AccessFailedCount = 0
                 }
             );
-
             // Seed UserRoles
             modelBuilder.Entity<IdentityUserRole<int>>().HasData(
                 new IdentityUserRole<int> { UserId = 1, RoleId = 1 }
+            );
+            modelBuilder.Entity<SystemConfig>().HasData(
+                new SystemConfig
+                {
+                    ConfigId = 100,
+                    ConfigKey = "ScorePrecision",
+                    ConfigValue = "0.5",
+                    Description = "Độ chính xác điểm số (0.25, 0.5, 1.0)",
+                    UpdatedAt = DateTime.UtcNow,
+                    UpdatedByUserId = 1
+                },
+                new SystemConfig
+                {
+                    ConfigId = 101,
+                    ConfigKey = "AISummaryMaxTokens",
+                    ConfigValue = "1000",
+                    Description = "Số token tối đa cho AI summary",
+                    UpdatedAt = DateTime.UtcNow,
+                    UpdatedByUserId = 1
+                },
+                new SystemConfig
+                {
+                    ConfigId = 102,
+                    ConfigKey = "AISummaryMaxWords",
+                    ConfigValue = "200",
+                    Description = "Số từ tối đa cho AI summary",
+                    UpdatedAt = DateTime.UtcNow,
+                    UpdatedByUserId = 1
+                },
+                new SystemConfig
+                {
+                    ConfigId = 103,
+                    ConfigKey = "DefaultPassThreshold",
+                    ConfigValue = "50",
+                    Description = "Ngưỡng điểm mặc định để Pass",
+                    UpdatedAt = DateTime.UtcNow,
+                    UpdatedByUserId = 1
+                }
             );
         }
 

@@ -35,6 +35,7 @@ namespace Service.Service
         private readonly INotificationService _notificationService;
         private readonly ICriteriaFeedbackRepository _criteriaFeedbackRepository;
         private readonly IHttpContextAccessor _httpContextAccessor;
+        private readonly ISystemConfigService _systemConfigService;
 
 
         public AssignmentService(
@@ -49,7 +50,7 @@ namespace Service.Service
             IReviewAssignmentRepository reviewAssignmentRepository,
             ASDPRSContext context,
             INotificationService notificationService,
-            ICriteriaFeedbackRepository criteriaFeedbackRepository, IHttpContextAccessor httpContextAccessor)
+            ICriteriaFeedbackRepository criteriaFeedbackRepository, IHttpContextAccessor httpContextAccessor, ISystemConfigService systemConfigService)
         {
             _assignmentRepository = assignmentRepository;
             _courseInstanceRepository = courseInstanceRepository;
@@ -64,6 +65,7 @@ namespace Service.Service
             _notificationService = notificationService;
             _criteriaFeedbackRepository = criteriaFeedbackRepository;
             _httpContextAccessor = httpContextAccessor;
+            _systemConfigService = systemConfigService;
         }
         private int GetCurrentStudentId()
         {
@@ -120,6 +122,14 @@ namespace Service.Service
                         null);
                 }
 
+                // Validate PassThreshold for PassFail
+                if (request.GradingScale == "PassFail" && !request.PassThreshold.HasValue)
+                {
+                    // Lấy giá trị mặc định từ system config
+                    var defaultPassThreshold = await _systemConfigService.GetSystemConfigAsync("DefaultPassThreshold");
+                    request.PassThreshold = decimal.Parse(defaultPassThreshold ?? "50");
+                }
+
                 // Validate weights sum to 100
                 if (request.InstructorWeight + request.PeerWeight != 100)
                 {
@@ -147,14 +157,13 @@ namespace Service.Service
                     InstructorWeight = request.InstructorWeight,
                     PeerWeight = request.PeerWeight,
                     GradingScale = request.GradingScale,
-                    Weight = request.Weight,
+                    PassThreshold = request.PassThreshold,
+                    MissingReviewPenalty = request.MissingReviewPenalty,
                     IncludeAIScore = request.IncludeAIScore,
                     Status = AssignmentStatusEnum.Draft.ToString()
                 };
 
                 await _assignmentRepository.AddAsync(assignment);
-                await SaveAssignmentConfigs(assignment.AssignmentId, "LateSubmissionPenalty", "0");  // Default 0%
-                await SaveAssignmentConfigs(assignment.AssignmentId, "MissingReviewPenalty", "0");
                 await _notificationService.SendNewAssignmentNotificationAsync(assignment.AssignmentId, assignment.CourseInstanceId);
                 var response = await MapToResponse(assignment);
                 return new BaseResponse<AssignmentResponse>(
@@ -254,6 +263,8 @@ namespace Service.Service
                 if (request.NumPeerReviewsRequired.HasValue)
                     assignment.NumPeerReviewsRequired = request.NumPeerReviewsRequired.Value;
 
+                if(request.PassThreshold.HasValue)
+                    assignment.PassThreshold = request.PassThreshold.Value;
                 if (request.AllowCrossClass.HasValue)
                     assignment.AllowCrossClass = request.AllowCrossClass.Value;
 
@@ -274,12 +285,6 @@ namespace Service.Service
                 }
                 if (request.GradingScale != null)
                     assignment.GradingScale = request.GradingScale;
-
-                if (request.Weight.HasValue)
-                    assignment.Weight = request.Weight.Value;
-
-                if (request.LateSubmissionPenalty.HasValue)
-                    await SaveAssignmentConfigs(assignment.AssignmentId, "LateSubmissionPenalty", request.LateSubmissionPenalty.Value.ToString());
 
                 if (request.MissingReviewPenalty.HasValue)
                     await SaveAssignmentConfigs(assignment.AssignmentId, "MissingReviewPenalty", request.MissingReviewPenalty.Value.ToString());
@@ -929,8 +934,9 @@ namespace Service.Service
                 IsBlindReview = assignment.IsBlindReview,
                 InstructorWeight = assignment.InstructorWeight,
                 PeerWeight = assignment.PeerWeight,
-                Weight = assignment.Weight,
                 GradingScale = assignment.GradingScale,
+                PassThreshold = assignment.PassThreshold,
+                MissingReviewPenalty = assignment.MissingReviewPenalty,
                 IncludeAIScore = assignment.IncludeAIScore,
                 CourseName = courseInstance?.Course?.CourseName ?? string.Empty,
                 CourseCode = courseInstance?.Course?.CourseCode ?? string.Empty,
@@ -1138,12 +1144,13 @@ namespace Service.Service
                     FinalDeadline = request.NewFinalDeadline ?? sourceAssignment.FinalDeadline,
                     ReviewDeadline = request.NewReviewDeadline ?? sourceAssignment.ReviewDeadline,
                     NumPeerReviewsRequired = sourceAssignment.NumPeerReviewsRequired,
+                    PassThreshold = sourceAssignment.PassThreshold,
                     AllowCrossClass = sourceAssignment.AllowCrossClass,
                     IsBlindReview = sourceAssignment.IsBlindReview,
                     InstructorWeight = sourceAssignment.InstructorWeight,
                     PeerWeight = sourceAssignment.PeerWeight,
                     GradingScale = sourceAssignment.GradingScale,
-                    Weight = sourceAssignment.Weight,
+
                     IncludeAIScore = sourceAssignment.IncludeAIScore,
                     Status = AssignmentStatusEnum.Draft.ToString(),
                     ClonedFromAssignmentId = sourceAssignmentId,
@@ -1191,7 +1198,6 @@ namespace Service.Service
                 var sourceMissingReviewPenalty = await GetAssignmentConfig(sourceAssignmentId, "MissingReviewPenalty");
 
                 // Use request values if provided, otherwise use source values or default to 0
-                var latePenalty = request.LateSubmissionPenalty?.ToString() ?? sourceLatePenalty ?? "0";
                 var missingReviewPenalty = request.MissingReviewPenalty?.ToString() ?? sourceMissingReviewPenalty ?? "0";
 
                 var response = await MapToResponse(clonedAssignment);
@@ -1265,19 +1271,23 @@ namespace Service.Service
             }
         }
         // Thêm method để xử lý điểm số theo thang điểm
-        private decimal CalculateScoreBasedOnGradingScale(decimal rawScore, string gradingScale)
+        private decimal CalculateScoreBasedOnGradingScale(decimal rawScore, string gradingScale, decimal? passThreshold = null)
         {
+            if (gradingScale == "PassFail")
             {
-                if (gradingScale == "PassFail")
-                {
-                    // Pass/Fail: >=50% là Pass (100), ngược lại Fail (0)
-                    return rawScore >= 50 ? 100 : 0;
-                }
-                else // Scale10
-                {
-                    // Scale10: giữ nguyên điểm 0-10, làm tròn 1 chữ số
-                    return Math.Round(rawScore, 1);
-                }
+                // Sử dụng PassThreshold do giáo viên set
+                decimal threshold = passThreshold ?? 50; // Fallback về 50 nếu không có
+                return rawScore >= threshold ? 100 : 0;
+            }
+            else // Scale10
+            {
+                // Lấy độ chính xác từ system config
+                var precisionConfig = _systemConfigService.GetSystemConfigAsync("ScorePrecision").Result;
+                decimal precision = decimal.Parse(precisionConfig ?? "0.5");
+
+                // Làm tròn theo precision
+                decimal roundedScore = Math.Round(rawScore / precision) * precision;
+                return Math.Round(roundedScore, 2); // Giữ 2 chữ số thập phân
             }
         }
 
@@ -1322,8 +1332,8 @@ namespace Service.Service
 
             decimal rawScore = totalWeight > 0 ? totalScore / totalWeight : 0;
 
-            // Áp dụng thang điểm
-            return CalculateScoreBasedOnGradingScale(rawScore, assignment.GradingScale);
+            // Áp dụng thang điểm với PassThreshold
+            return CalculateScoreBasedOnGradingScale(rawScore, assignment.GradingScale, assignment.PassThreshold);
         }
 
         // Lấy assignment status summary
