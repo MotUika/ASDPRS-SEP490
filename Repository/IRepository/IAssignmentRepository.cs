@@ -25,5 +25,6 @@ namespace Repository.IRepository
         Task DeleteAsync(Assignment assignment);
         Task<bool> CanStudentSubmitAssignmentAsync(int assignmentId, int studentId);
         Task<bool> ExistsAsync(int assignmentId);
+        Task<List<Assignment>> GetAssignmentsByRubricTemplateIdAsync(int rubricTemplateId);
     }
 }

@@ -28,5 +28,51 @@ namespace Repository.Repository
                 .Where(rt => rt.CreatedByUserId == userId)
                 .ToListAsync();
         }
+
+        public async Task<IEnumerable<Assignment>> GetAssignmentsUsingTemplateAsync(int rubricTemplateId)
+        {
+            return await _context.Assignments
+                .Include(a => a.CourseInstance)
+                    .ThenInclude(ci => ci.Course)
+                .Include(a => a.CourseInstance)
+                    .ThenInclude(ci => ci.Campus)
+                .Where(a => a.RubricTemplateId == rubricTemplateId)
+                .ToListAsync();
+        }
+
+        public async Task<RubricTemplate> GetByIdWithDetailsAsync(int templateId)
+        {
+            return await _context.RubricTemplates
+                .Include(rt => rt.CreatedByUser)
+                .Include(rt => rt.Rubrics)
+                .Include(rt => rt.CriteriaTemplates)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(rt => rt.TemplateId == templateId);
+        }
+
+        public async Task<IEnumerable<RubricTemplate>> GetByUserIdWithDetailsAsync(int userId)
+        {
+            return await _context.RubricTemplates
+                .Include(rt => rt.CreatedByUser)
+                .Include(rt => rt.Rubrics)
+                .Include(rt => rt.CriteriaTemplates)
+                .Where(rt => rt.CreatedByUserId == userId)
+                .AsNoTracking()
+                .ToListAsync();
+        }
+
+        public async Task<IEnumerable<RubricTemplate>> GetPublicWithDetailsAsync()
+        {
+            return await _context.RubricTemplates
+                .Include(rt => rt.CreatedByUser)
+                .Include(rt => rt.Rubrics)
+                .Include(rt => rt.CriteriaTemplates)
+                .Where(rt => rt.IsPublic)
+                .AsNoTracking()
+                .ToListAsync();
+        }
+
+
+
     }
 }

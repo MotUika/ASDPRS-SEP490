@@ -7,6 +7,7 @@ using Service.IService;
 using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Enums;
 using Service.RequestAndResponse.Request.RubricTemplate;
+using Service.RequestAndResponse.Response.CriteriaTemplate;
 using Service.RequestAndResponse.Response.RubricTemplate;
 using System;
 using System.Collections.Generic;
@@ -32,25 +33,76 @@ namespace Service.Service
         {
             try
             {
-                var rubricTemplate = await _context.RubricTemplates
-                    .Include(rt => rt.CreatedByUser)
-                    .Include(rt => rt.Rubrics)
-                    .Include(rt => rt.CriteriaTemplates)
-                    .FirstOrDefaultAsync(rt => rt.TemplateId == id);
+                // 🧩 Lấy rubric template đầy đủ thông tin (CreatedByUser, Rubrics, CriteriaTemplates)
+                var rubricTemplate = await _rubricTemplateRepository.GetByIdWithDetailsAsync(id);
 
                 if (rubricTemplate == null)
                 {
-                    return new BaseResponse<RubricTemplateResponse>("Rubric template not found", StatusCodeEnum.NotFound_404, null);
+                    return new BaseResponse<RubricTemplateResponse>(
+                        "Rubric template not found",
+                        StatusCodeEnum.NotFound_404,
+                        null);
                 }
 
+                // 🧠 Dùng AutoMapper để map toàn bộ dữ liệu gốc
                 var response = _mapper.Map<RubricTemplateResponse>(rubricTemplate);
-                return new BaseResponse<RubricTemplateResponse>("Rubric template retrieved successfully", StatusCodeEnum.OK_200, response);
+
+                // 📘 Lấy danh sách assignments đang sử dụng rubric template này qua repository
+                var assignments = await _rubricTemplateRepository.GetAssignmentsUsingTemplateAsync(id);
+
+                // 🧩 Gán danh sách assignments vào response (luôn trả về [] thay vì null)
+                response.AssignmentsUsingTemplate = (assignments != null && assignments.Any())
+                    ? assignments.Select(a => new AssignmentUsingTemplateResponse
+                    {
+                        AssignmentId = a.AssignmentId,
+                        Title = a.Title,
+                        CourseName = a.CourseInstance?.Course?.CourseName,
+                        ClassName = $"{a.CourseInstance?.Course?.CourseName} - {a.CourseInstance?.SectionCode}",
+                        CampusName = a.CourseInstance?.Campus?.CampusName,
+                        Deadline = a.Deadline
+                    }).ToList()
+                    : new List<AssignmentUsingTemplateResponse>();
+
+                return new BaseResponse<RubricTemplateResponse>(
+                    "Rubric template retrieved successfully",
+                    StatusCodeEnum.OK_200,
+                    response);
             }
             catch (Exception ex)
             {
-                return new BaseResponse<RubricTemplateResponse>($"Error retrieving rubric template: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
+                return new BaseResponse<RubricTemplateResponse>(
+                    $"Error retrieving rubric template: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
             }
         }
+
+
+        //public async Task<BaseResponse<RubricTemplateResponse>> GetRubricTemplateByIdAsync(int id)
+        //{
+        //    try
+        //    {
+        //        var rubricTemplate = await _context.RubricTemplates
+        //            .Include(rt => rt.CreatedByUser)
+        //            .Include(rt => rt.Rubrics)
+        //            .Include(rt => rt.CriteriaTemplates)
+        //            .FirstOrDefaultAsync(rt => rt.TemplateId == id);
+
+        //        if (rubricTemplate == null)
+        //        {
+        //            return new BaseResponse<RubricTemplateResponse>("Rubric template not found", StatusCodeEnum.NotFound_404, null);
+        //        }
+
+        //        var response = _mapper.Map<RubricTemplateResponse>(rubricTemplate);
+        //        return new BaseResponse<RubricTemplateResponse>("Rubric template retrieved successfully", StatusCodeEnum.OK_200, response);
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        return new BaseResponse<RubricTemplateResponse>($"Error retrieving rubric template: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
+        //    }
+        //}
+
+
 
         public async Task<BaseResponse<IEnumerable<RubricTemplateResponse>>> GetAllRubricTemplatesAsync()
         {
@@ -191,41 +243,87 @@ namespace Service.Service
         {
             try
             {
-                var rubricTemplates = await _context.RubricTemplates
-                    .Include(rt => rt.CreatedByUser)
-                    .Include(rt => rt.Rubrics)
-                    .Include(rt => rt.CriteriaTemplates)
-                    .Where(rt => rt.CreatedByUserId == userId)
-                    .ToListAsync();
+                // 🧩 Lấy tất cả rubric templates của user
+                var rubricTemplates = await _rubricTemplateRepository.GetByUserIdWithDetailsAsync(userId);
 
+                // 🧠 Map sang response
                 var response = _mapper.Map<IEnumerable<RubricTemplateResponse>>(rubricTemplates);
-                return new BaseResponse<IEnumerable<RubricTemplateResponse>>("Rubric templates retrieved successfully", StatusCodeEnum.OK_200, response);
+
+                // 📝 Lấy assignments cho từng rubric template
+                foreach (var template in response)
+                {
+                    var assignments = await _rubricTemplateRepository.GetAssignmentsUsingTemplateAsync(template.TemplateId);
+
+                    template.AssignmentsUsingTemplate = (assignments != null && assignments.Any())
+                        ? assignments.Select(a => new AssignmentUsingTemplateResponse
+                        {
+                            AssignmentId = a.AssignmentId,
+                            Title = a.Title,
+                            CourseName = a.CourseInstance?.Course?.CourseName,
+                            ClassName = $"{a.CourseInstance?.Course?.CourseName} - {a.CourseInstance?.SectionCode}",
+                            CampusName = a.CourseInstance?.Campus?.CampusName,
+                            Deadline = a.Deadline
+                        }).ToList()
+                        : new List<AssignmentUsingTemplateResponse>();
+                }
+
+                return new BaseResponse<IEnumerable<RubricTemplateResponse>>(
+                    "Rubric templates retrieved successfully",
+                    StatusCodeEnum.OK_200,
+                    response);
             }
             catch (Exception ex)
             {
-                return new BaseResponse<IEnumerable<RubricTemplateResponse>>($"Error retrieving rubric templates: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
+                return new BaseResponse<IEnumerable<RubricTemplateResponse>>(
+                    $"Error retrieving rubric templates: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
             }
         }
+
 
         public async Task<BaseResponse<IEnumerable<RubricTemplateResponse>>> GetPublicRubricTemplatesAsync()
         {
             try
             {
-                var rubricTemplates = await _context.RubricTemplates
-                    .Include(rt => rt.CreatedByUser)
-                    .Include(rt => rt.Rubrics)
-                    .Include(rt => rt.CriteriaTemplates)
-                    .Where(rt => rt.IsPublic)
-                    .ToListAsync();
+                // Lấy tất cả rubric templates công khai
+                var rubricTemplates = await _rubricTemplateRepository.GetPublicWithDetailsAsync();
 
+                // Map sang response
                 var response = _mapper.Map<IEnumerable<RubricTemplateResponse>>(rubricTemplates);
-                return new BaseResponse<IEnumerable<RubricTemplateResponse>>("Public rubric templates retrieved successfully", StatusCodeEnum.OK_200, response);
+
+                // Lấy assignments cho từng rubric template
+                foreach (var template in response)
+                {
+                    var assignments = await _rubricTemplateRepository.GetAssignmentsUsingTemplateAsync(template.TemplateId);
+
+                    template.AssignmentsUsingTemplate = (assignments != null && assignments.Any())
+                        ? assignments.Select(a => new AssignmentUsingTemplateResponse
+                        {
+                            AssignmentId = a.AssignmentId,
+                            Title = a.Title,
+                            CourseName = a.CourseInstance?.Course?.CourseName,
+                            ClassName = $"{a.CourseInstance?.Course?.CourseName} - {a.CourseInstance?.SectionCode}",
+                            CampusName = a.CourseInstance?.Campus?.CampusName,
+                            Deadline = a.Deadline
+                        }).ToList()
+                        : new List<AssignmentUsingTemplateResponse>();
+                }
+
+                return new BaseResponse<IEnumerable<RubricTemplateResponse>>(
+                    "Public rubric templates retrieved successfully",
+                    StatusCodeEnum.OK_200,
+                    response);
             }
             catch (Exception ex)
             {
-                return new BaseResponse<IEnumerable<RubricTemplateResponse>>($"Error retrieving public rubric templates: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
+                return new BaseResponse<IEnumerable<RubricTemplateResponse>>(
+                    $"Error retrieving public rubric templates: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
             }
         }
+
 
         public async Task<BaseResponse<IEnumerable<RubricTemplateResponse>>> SearchRubricTemplatesAsync(string searchTerm)
         {

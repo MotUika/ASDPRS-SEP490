@@ -30,7 +30,7 @@ namespace ASDPRS_SEP490.Controllers
         [SwaggerOperation(Summary = "Tạo bài tập mới", Description = "Tạo mới một assignment cho lớp học phần")]
         [SwaggerResponse(201, "Tạo thành công", typeof(BaseResponse<AssignmentResponse>))]
         [SwaggerResponse(500, "Lỗi server")]
-        public async Task<IActionResult> CreateAssignment([FromBody] CreateAssignmentRequest request)
+        public async Task<IActionResult> CreateAssignment([FromForm] CreateAssignmentRequest request)
         {
             var result = await _assignmentService.CreateAssignmentAsync(request);
             return result.StatusCode switch
@@ -43,7 +43,7 @@ namespace ASDPRS_SEP490.Controllers
 
         [HttpPut]
         [SwaggerOperation(Summary = "Cập nhật bài tập", Description = "Cập nhật thông tin bài tập hiện có")]
-        public async Task<IActionResult> UpdateAssignment([FromBody] UpdateAssignmentRequest request)
+        public async Task<IActionResult> UpdateAssignment([FromForm] UpdateAssignmentRequest request)
         {
             var result = await _assignmentService.UpdateAssignmentAsync(request);
             return result.StatusCode switch
@@ -207,6 +207,22 @@ namespace ASDPRS_SEP490.Controllers
                 _ => StatusCode(500, result)
             };
         }
+
+        [HttpGet("template/{templateId}/assignments")]
+        [SwaggerOperation(
+    Summary = "Lấy danh sách assignment đang sử dụng rubric template này",
+    Description = "Trả về danh sách assignment có RubricTemplateId tương ứng."
+)]
+        [SwaggerResponse(200, "Danh sách assignment", typeof(BaseResponse<List<AssignmentResponse>>))]
+        [SwaggerResponse(404, "Không tìm thấy rubric template")]
+        public async Task<IActionResult> GetAssignmentsByRubricTemplate(int templateId)
+        {
+            var result = await _assignmentService.GetAssignmentsByRubricTemplateAsync(templateId);
+            if (result.StatusCode == StatusCodeEnum.OK_200)
+                return Ok(result);
+            return StatusCode((int)result.StatusCode, result);
+        }
+
 
         // ===================== STATISTICS =====================
 
