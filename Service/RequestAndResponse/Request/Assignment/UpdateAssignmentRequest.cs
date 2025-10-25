@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.AspNetCore.Http;
+using System;
 using System.ComponentModel.DataAnnotations;
 
 namespace Service.RequestAndResponse.Request.Assignment
@@ -8,7 +9,7 @@ namespace Service.RequestAndResponse.Request.Assignment
         [Required]
         public int AssignmentId { get; set; }
 
-        public int? RubricId { get; set; }
+        public int? RubricTemplateId { get; set; }
 
         [StringLength(100)]
         public string Title { get; set; }
@@ -18,6 +19,8 @@ namespace Service.RequestAndResponse.Request.Assignment
 
         [StringLength(1000)]
         public string Guidelines { get; set; }
+
+        public IFormFile? File { get; set; }
 
         public DateTime? StartDate { get; set; }
 

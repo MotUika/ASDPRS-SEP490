@@ -65,27 +65,27 @@ namespace API.Controllers
         /// </summary>
         /// <param name="request">Thông tin tạo rubric</param>
         /// <returns>Rubric vừa được tạo</returns>
-        [HttpPost]
-        [SwaggerOperation(
-            Summary = "Tạo rubric mới",
-            Description = "Tạo một rubric mới với thông tin được cung cấp"
-        )]
-        [SwaggerResponse(201, "Tạo thành công", typeof(BaseResponse<RubricResponse>))]
-        [SwaggerResponse(400, "Dữ liệu không hợp lệ")]
-        [SwaggerResponse(404, "Không tìm thấy template hoặc assignment")]
-        [SwaggerResponse(500, "Lỗi server")]
-        public async Task<IActionResult> CreateRubric([FromBody] CreateRubricRequest request)
-        {
-            if (!ModelState.IsValid)
-                return BadRequest(ModelState);
+        //[HttpPost]
+        //[SwaggerOperation(
+        //    Summary = "Tạo rubric mới",
+        //    Description = "Tạo một rubric mới với thông tin được cung cấp"
+        //)]
+        //[SwaggerResponse(201, "Tạo thành công", typeof(BaseResponse<RubricResponse>))]
+        //[SwaggerResponse(400, "Dữ liệu không hợp lệ")]
+        //[SwaggerResponse(404, "Không tìm thấy template hoặc assignment")]
+        //[SwaggerResponse(500, "Lỗi server")]
+        //public async Task<IActionResult> CreateRubric([FromBody] CreateRubricRequest request)
+        //{
+        //    if (!ModelState.IsValid)
+        //        return BadRequest(ModelState);
 
-            var result = await _rubricService.CreateRubricAsync(request);
+        //    var result = await _rubricService.CreateRubricAsync(request);
 
-            if (result.StatusCode == StatusCodeEnum.Created_201)
-                return CreatedAtAction(nameof(GetRubricById), new { id = result.Data?.RubricId }, result);
+        //    if (result.StatusCode == StatusCodeEnum.Created_201)
+        //        return CreatedAtAction(nameof(GetRubricById), new { id = result.Data?.RubricId }, result);
 
-            return StatusCode((int)result.StatusCode, result);
-        }
+        //    return StatusCode((int)result.StatusCode, result);
+        //}
 
         /// <summary>
         /// Cập nhật thông tin rubric

@@ -8,10 +8,15 @@ namespace Service.RequestAndResponse.Response.Assignment
     {
         public int AssignmentId { get; set; }
         public int CourseInstanceId { get; set; }
+        public int? RubricTemplateId { get; set; }
         public int? RubricId { get; set; }
         public string Title { get; set; }
         public string Description { get; set; }
         public string Guidelines { get; set; }
+        // File info
+        public string? FileUrl { get; set; }
+        public string? FileName { get; set; }
+
         public DateTime CreatedAt { get; set; }
         public DateTime? StartDate { get; set; }
         public DateTime Deadline { get; set; }

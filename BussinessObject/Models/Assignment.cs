@@ -12,6 +12,8 @@ public class Assignment
 
     public int? RubricId { get; set; }
 
+    public int? RubricTemplateId { get; set; }
+
     [Required]
     [StringLength(100)]
     public string Title { get; set; }
@@ -21,6 +23,12 @@ public class Assignment
 
     [StringLength(1000)]
     public string Guidelines { get; set; }
+
+    [StringLength(500)]
+    public string? FileUrl { get; set; }
+
+    [StringLength(255)]
+    public string? FileName { get; set; }
 
     [Required]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -74,6 +82,9 @@ public class Assignment
 
     [ForeignKey(nameof(ClonedFromAssignmentId))]
     public virtual Assignment ClonedFromAssignment { get; set; }
+
+    [ForeignKey("RubricTemplateId")]
+    public RubricTemplate RubricTemplate { get; set; }
 
     // Navigation properties
     public virtual ICollection<Submission> Submissions { get; set; } = new List<Submission>();

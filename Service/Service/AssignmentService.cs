@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Repository.IRepository;
 using Repository.Repository;
+using Service.Interface;
 using Service.IService;
 using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Enums;
@@ -36,6 +37,9 @@ namespace Service.Service
         private readonly ICriteriaFeedbackRepository _criteriaFeedbackRepository;
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly ISystemConfigService _systemConfigService;
+        private readonly IRubricService _rubricService;
+        private readonly IRubricTemplateRepository _rubricTemplateRepository;
+        private readonly IFileStorageService _fileStorageService;
 
 
         public AssignmentService(
@@ -50,6 +54,9 @@ namespace Service.Service
             IReviewAssignmentRepository reviewAssignmentRepository,
             ASDPRSContext context,
             INotificationService notificationService,
+            IRubricService rubricService,
+            IRubricTemplateRepository rubricTemplateRepository,
+            IFileStorageService fileStorageService,
             ICriteriaFeedbackRepository criteriaFeedbackRepository, IHttpContextAccessor httpContextAccessor, ISystemConfigService systemConfigService)
         {
             _assignmentRepository = assignmentRepository;
@@ -63,6 +70,9 @@ namespace Service.Service
             _reviewAssignmentRepository = reviewAssignmentRepository;
             _context = context;
             _notificationService = notificationService;
+            _rubricService = rubricService;
+            _rubricTemplateRepository = rubricTemplateRepository;
+            _fileStorageService = fileStorageService;
             _criteriaFeedbackRepository = criteriaFeedbackRepository;
             _httpContextAccessor = httpContextAccessor;
             _systemConfigService = systemConfigService;
@@ -91,14 +101,14 @@ namespace Service.Service
                         null);
                 }
 
-                // Validate rubric exists if provided
-                if (request.RubricId.HasValue)
+                // Validate rubric template exists if provided
+                if (request.RubricTemplateId.HasValue)
                 {
-                    var rubric = await _rubricRepository.GetByIdAsync(request.RubricId.Value);
-                    if (rubric == null)
+                    var rubricTemplate = await _rubricTemplateRepository.GetByIdAsync(request.RubricTemplateId.Value);
+                    if (rubricTemplate == null)
                     {
                         return new BaseResponse<AssignmentResponse>(
-                            "Rubric not found",
+                            "Rubric template not found",
                             StatusCodeEnum.NotFound_404,
                             null);
                     }
@@ -130,19 +140,11 @@ namespace Service.Service
                     request.PassThreshold = decimal.Parse(defaultPassThreshold ?? "50");
                 }
 
-                // Validate weights sum to 100
-                if (request.InstructorWeight + request.PeerWeight != 100)
-                {
-                    return new BaseResponse<AssignmentResponse>(
-                        "Instructor weight and peer weight must sum to 100%",
-                        StatusCodeEnum.BadRequest_400,
-                        null);
-                }
-
                 var assignment = new Assignment
                 {
                     CourseInstanceId = request.CourseInstanceId,
-                    RubricId = request.RubricId,
+                    RubricId = null,
+                    RubricTemplateId = request.RubricTemplateId,
                     Title = request.Title,
                     Description = request.Description,
                     Guidelines = request.Guidelines,
@@ -163,7 +165,49 @@ namespace Service.Service
                     Status = AssignmentStatusEnum.Draft.ToString()
                 };
 
+                if (request.File != null)
+                {
+                    var uploadResult = await _fileStorageService.UploadFileAsync(
+                        request.File,
+                        folder: $"assignments/{request.CourseInstanceId}"
+                    );
+
+                    if (!uploadResult.Success)
+                    {
+                        return new BaseResponse<AssignmentResponse>(
+                            $"Assignment created but failed to upload file: {uploadResult.ErrorMessage}",
+                            StatusCodeEnum.PartialContent_206,
+                            null
+                        );
+                    }
+
+                    assignment.FileUrl = uploadResult.FileUrl;
+                    assignment.FileName = uploadResult.FileName;
+                }
+
                 await _assignmentRepository.AddAsync(assignment);
+
+                // 8️⃣ Nếu có RubricTemplateId → clone rubric từ template và gán vào assignment
+                if (request.RubricTemplateId.HasValue)
+                {
+                    var rubricResult = await _rubricService.CreateRubricFromTemplateAsync(
+                        request.RubricTemplateId.Value,
+                        assignment.AssignmentId);
+
+                    if (rubricResult.StatusCode == StatusCodeEnum.Created_201 && rubricResult.Data != null)
+                    {
+                        assignment.RubricId = rubricResult.Data.RubricId;
+                        await _assignmentRepository.UpdateAsync(assignment);
+                    }
+                    else
+                    {
+                        return new BaseResponse<AssignmentResponse>(
+                            "Assignment created but failed to clone rubric from template.",
+                            StatusCodeEnum.PartialContent_206,
+                            await MapToResponse(assignment));
+                    }
+                }
+
                 await _notificationService.SendNewAssignmentNotificationAsync(assignment.AssignmentId, assignment.CourseInstanceId);
                 var response = await MapToResponse(assignment);
                 return new BaseResponse<AssignmentResponse>(
@@ -218,24 +262,36 @@ namespace Service.Service
                         null);
                 }
 
-                // Update fields if provided
-                if (request.RubricId.HasValue)
+                if (request.File != null)
                 {
-                    if (request.RubricId.Value == 0)
+                    var uploadResult = await _fileStorageService.UploadFileAsync(
+                        request.File,
+                        folder: $"assignments/{assignment.CourseInstanceId}"
+                    );
+
+                    if (!uploadResult.Success)
                     {
-                        assignment.RubricId = null;
+                        return new BaseResponse<AssignmentResponse>(
+                            $"Assignment updated but failed to upload file: {uploadResult.ErrorMessage}",
+                            StatusCodeEnum.PartialContent_206,
+                            await MapToResponse(assignment)
+                        );
                     }
-                    else
+
+                    assignment.FileUrl = uploadResult.FileUrl;
+                    assignment.FileName = uploadResult.FileName;
+                }
+
+                // Update fields if provided
+                if (request.RubricTemplateId.HasValue)
+                {
+                    var rubricTemplate = await _rubricTemplateRepository.GetByIdAsync(request.RubricTemplateId.Value);
+                    if (rubricTemplate == null)
                     {
-                        var rubric = await _rubricRepository.GetByIdAsync(request.RubricId.Value);
-                        if (rubric == null)
-                        {
-                            return new BaseResponse<AssignmentResponse>(
-                                "Rubric not found",
-                                StatusCodeEnum.NotFound_404,
-                                null);
-                        }
-                        assignment.RubricId = request.RubricId.Value;
+                        return new BaseResponse<AssignmentResponse>(
+                            "Rubric template not found",
+                            StatusCodeEnum.NotFound_404,
+                            null);
                     }
                 }
 
@@ -291,6 +347,29 @@ namespace Service.Service
 
                 if (request.IncludeAIScore.HasValue)
                     assignment.IncludeAIScore = request.IncludeAIScore.Value;
+
+                // Nếu có thay đổi RubricTemplateId → clone rubric mới từ template
+                if (request.RubricTemplateId.HasValue &&
+            (!assignment.RubricTemplateId.HasValue ||
+             assignment.RubricTemplateId.Value != request.RubricTemplateId.Value))
+                {
+                    var rubricResult = await _rubricService.CreateRubricFromTemplateAsync(
+                        request.RubricTemplateId.Value,
+                        assignment.AssignmentId);
+
+                    if (rubricResult.StatusCode == StatusCodeEnum.Created_201 && rubricResult.Data != null)
+                    {
+                        assignment.RubricTemplateId = request.RubricTemplateId.Value;
+                        assignment.RubricId = rubricResult.Data.RubricId;
+                    }
+                    else
+                    {
+                        return new BaseResponse<AssignmentResponse>(
+                            "Assignment updated, but failed to clone rubric from new template.",
+                            StatusCodeEnum.PartialContent_206,
+                            await MapToResponse(assignment));
+                    }
+                }
 
                 await _assignmentRepository.UpdateAsync(assignment);
 
@@ -924,6 +1003,8 @@ namespace Service.Service
                 Title = assignment.Title,
                 Description = assignment.Description,
                 Guidelines = assignment.Guidelines,
+                FileUrl = assignment.FileUrl,
+                FileName = assignment.FileName,
                 CreatedAt = assignment.CreatedAt,
                 StartDate = assignment.StartDate,
                 Deadline = assignment.Deadline,
@@ -1370,6 +1451,37 @@ namespace Service.Service
                     null);
             }
         }
+
+        public async Task<BaseResponse<List<AssignmentResponse>>> GetAssignmentsByRubricTemplateAsync(int rubricTemplateId)
+        {
+            var rubricTemplate = await _rubricTemplateRepository.GetByIdAsync(rubricTemplateId);
+            if (rubricTemplate == null)
+            {
+                return new BaseResponse<List<AssignmentResponse>>(
+                    "Rubric template not found",
+                    StatusCodeEnum.NotFound_404,
+                    null);
+            }
+
+            var assignments = await _assignmentRepository.GetAssignmentsByRubricTemplateIdAsync(rubricTemplateId);
+
+            var responses = assignments.Select(a => new AssignmentResponse
+            {
+                AssignmentId = a.AssignmentId,
+                Title = a.Title,
+                CourseInstanceId = a.CourseInstanceId,
+                RubricTemplateId = a.RubricTemplateId,
+                CreatedAt = a.CreatedAt,
+                Deadline = a.Deadline
+            }).ToList();
+
+            return new BaseResponse<List<AssignmentResponse>>(
+                $"Found {responses.Count} assignments using this rubric template.",
+                StatusCodeEnum.OK_200,
+                responses);
+        }
+
+
 
         public async Task<BaseResponse<AssignmentResponse>> PublishAssignmentAsync(int assignmentId)
         {

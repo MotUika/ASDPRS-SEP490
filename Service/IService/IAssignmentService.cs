@@ -20,6 +20,7 @@ namespace Service.IService
         Task<BaseResponse<List<AssignmentSummaryResponse>>> GetAssignmentsByStudentAsync(int studentId);
         Task<BaseResponse<List<AssignmentSummaryResponse>>> GetActiveAssignmentsAsync();
         Task<BaseResponse<List<AssignmentSummaryResponse>>> GetOverdueAssignmentsAsync();
+        Task<BaseResponse<List<AssignmentResponse>>> GetAssignmentsByRubricTemplateAsync(int rubricTemplateId);
         Task<BaseResponse<bool>> ExtendDeadlineAsync(int assignmentId, DateTime newDeadline);
         Task<BaseResponse<bool>> UpdateRubricAsync(int assignmentId, int rubricId);
         Task<BaseResponse<AssignmentStatsResponse>> GetAssignmentStatisticsAsync(int assignmentId);

@@ -15,5 +15,19 @@ namespace Service.RequestAndResponse.Response.RubricTemplate
         public int RubricCount { get; set; }
         public int CriteriaTemplateCount { get; set; }
         public List<CriteriaTemplateResponse> CriteriaTemplates { get; set; }
+
+        // Thêm danh sách assignment đang dùng rubric template này
+        public List<AssignmentUsingTemplateResponse> AssignmentsUsingTemplate { get; set; }
+    }
+
+    // Class phụ chứa thông tin assignment + lớp + môn + campus
+    public class AssignmentUsingTemplateResponse
+    {
+        public int AssignmentId { get; set; }
+        public string Title { get; set; }
+        public string CourseName { get; set; }
+        public string ClassName { get; set; }
+        public string CampusName { get; set; }
+        public DateTime? Deadline { get; set; }
     }
 }

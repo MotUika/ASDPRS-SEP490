@@ -285,6 +285,20 @@ namespace Repository.Repository
             return canSubmit;
         }
 
+        public async Task<List<Assignment>> GetAssignmentsByRubricTemplateIdAsync(int rubricTemplateId)
+        {
+            return await _context.Assignments
+                .Include(a => a.CourseInstance)
+                    .ThenInclude(ci => ci.Course)
+                .Include(a => a.CourseInstance)
+                    .ThenInclude(ci => ci.Campus)
+                .Include(a => a.Rubric)
+                .Where(a => a.RubricTemplateId == rubricTemplateId)
+                .OrderByDescending(a => a.CreatedAt)
+                .ToListAsync();
+        }
+
+
         Task IAssignmentRepository.AddAsync(Assignment assignment)
         {
             return AddAsync(assignment);
