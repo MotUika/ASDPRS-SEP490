@@ -96,5 +96,24 @@ namespace Repository.Repository
                 .AsNoTracking()
                 .ToListAsync();
         }
+
+        public async Task<decimal?> GetPeerAverageScoreBySubmissionIdAsync(int submissionId)
+        {
+            var peerScores = await _context.ReviewAssignments
+                .Where(ra => ra.SubmissionId == submissionId)
+                .SelectMany(ra => ra.Reviews)
+                .Where(r => r.OverallScore.HasValue)
+                .Select(r => r.OverallScore.Value)
+                .ToListAsync();
+
+            if (peerScores == null || peerScores.Count == 0)
+                return null;
+
+            return peerScores.Average();
+        }
+
+       
+
+
     }
 }

@@ -18,5 +18,6 @@ namespace Repository.IRepository
         Task<IEnumerable<Review>> GetBySubmissionIdAsync(int submissionId);
         Task<IEnumerable<Review>> GetByReviewerIdAsync(int reviewerId);
         Task<IEnumerable<Review>> GetByAssignmentIdAsync(int assignmentId);
+        Task<IEnumerable<Review>> GetPeerReviewsBySubmissionIdAsync(int submissionId);
     }
 }

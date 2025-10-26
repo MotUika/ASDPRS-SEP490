@@ -169,7 +169,7 @@ namespace Service.Service
                 {
                     var uploadResult = await _fileStorageService.UploadFileAsync(
                         request.File,
-                        folder: $"assignments/{request.CourseInstanceId}"
+                        folder: $"assignments/{request.CourseInstanceId}", makePublic: true
                     );
 
                     if (!uploadResult.Success)
@@ -266,7 +266,7 @@ namespace Service.Service
                 {
                     var uploadResult = await _fileStorageService.UploadFileAsync(
                         request.File,
-                        folder: $"assignments/{assignment.CourseInstanceId}"
+                        folder: $"assignments/{assignment.CourseInstanceId}", makePublic: true
                     );
 
                     if (!uploadResult.Success)

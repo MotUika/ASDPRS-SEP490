@@ -14,5 +14,6 @@ namespace Repository.IRepository
         Task DeleteAsync(ReviewAssignment reviewAssignment);
         Task<IEnumerable<ReviewAssignment>> GetOverdueAsync(DateTime currentTime);
         Task<List<Submission>> GetAvailableSubmissionsForReviewerAsync(int assignmentId, int reviewerId);
+        Task<decimal?> GetPeerAverageScoreBySubmissionIdAsync(int submissionId);
     }
 }

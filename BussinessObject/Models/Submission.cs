@@ -40,6 +40,14 @@ namespace BussinessObject.Models
         [ForeignKey("UserId")]
         public User User { get; set; }
 
+        public decimal? InstructorScore { get; set; }
+        public decimal? PeerAverageScore { get; set; }
+        public decimal? FinalScore { get; set; }
+        [StringLength(1000)]
+        public string? Feedback { get; set; }
+        public DateTime? GradedAt { get; set; }
+
+
         public ICollection<ReviewAssignment> ReviewAssignments { get; set; }
         public ICollection<AISummary> AISummaries { get; set; }
         public ICollection<RegradeRequest> RegradeRequests { get; set; }

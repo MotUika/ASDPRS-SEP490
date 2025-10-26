@@ -883,5 +883,41 @@ namespace Service.Service
                 CriteriaFeedbacks = criteriaFeedbackResponses
             };
         }
+
+        public async Task<IEnumerable<ReviewResponse>> GetPeerReviewsBySubmissionIdAsync(int submissionId)
+        {
+            try
+            {
+                var reviews = await _reviewRepository.GetPeerReviewsBySubmissionIdAsync(submissionId);
+
+                if (reviews == null || !reviews.Any())
+                {
+                    Console.WriteLine($"⚠️ No peer reviews found for submission {submissionId}");
+                    return Enumerable.Empty<ReviewResponse>();
+                }
+
+                var response = reviews.Select(r => new ReviewResponse
+                {
+                    ReviewId = r.ReviewId,
+                    SubmissionId = r.ReviewAssignment?.SubmissionId ?? 0,
+                    ReviewerName = r.ReviewAssignment?.ReviewerUser?.UserName,
+                    ReviewerEmail = r.ReviewAssignment?.ReviewerUser?.Email,
+                    OverallScore = r.OverallScore,
+                    GeneralFeedback = r.GeneralFeedback,
+                    ReviewedAt = r.ReviewedAt,
+                    ReviewType = r.ReviewType
+                }).ToList();
+
+                Console.WriteLine($"✅ Found {response.Count} peer reviews for submission {submissionId}");
+                return response;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Error retrieving peer reviews: {ex.Message}");
+                return Enumerable.Empty<ReviewResponse>();
+            }
+        }
+
+
     }
 }

@@ -69,7 +69,7 @@ namespace Service.Service
                 if (assignment == null)
                     return new BaseResponse<SubmissionResponse>("Assignment not found", StatusCodeEnum.NotFound_404, null);
 
-                
+
                 if (assignment.Status != AssignmentStatusEnum.Active.ToString())
                 {
                     return new BaseResponse<SubmissionResponse>(
@@ -144,7 +144,7 @@ namespace Service.Service
                 return new BaseResponse<SubmissionResponse>("An error occurred while creating the submission", StatusCodeEnum.InternalServerError_500, null);
             }
         }
-        
+
         private async Task AutoAssignReviewsForNewSubmission(int assignmentId)
         {
             try
@@ -804,5 +804,226 @@ namespace Service.Service
                     null);
             }
         }
+
+        public async Task<BaseResponse<GradeSubmissionResponse>> GradeSubmissionAsync(GradeSubmissionRequest request)
+        {
+            try
+            {
+                // 1️⃣ Kiểm tra submission
+                var submission = await _submissionRepository.GetByIdAsync(request.SubmissionId);
+                if (submission == null)
+                    return new BaseResponse<GradeSubmissionResponse>("Submission not found", StatusCodeEnum.NotFound_404, null);
+
+                // 2️⃣ Kiểm tra assignment
+                var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
+                if (assignment == null)
+                    return new BaseResponse<GradeSubmissionResponse>("Assignment not found", StatusCodeEnum.NotFound_404, null);
+
+                // 3️⃣ Validate điểm instructor nhập
+                if (request.InstructorScore < 0 || request.InstructorScore > 100)
+                {
+                    return new BaseResponse<GradeSubmissionResponse>(
+                        "Instructor score must be between 0 and 100",
+                        StatusCodeEnum.BadRequest_400,
+                        null
+                    );
+                }
+
+                // 4️⃣ Lấy điểm trung bình peer review
+                var peerAverage = await _reviewAssignmentRepository.GetPeerAverageScoreBySubmissionIdAsync(submission.SubmissionId);
+                var peerAvg = peerAverage ?? 0;
+
+                // 5️⃣ Normalize trọng số
+                var instructorWeight = assignment.InstructorWeight;
+                var peerWeight = assignment.PeerWeight;
+
+                // Nếu cả hai = 0, gán mặc định
+                if (instructorWeight == 0 && peerWeight == 0)
+                {
+                    instructorWeight = 50.0m;
+                    peerWeight = 50.0m;
+                }
+
+                // Nếu tổng khác 100, tự động chuẩn hóa
+                if (instructorWeight + peerWeight != 100)
+                {
+                    var total = instructorWeight + peerWeight;
+                    instructorWeight = (instructorWeight / total) * 100;
+                    peerWeight = (peerWeight / total) * 100;
+                }
+
+                // 6️⃣ Tính điểm cuối cùng
+                var finalScore = Math.Round(
+                    (request.InstructorScore * instructorWeight / 100) +
+                    (peerAvg * peerWeight / 100), 2);
+
+                // 7️⃣ Cập nhật submission
+                submission.InstructorScore = request.InstructorScore;
+                submission.PeerAverageScore = peerAvg;
+                submission.FinalScore = finalScore;
+                submission.Feedback = request.Feedback ?? submission.Feedback;
+                submission.GradedAt = DateTime.UtcNow;
+                submission.Status = "Graded";
+
+                if (request.PublishImmediately)
+                    submission.IsPublic = true;
+
+                await _submissionRepository.UpdateAsync(submission);
+
+                // 8️⃣ Chuẩn bị response
+                var response = new GradeSubmissionResponse
+                {
+                    SubmissionId = submission.SubmissionId,
+                    AssignmentId = submission.AssignmentId,
+                    UserId = submission.UserId,
+                    InstructorScore = submission.InstructorScore,
+                    PeerAverageScore = submission.PeerAverageScore,
+                    FinalScore = submission.FinalScore,
+                    Feedback = submission.Feedback,
+                    GradedAt = submission.GradedAt,
+                    FileUrl = submission.FileUrl,
+                    FileName = submission.FileName,
+                    Status = submission.Status,
+                    StudentName = submission.User?.UserName,
+                    CourseName = submission.Assignment?.CourseInstance?.Course?.CourseName,
+                    AssignmentTitle = submission.Assignment?.Title
+                };
+
+                _logger.LogInformation($"✅ Submission {submission.SubmissionId} graded successfully. FinalScore: {finalScore}");
+
+                return new BaseResponse<GradeSubmissionResponse>(
+                    "Submission graded successfully",
+                    StatusCodeEnum.OK_200,
+                    response
+                );
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "❌ Error grading submission");
+                return new BaseResponse<GradeSubmissionResponse>(
+                    "An error occurred while grading submission",
+                    StatusCodeEnum.InternalServerError_500,
+                    null
+                );
+            }
+        }
+
+
+
+
+        public async Task<BaseResponse<bool>> PublishGradesAsync(PublishGradesRequest request)
+        {
+            try
+            {
+                var assignment = await _assignmentRepository.GetByIdAsync(request.AssignmentId);
+                if (assignment == null)
+                    return new BaseResponse<bool>("Assignment not found", StatusCodeEnum.NotFound_404, false);
+
+                var submissions = await _submissionRepository.GetByAssignmentIdAsync(request.AssignmentId);
+                if (!submissions.Any())
+                    return new BaseResponse<bool>("No submissions found", StatusCodeEnum.NotFound_404, false);
+
+                // Đếm tỷ lệ nộp bài
+                var totalStudents = await _context.CourseStudents
+                    .CountAsync(cs => cs.CourseInstanceId == assignment.CourseInstanceId);
+
+                var submittedCount = submissions.Count(s => s.Status == "Submitted" || s.Status == "Graded");
+                var submissionRate = (decimal)submittedCount / totalStudents * 100;
+
+                var canPublish = submissionRate >= 50 || DateTime.UtcNow >= (assignment.FinalDeadline ?? assignment.Deadline);
+
+                if (!canPublish && !request.ForcePublish)
+                {
+                    return new BaseResponse<bool>(
+                        "Cannot publish yet. Less than 50% submissions or before FinalDeadline.",
+                        StatusCodeEnum.BadRequest_400,
+                        false
+                    );
+                }
+
+                foreach (var s in submissions.Where(s => s.Status == "Graded"))
+                {
+                    s.IsPublic = true;
+                }
+
+                await _context.SaveChangesAsync();
+
+                return new BaseResponse<bool>(
+                    "Grades published successfully",
+                    StatusCodeEnum.OK_200,
+                    true
+                );
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error publishing grades");
+                return new BaseResponse<bool>(
+                    "An error occurred while publishing grades",
+                    StatusCodeEnum.InternalServerError_500,
+                    false
+                );
+            }
+        }
+
+        public async Task<BaseResponse<IEnumerable<SubmissionSummaryResponse>>> GetSubmissionSummaryAsync(
+            int? courseId, int? classId, int? assignmentId)
+        {
+            try
+            {
+                var query = _context.Submissions
+                    .Include(s => s.User)
+                    .Include(s => s.Assignment)
+                        .ThenInclude(a => a.CourseInstance)
+                            .ThenInclude(ci => ci.Course)
+                    .AsQueryable();
+
+                if (assignmentId.HasValue)
+                    query = query.Where(s => s.AssignmentId == assignmentId.Value);
+                else if (classId.HasValue)
+                    query = query.Where(s => s.Assignment.CourseInstanceId == classId.Value);
+                else if (courseId.HasValue)
+                    query = query.Where(s => s.Assignment.CourseInstance.CourseId == courseId.Value);
+
+                var submissions = await query.ToListAsync();
+
+                if (!submissions.Any())
+                {
+                    return new BaseResponse<IEnumerable<SubmissionSummaryResponse>>(
+                        "No submissions found",
+                        StatusCodeEnum.NoContent_204,
+                        Enumerable.Empty<SubmissionSummaryResponse>());
+                }
+
+                var result = submissions.Select(s => new SubmissionSummaryResponse
+                {
+                    SubmissionId = s.SubmissionId,
+                    AssignmentId = s.AssignmentId,
+                    UserId = s.UserId,
+                    StudentName = s.User?.UserName,
+                    StudentEmail = s.User?.Email,
+                    CourseName = s.Assignment?.CourseInstance?.Course?.CourseName,
+                    ClassName = s.Assignment?.CourseInstance?.SectionCode,
+                    AssignmentTitle = s.Assignment?.Title,
+                    PeerAverageScore = s.PeerAverageScore ?? 0,
+                    InstructorScore = s.InstructorScore ?? 0,
+                    FinalScore = s.FinalScore ?? 0,
+                    Status = s.Status,
+                    GradedAt = s.GradedAt
+                }).OrderByDescending(x => x.GradedAt).ToList();
+
+                return new BaseResponse<IEnumerable<SubmissionSummaryResponse>>(
+                    "Submission summary fetched successfully",
+                    StatusCodeEnum.OK_200,
+                    result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching submission summary");
+                return new BaseResponse<IEnumerable<SubmissionSummaryResponse>>(
+                    "An error occurred while fetching submission summary",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
+            }
+        } 
     }
 }
