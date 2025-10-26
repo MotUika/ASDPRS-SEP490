@@ -20,9 +20,12 @@ namespace Service.RequestAndResponse.Response.Review
         public DateTime? EditDeadline { get; set; }
         public string EditStatus { get; set; }
 
-
         // Additional info from related entities
         public int SubmissionId { get; set; }
+
+        // 🧍 Reviewer Info (THÊM DÒNG NÀY)
+        public int? ReviewerId { get; set; }
+
         public string ReviewerName { get; set; }
         public string ReviewerEmail { get; set; }
         public string AssignmentTitle { get; set; }

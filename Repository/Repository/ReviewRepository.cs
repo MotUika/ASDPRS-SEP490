@@ -61,5 +61,17 @@ namespace Repository.Repository
                 .Where(r => r.ReviewAssignment.Submission.AssignmentId == assignmentId)
                 .ToListAsync();
         }
+
+        public async Task<IEnumerable<Review>> GetPeerReviewsBySubmissionIdAsync(int submissionId)
+        {
+            return await _context.ReviewAssignments
+                .Where(ra => ra.SubmissionId == submissionId)
+                .Include(ra => ra.Reviews)
+                .SelectMany(ra => ra.Reviews)
+                .Include(r => r.ReviewAssignment)
+                    .ThenInclude(ra => ra.ReviewerUser)
+                .ToListAsync();
+        }
+
     }
 }
