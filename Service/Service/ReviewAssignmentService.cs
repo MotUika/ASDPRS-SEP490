@@ -1174,6 +1174,7 @@ namespace Service.Service
             }
         }
 
+        // Trong ReviewAssignmentService
         public async Task<BaseResponse<ReviewAssignmentDetailResponse>> GetRandomReviewAssignmentAsync(int assignmentId, int reviewerId)
         {
             using var transaction = await _context.Database.BeginTransactionAsync();
@@ -1183,103 +1184,85 @@ namespace Service.Service
                 if (assignment == null)
                 {
                     return new BaseResponse<ReviewAssignmentDetailResponse>(
-                        "Assignment not found",
-                        StatusCodeEnum.NotFound_404,
-                        null);
+                        "Assignment not found", StatusCodeEnum.NotFound_404, null);
                 }
 
-                // Check if assignment is in review phase
                 if (assignment.Status != "InReview")
                 {
                     return new BaseResponse<ReviewAssignmentDetailResponse>(
-                        "Assignment is not in review phase yet",
-                        StatusCodeEnum.BadRequest_400,
-                        null);
+                        "Assignment is not in review phase yet", StatusCodeEnum.BadRequest_400, null);
                 }
 
-                // Get all submissions excluding reviewer's own
-                var submissions = await _submissionRepository.GetByAssignmentIdAsync(assignmentId);
-                var reviewerSubmissions = submissions.Where(s => s.UserId == reviewerId)
-                                                    .Select(s => s.SubmissionId)
-                                                    .ToHashSet(); // HashSet for fast lookup
-                                                                  // Get already reviewed submissions  
-                var existingReviews = await _reviewAssignmentRepository.GetByReviewerIdAsync(reviewerId);
-                var reviewedSubmissionIds = existingReviews.Select(ra => ra.SubmissionId)
-                                                          .ToHashSet(); // HashSet for fast lookup
+                var existingInProgressAssignment = await _context.ReviewAssignments
+                    .Include(ra => ra.Submission)
+                    .ThenInclude(s => s.Assignment)
+                    .FirstOrDefaultAsync(ra =>
+                        ra.ReviewerUserId == reviewerId &&
+                        ra.Submission.AssignmentId == assignmentId &&
+                        (ra.Status == "Assigned" || ra.Status == "In Progress"));
 
+                if (existingInProgressAssignment != null)
+                {
+                    await transaction.CommitAsync();
+                    return await GetReviewAssignmentDetailsAsync(existingInProgressAssignment.ReviewAssignmentId, reviewerId);
+                }
+
+                // 🔴 ƯU TIÊN 2: Tìm bài đã được gán nhưng chưa bắt đầu (có thể do back ra)
+                var existingAssignedAssignment = await _context.ReviewAssignments
+                    .Include(ra => ra.Submission)
+                    .ThenInclude(s => s.Assignment)
+                    .FirstOrDefaultAsync(ra =>
+                        ra.ReviewerUserId == reviewerId &&
+                        ra.Submission.AssignmentId == assignmentId &&
+                        ra.Status == "Assigned");
+
+                if (existingAssignedAssignment != null)
+                {
+                    // Update status để tracking
+                    existingAssignedAssignment.Status = "In Progress";
+                    await _reviewAssignmentRepository.UpdateAsync(existingAssignedAssignment);
+                    await transaction.CommitAsync();
+
+                    return await GetReviewAssignmentDetailsAsync(existingAssignedAssignment.ReviewAssignmentId, reviewerId);
+                }
+
+                // Nếu không có bài nào đang dở, mới tìm bài mới
                 var availableSubmissions = await _reviewAssignmentRepository.GetAvailableSubmissionsForReviewerAsync(assignmentId, reviewerId);
 
                 if (!availableSubmissions.Any())
                 {
                     return new BaseResponse<ReviewAssignmentDetailResponse>(
-                        "No available submissions to review",
-                        StatusCodeEnum.NotFound_404,
-                        null);
+                        "No available submissions to review", StatusCodeEnum.NotFound_404, null);
                 }
 
-                // Filter out already reviewed submissions
-                var newSubmissions = availableSubmissions
-                    .Where(s => !reviewedSubmissionIds.Contains(s.SubmissionId))
-                    .ToList();
-
-                if (!newSubmissions.Any())
-                {
-                    return new BaseResponse<ReviewAssignmentDetailResponse>(
-                        "You have already reviewed all available submissions",
-                        StatusCodeEnum.NotFound_404,
-                        null);
-                }
-
-                // Bổ sung: Ưu tiên bài ít review nhất (lấy số review hiện có của submission)
-                var submissionsWithReviewCount = newSubmissions.Select(s => new
+                // Logic chọn bài ngẫu nhiên (giữ nguyên)
+                var submissionsWithReviewCount = availableSubmissions.Select(s => new
                 {
                     Submission = s,
                     ReviewCount = _context.ReviewAssignments.Count(ra => ra.SubmissionId == s.SubmissionId && ra.Status == "Completed")
                 }).ToList();
 
-                // Nhóm theo ReviewCount ít nhất
                 var minReviewCount = submissionsWithReviewCount.Min(x => x.ReviewCount);
                 var prioritySubmissions = submissionsWithReviewCount.Where(x => x.ReviewCount == minReviewCount)
                                                                    .Select(x => x.Submission)
                                                                    .ToList();
 
-                // Random trong nhóm ưu tiên
                 var random = _threadLocalRandom.Value;
                 var selectedSubmission = prioritySubmissions[random.Next(prioritySubmissions.Count)];
 
-                // Tạo hoặc lấy review assignment
-                var existingAssignment = existingReviews
-                    .FirstOrDefault(ra => ra.SubmissionId == selectedSubmission.SubmissionId);
-
-                ReviewAssignment reviewAssignment;
-                
-                if (existingAssignment == null)
+                var reviewAssignment = new ReviewAssignment
                 {
-                    reviewAssignment = new ReviewAssignment
-                    {
-                        SubmissionId = selectedSubmission.SubmissionId,
-                        ReviewerUserId = reviewerId,
+                    SubmissionId = selectedSubmission.SubmissionId,
+                    ReviewerUserId = reviewerId,
                         Status = "Assigned",
-                        AssignedAt = DateTime.UtcNow,
-                        Deadline = assignment.ReviewDeadline ?? DateTime.UtcNow.AddDays(7),
-                        IsAIReview = false
-                    };
-                    
-                    await _reviewAssignmentRepository.AddAsync(reviewAssignment);
-                }
-                else
-                {
-                    reviewAssignment = existingAssignment;
-                }
+                    AssignedAt = DateTime.UtcNow,
+                    Deadline = assignment.ReviewDeadline ?? DateTime.UtcNow.AddDays(7),
+                    IsAIReview = false
+                };
 
-                // Tự động check và update status Overdue nếu quá hạn
-                if (reviewAssignment.Deadline < DateTime.UtcNow && reviewAssignment.Status != "Completed")
-                {
-                    reviewAssignment.Status = "Overdue";
-                    await _reviewAssignmentRepository.UpdateAsync(reviewAssignment);
-                }
-
+                await _reviewAssignmentRepository.AddAsync(reviewAssignment);
                 await transaction.CommitAsync();
+
                 return await GetReviewAssignmentDetailsAsync(reviewAssignment.ReviewAssignmentId, reviewerId);
             }
             catch (Exception ex)
@@ -1287,12 +1270,9 @@ namespace Service.Service
                 await transaction.RollbackAsync();
                 _logger.LogError(ex, "Error getting random review assignment");
                 return new BaseResponse<ReviewAssignmentDetailResponse>(
-                    $"Error getting random review assignment: {ex.Message}",
-                    StatusCodeEnum.InternalServerError_500,
-                    null);
+                    $"Error getting random review assignment: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
-        
         public async Task<BaseResponse<List<ReviewAssignmentResponse>>> GetAvailableReviewsForStudentAsync(int assignmentId, int studentId)
         {
             try

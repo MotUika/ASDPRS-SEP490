@@ -1,4 +1,5 @@
-﻿using System;
+﻿using BussinessObject.Models;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -11,6 +12,8 @@ namespace Service.IService
         Task<string> SummarizeAsync(string text, string model = null, int maxOutputTokens = 800);
         Task<string> AnalyzeDocumentAsync(string text, string analysisType);
         Task<string> GenerateReviewAsync(string documentText, string context);
+        Task<string> GenerateEnhancedReviewAsync(string documentText, string context, List<Criteria> criteria);
+        Task<string> GenerateCriteriaReviewAsync(string documentText, Criteria criteria, string context);
     }
 
 }
