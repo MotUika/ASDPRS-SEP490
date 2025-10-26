@@ -360,18 +360,18 @@ namespace Service.Service
 
                 if (regradeRequest.Submission.User != null)
                 {
-                    response.RequestedByStudent = _mapper.Map<UserInfoResponse>(regradeRequest.Submission.User);
+                    response.RequestedByStudent = _mapper.Map<UserInfoRegradeResponse>(regradeRequest.Submission.User);
                 }
 
                 if (regradeRequest.Submission.Assignment != null)
                 {
-                    response.Assignment = _mapper.Map<AssignmentInfoResponse>(regradeRequest.Submission.Assignment);
+                    response.Assignment = _mapper.Map<AssignmentInfoRegradeResponse>(regradeRequest.Submission.Assignment);
                 }
             }
 
             if (regradeRequest.ReviewedByInstructor != null)
             {
-                response.ReviewedByInstructor = _mapper.Map<UserInfoResponse>(regradeRequest.ReviewedByInstructor);
+                response.ReviewedByInstructor = _mapper.Map<UserInfoRegradeResponse>(regradeRequest.ReviewedByInstructor);
             }
 
             return response;
