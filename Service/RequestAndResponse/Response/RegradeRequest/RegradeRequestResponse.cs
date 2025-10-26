@@ -14,9 +14,9 @@ namespace Service.RequestAndResponse.Response.RegradeRequest
 
         // Navigation properties for detailed view
         public SubmissionInfoResponse Submission { get; set; }
-        public UserInfoResponse RequestedByStudent { get; set; }
-        public UserInfoResponse ReviewedByInstructor { get; set; }
-        public AssignmentInfoResponse Assignment { get; set; }
+        public UserInfoRegradeResponse RequestedByStudent { get; set; }
+        public UserInfoRegradeResponse ReviewedByInstructor { get; set; }
+        public AssignmentInfoRegradeResponse Assignment { get; set; }
     }
 
     public class SubmissionInfoResponse
@@ -27,7 +27,7 @@ namespace Service.RequestAndResponse.Response.RegradeRequest
         public string Status { get; set; }
     }
 
-    public class UserInfoResponse
+    public class UserInfoRegradeResponse
     {
         public int UserId { get; set; }
         public string FullName { get; set; }
@@ -35,7 +35,7 @@ namespace Service.RequestAndResponse.Response.RegradeRequest
         public string Role { get; set; }
     }
 
-    public class AssignmentInfoResponse
+    public class AssignmentInfoRegradeResponse
     {
         public int AssignmentId { get; set; }
         public string Title { get; set; }
