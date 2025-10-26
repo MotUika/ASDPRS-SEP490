@@ -481,9 +481,12 @@ namespace DataAccessLayer.Migrations
                         .Annotation("SqlServer:Identity", "1, 1"),
                     CourseInstanceId = table.Column<int>(type: "int", nullable: false),
                     RubricId = table.Column<int>(type: "int", nullable: true),
+                    RubricTemplateId = table.Column<int>(type: "int", nullable: true),
                     Title = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
                     Description = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: false),
                     Guidelines = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: false),
+                    FileUrl = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    FileName = table.Column<string>(type: "nvarchar(255)", maxLength: 255, nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
                     StartDate = table.Column<DateTime>(type: "datetime2", nullable: true),
                     Deadline = table.Column<DateTime>(type: "datetime2", nullable: false),
@@ -516,6 +519,11 @@ namespace DataAccessLayer.Migrations
                         principalTable: "CourseInstances",
                         principalColumn: "CourseInstanceId",
                         onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_Assignments_RubricTemplates_RubricTemplateId",
+                        column: x => x.RubricTemplateId,
+                        principalTable: "RubricTemplates",
+                        principalColumn: "TemplateId");
                 });
 
             migrationBuilder.CreateTable(
@@ -943,7 +951,7 @@ namespace DataAccessLayer.Migrations
             migrationBuilder.InsertData(
                 table: "AspNetUsers",
                 columns: new[] { "Id", "AccessFailedCount", "AvatarUrl", "CampusId", "ConcurrencyStamp", "CreatedAt", "Email", "EmailConfirmed", "FirstName", "IsActive", "LastName", "LockoutEnabled", "LockoutEnd", "NormalizedEmail", "NormalizedUserName", "PasswordHash", "PhoneNumber", "PhoneNumberConfirmed", "SecurityStamp", "StudentCode", "TwoFactorEnabled", "UserName" },
-                values: new object[] { 1, 0, null, 1, "e5cdedef-78e0-4c5e-b4d0-411fb8ed6608", new DateTime(2025, 10, 23, 7, 11, 40, 513, DateTimeKind.Utc).AddTicks(8881), "admin@example.com", true, "Admin", true, "User", true, null, "ADMIN@EXAMPLE.COM", "ADMIN", "AQAAAAIAAYagAAAAEK95SlxvEPzqxJyTxIof0ufhmHVKdEGcuw7MxCBj92JUehpXlaMI0F4RrX3mzLDNzA==", null, false, "5c93463f-f720-4ee0-9621-c752bf13bd06", "ADMIN001", false, "admin" });
+                values: new object[] { 1, 0, null, 1, "e1e55997-c249-40b3-b5c0-e8e3b949125d", new DateTime(2025, 10, 26, 6, 23, 19, 634, DateTimeKind.Utc).AddTicks(5899), "admin@example.com", true, "Admin", true, "User", true, null, "ADMIN@EXAMPLE.COM", "ADMIN", "AQAAAAIAAYagAAAAEK95SlxvEPzqxJyTxIof0ufhmHVKdEGcuw7MxCBj92JUehpXlaMI0F4RrX3mzLDNzA==", null, false, "523e95c0-2c68-42bd-94f7-b87dc1d07310", "ADMIN001", false, "admin" });
 
             migrationBuilder.InsertData(
                 table: "AspNetUserRoles",
@@ -955,10 +963,10 @@ namespace DataAccessLayer.Migrations
                 columns: new[] { "ConfigId", "ConfigKey", "ConfigValue", "Description", "UpdatedAt", "UpdatedByUserId" },
                 values: new object[,]
                 {
-                    { 100, "ScorePrecision", "0.5", "Độ chính xác điểm số (0.25, 0.5, 1.0)", new DateTime(2025, 10, 23, 7, 11, 40, 513, DateTimeKind.Utc).AddTicks(8933), 1 },
-                    { 101, "AISummaryMaxTokens", "1000", "Số token tối đa cho AI summary", new DateTime(2025, 10, 23, 7, 11, 40, 513, DateTimeKind.Utc).AddTicks(8938), 1 },
-                    { 102, "AISummaryMaxWords", "200", "Số từ tối đa cho AI summary", new DateTime(2025, 10, 23, 7, 11, 40, 513, DateTimeKind.Utc).AddTicks(8939), 1 },
-                    { 103, "DefaultPassThreshold", "50", "Ngưỡng điểm mặc định để Pass", new DateTime(2025, 10, 23, 7, 11, 40, 513, DateTimeKind.Utc).AddTicks(8940), 1 }
+                    { 100, "ScorePrecision", "0.5", "Độ chính xác điểm số (0.25, 0.5, 1.0)", new DateTime(2025, 10, 26, 6, 23, 19, 634, DateTimeKind.Utc).AddTicks(5962), 1 },
+                    { 101, "AISummaryMaxTokens", "1000", "Số token tối đa cho AI summary", new DateTime(2025, 10, 26, 6, 23, 19, 634, DateTimeKind.Utc).AddTicks(5967), 1 },
+                    { 102, "AISummaryMaxWords", "200", "Số từ tối đa cho AI summary", new DateTime(2025, 10, 26, 6, 23, 19, 634, DateTimeKind.Utc).AddTicks(5968), 1 },
+                    { 103, "DefaultPassThreshold", "50", "Ngưỡng điểm mặc định để Pass", new DateTime(2025, 10, 26, 6, 23, 19, 634, DateTimeKind.Utc).AddTicks(5969), 1 }
                 });
 
             migrationBuilder.CreateIndex(
@@ -1034,6 +1042,11 @@ namespace DataAccessLayer.Migrations
                 name: "IX_Assignments_FinalDeadline",
                 table: "Assignments",
                 column: "FinalDeadline");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Assignments_RubricTemplateId",
+                table: "Assignments",
+                column: "RubricTemplateId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Assignments_StartDate",
@@ -1319,13 +1332,7 @@ namespace DataAccessLayer.Migrations
                 name: "ReviewAssignments");
 
             migrationBuilder.DropTable(
-                name: "RubricTemplates");
-
-            migrationBuilder.DropTable(
                 name: "Submissions");
-
-            migrationBuilder.DropTable(
-                name: "AspNetUsers");
 
             migrationBuilder.DropTable(
                 name: "Assignments");
@@ -1334,10 +1341,16 @@ namespace DataAccessLayer.Migrations
                 name: "CourseInstances");
 
             migrationBuilder.DropTable(
+                name: "RubricTemplates");
+
+            migrationBuilder.DropTable(
                 name: "Courses");
 
             migrationBuilder.DropTable(
                 name: "Semesters");
+
+            migrationBuilder.DropTable(
+                name: "AspNetUsers");
 
             migrationBuilder.DropTable(
                 name: "Curriculums");

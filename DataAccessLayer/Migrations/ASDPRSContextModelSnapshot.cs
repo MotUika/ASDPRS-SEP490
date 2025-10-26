@@ -50,6 +50,14 @@ namespace DataAccessLayer.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
 
+                    b.Property<string>("FileName")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("FileUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<DateTime?>("FinalDeadline")
                         .HasColumnType("datetime2");
 
@@ -94,6 +102,9 @@ namespace DataAccessLayer.Migrations
                     b.Property<int?>("RubricId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("RubricTemplateId")
+                        .HasColumnType("int");
+
                     b.Property<DateTime?>("StartDate")
                         .HasColumnType("datetime2");
 
@@ -114,6 +125,8 @@ namespace DataAccessLayer.Migrations
                     b.HasIndex("Deadline");
 
                     b.HasIndex("FinalDeadline");
+
+                    b.HasIndex("RubricTemplateId");
 
                     b.HasIndex("StartDate");
 
@@ -962,7 +975,7 @@ namespace DataAccessLayer.Migrations
                             ConfigKey = "ScorePrecision",
                             ConfigValue = "0.5",
                             Description = "Độ chính xác điểm số (0.25, 0.5, 1.0)",
-                            UpdatedAt = new DateTime(2025, 10, 23, 7, 11, 40, 513, DateTimeKind.Utc).AddTicks(8933),
+                            UpdatedAt = new DateTime(2025, 10, 26, 6, 23, 19, 634, DateTimeKind.Utc).AddTicks(5962),
                             UpdatedByUserId = 1
                         },
                         new
@@ -971,7 +984,7 @@ namespace DataAccessLayer.Migrations
                             ConfigKey = "AISummaryMaxTokens",
                             ConfigValue = "1000",
                             Description = "Số token tối đa cho AI summary",
-                            UpdatedAt = new DateTime(2025, 10, 23, 7, 11, 40, 513, DateTimeKind.Utc).AddTicks(8938),
+                            UpdatedAt = new DateTime(2025, 10, 26, 6, 23, 19, 634, DateTimeKind.Utc).AddTicks(5967),
                             UpdatedByUserId = 1
                         },
                         new
@@ -980,7 +993,7 @@ namespace DataAccessLayer.Migrations
                             ConfigKey = "AISummaryMaxWords",
                             ConfigValue = "200",
                             Description = "Số từ tối đa cho AI summary",
-                            UpdatedAt = new DateTime(2025, 10, 23, 7, 11, 40, 513, DateTimeKind.Utc).AddTicks(8939),
+                            UpdatedAt = new DateTime(2025, 10, 26, 6, 23, 19, 634, DateTimeKind.Utc).AddTicks(5968),
                             UpdatedByUserId = 1
                         },
                         new
@@ -989,7 +1002,7 @@ namespace DataAccessLayer.Migrations
                             ConfigKey = "DefaultPassThreshold",
                             ConfigValue = "50",
                             Description = "Ngưỡng điểm mặc định để Pass",
-                            UpdatedAt = new DateTime(2025, 10, 23, 7, 11, 40, 513, DateTimeKind.Utc).AddTicks(8940),
+                            UpdatedAt = new DateTime(2025, 10, 26, 6, 23, 19, 634, DateTimeKind.Utc).AddTicks(5969),
                             UpdatedByUserId = 1
                         });
                 });
@@ -1095,8 +1108,8 @@ namespace DataAccessLayer.Migrations
                             Id = 1,
                             AccessFailedCount = 0,
                             CampusId = 1,
-                            ConcurrencyStamp = "e5cdedef-78e0-4c5e-b4d0-411fb8ed6608",
-                            CreatedAt = new DateTime(2025, 10, 23, 7, 11, 40, 513, DateTimeKind.Utc).AddTicks(8881),
+                            ConcurrencyStamp = "e1e55997-c249-40b3-b5c0-e8e3b949125d",
+                            CreatedAt = new DateTime(2025, 10, 26, 6, 23, 19, 634, DateTimeKind.Utc).AddTicks(5899),
                             Email = "admin@example.com",
                             EmailConfirmed = true,
                             FirstName = "Admin",
@@ -1107,7 +1120,7 @@ namespace DataAccessLayer.Migrations
                             NormalizedUserName = "ADMIN",
                             PasswordHash = "AQAAAAIAAYagAAAAEK95SlxvEPzqxJyTxIof0ufhmHVKdEGcuw7MxCBj92JUehpXlaMI0F4RrX3mzLDNzA==",
                             PhoneNumberConfirmed = false,
-                            SecurityStamp = "5c93463f-f720-4ee0-9621-c752bf13bd06",
+                            SecurityStamp = "523e95c0-2c68-42bd-94f7-b87dc1d07310",
                             StudentCode = "ADMIN001",
                             TwoFactorEnabled = false,
                             UserName = "admin"
@@ -1408,9 +1421,15 @@ namespace DataAccessLayer.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("RubricTemplate", "RubricTemplate")
+                        .WithMany()
+                        .HasForeignKey("RubricTemplateId");
+
                     b.Navigation("ClonedFromAssignment");
 
                     b.Navigation("CourseInstance");
+
+                    b.Navigation("RubricTemplate");
                 });
 
             modelBuilder.Entity("BussinessObject.Models.AISummary", b =>
