@@ -531,7 +531,7 @@ namespace Service.Service
                     }
                 }
 
-                _logger.LogInformation($"Processing submission {submission.SubmissionId} for universal AI review");
+                _logger.LogInformation($"Processing submission {submission.SubmissionId} for AI review");
 
                 // Tải file và trích xuất text
                 using var fileStream = await _fileStorageService.GetFileStreamAsync(submission.FileUrl);
@@ -554,21 +554,21 @@ namespace Service.Service
                         null);
                 }
 
-                // Giới hạn độ dài text để tiết kiệm token
+                // Giới hạn độ dài text
                 if (extractedText.Length > 12000)
                 {
                     extractedText = extractedText.Substring(0, 12000) + "...";
                 }
 
-                // Tạo context tổng quát
-                var context = BuildUniversalContext(assignment, rubric, criteria);
+                // Tạo context với thông tin criteria
+                var context = BuildEnhancedContext(assignment, rubric, criteria);
 
-                _logger.LogInformation($"Calling AI service for universal review generation");
+                _logger.LogInformation($"Calling AI service for enhanced review generation");
 
-                // Gọi AI service với prompt tổng quát
-                var reviewContent = await _genAIService.GenerateReviewAsync(extractedText, context);
+                // Gọi AI service với prompt cải tiến
+                var reviewContent = await _genAIService.GenerateEnhancedReviewAsync(extractedText, context, criteria);
 
-                _logger.LogInformation($"Universal AI review generated: {reviewContent.Length} characters");
+                _logger.LogInformation($"Enhanced AI review generated: {reviewContent.Length} characters");
 
                 // Giới hạn độ dài kết quả
                 if (reviewContent.Length > 1800)
@@ -579,23 +579,54 @@ namespace Service.Service
                 // Xóa review cũ nếu có
                 if (request.ReplaceExisting)
                 {
-                    var existingReviews = await _aiSummaryRepository.GetBySubmissionAndTypeAsync(request.SubmissionId, "UniversalReview");
+                    var existingReviews = await _aiSummaryRepository.GetBySubmissionAndTypeAsync(request.SubmissionId, "EnhancedReview");
                     foreach (var existing in existingReviews)
+                    {
+                        await _aiSummaryRepository.DeleteAsync(existing);
+                    }
+
+                    // Xóa cả các criteria reviews cũ
+                    var existingCriteriaReviews = await _aiSummaryRepository.GetBySubmissionAndTypeAsync(request.SubmissionId, "CriteriaReview_");
+                    foreach (var existing in existingCriteriaReviews)
                     {
                         await _aiSummaryRepository.DeleteAsync(existing);
                     }
                 }
 
-                // Lưu review mới
+                // Lưu review tổng quát
                 var aiReview = new AISummary
                 {
                     SubmissionId = request.SubmissionId,
                     Content = reviewContent,
-                    SummaryType = "UniversalReview", // Loại review tổng quát
+                    SummaryType = "EnhancedReview",
                     GeneratedAt = DateTime.UtcNow
                 };
 
                 await _aiSummaryRepository.AddAsync(aiReview);
+
+                // Tạo reviews cho từng criteria nếu có
+                if (criteria != null && criteria.Any())
+                {
+                    foreach (var criterion in criteria)
+                    {
+                        var criteriaReviewContent = await _genAIService.GenerateCriteriaReviewAsync(extractedText, criterion, context);
+
+                        if (!string.IsNullOrEmpty(criteriaReviewContent) && criteriaReviewContent.Length > 500)
+                        {
+                            criteriaReviewContent = criteriaReviewContent.Substring(0, 500);
+                        }
+
+                        var criteriaReview = new AISummary
+                        {
+                            SubmissionId = request.SubmissionId,
+                            Content = criteriaReviewContent,
+                            SummaryType = $"CriteriaReview_{criterion.CriteriaId}",
+                            GeneratedAt = DateTime.UtcNow
+                        };
+
+                        await _aiSummaryRepository.AddAsync(criteriaReview);
+                    }
+                }
 
                 var generationResponse = new AISummaryGenerationResponse
                 {
@@ -604,7 +635,7 @@ namespace Service.Service
                     SummaryType = aiReview.SummaryType,
                     GeneratedAt = aiReview.GeneratedAt,
                     WasGenerated = true,
-                    Status = "Universal review generated successfully"
+                    Status = $"Enhanced review generated successfully with {criteria?.Count ?? 0} criteria reviews"
                 };
 
                 return new BaseResponse<AISummaryGenerationResponse>(
@@ -614,15 +645,176 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error generating universal AI review for submission {SubmissionId}", request.SubmissionId);
+                _logger.LogError(ex, "Error generating enhanced AI review for submission {SubmissionId}", request.SubmissionId);
                 return new BaseResponse<AISummaryGenerationResponse>(
                     $"Error generating AI review: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
                     null);
             }
         }
+        public async Task<BaseResponse<EnhancedReviewResponse>> GenerateEnhancedReviewAsync(GenerateReviewRequest request)
+        {
+            try
+            {
+                var submission = await _submissionRepository.GetByIdAsync(request.SubmissionId);
+                if (submission == null)
+                {
+                    return new BaseResponse<EnhancedReviewResponse>(
+                        "Submission not found",
+                        StatusCodeEnum.NotFound_404,
+                        null);
+                }
 
-        private string BuildUniversalContext(Assignment assignment, Rubric rubric, List<Criteria> criteria)
+                var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
+                if (assignment == null)
+                {
+                    return new BaseResponse<EnhancedReviewResponse>(
+                        "Assignment not found",
+                        StatusCodeEnum.NotFound_404,
+                        null);
+                }
+
+                // Lấy thông tin rubric và criteria
+                Rubric rubric = null;
+                List<Criteria> criteria = null;
+                if (assignment.RubricId.HasValue)
+                {
+                    rubric = await _rubricRepository.GetByIdAsync(assignment.RubricId.Value);
+                    if (rubric != null)
+                    {
+                        criteria = (await _criteriaRepository.GetByRubricIdAsync(rubric.RubricId)).ToList();
+                    }
+                }
+
+                _logger.LogInformation($"Processing submission {submission.SubmissionId} for enhanced AI review");
+
+                // Tải file và trích xuất text (giữ nguyên)
+                using var fileStream = await _fileStorageService.GetFileStreamAsync(submission.FileUrl);
+                if (fileStream == null)
+                {
+                    return new BaseResponse<EnhancedReviewResponse>(
+                        "Could not download file from storage",
+                        StatusCodeEnum.BadRequest_400,
+                        null);
+                }
+
+                var fileName = submission.FileName ?? submission.OriginalFileName;
+                var extractedText = await _documentTextExtractor.ExtractTextAsync(fileStream, fileName);
+
+                if (string.IsNullOrWhiteSpace(extractedText))
+                {
+                    return new BaseResponse<EnhancedReviewResponse>(
+                        "No text could be extracted from the file",
+                        StatusCodeEnum.BadRequest_400,
+                        null);
+                }
+
+                // Giới hạn độ dài text
+                if (extractedText.Length > 12000)
+                {
+                    extractedText = extractedText.Substring(0, 12000) + "...";
+                }
+
+                // Tạo context với thông tin criteria
+                var context = BuildEnhancedContext(assignment, rubric, criteria);
+
+                _logger.LogInformation($"Calling AI service for enhanced review generation");
+
+                // Gọi AI service với prompt cải tiến
+                var reviewContent = await _genAIService.GenerateEnhancedReviewAsync(extractedText, context, criteria);
+
+                // Xóa review cũ nếu có
+                if (request.ReplaceExisting)
+                {
+                    var existingReviews = await _aiSummaryRepository.GetBySubmissionAndTypeAsync(request.SubmissionId, "EnhancedReview");
+                    foreach (var existing in existingReviews)
+                    {
+                        await _aiSummaryRepository.DeleteAsync(existing);
+                    }
+
+                    // Xóa cả các criteria reviews cũ
+                    var existingCriteriaReviews = await _aiSummaryRepository.GetBySubmissionAndTypePrefixAsync(request.SubmissionId, "CriteriaReview_");
+                    foreach (var existing in existingCriteriaReviews)
+                    {
+                        await _aiSummaryRepository.DeleteAsync(existing);
+                    }
+                }
+
+                // Lưu review tổng quát
+                var aiReview = new AISummary
+                {
+                    SubmissionId = request.SubmissionId,
+                    Content = reviewContent,
+                    SummaryType = "EnhancedReview",
+                    GeneratedAt = DateTime.UtcNow
+                };
+
+                await _aiSummaryRepository.AddAsync(aiReview);
+
+                // Tạo và lưu criteria reviews
+                var criteriaReviews = new List<CriteriaReviewResponse>();
+                if (criteria != null && criteria.Any())
+                {
+                    foreach (var criterion in criteria)
+                    {
+                        var criteriaReviewContent = await _genAIService.GenerateCriteriaReviewAsync(extractedText, criterion, context);
+
+                        if (!string.IsNullOrEmpty(criteriaReviewContent) && criteriaReviewContent.Length > 500)
+                        {
+                            criteriaReviewContent = criteriaReviewContent.Substring(0, 500);
+                        }
+
+                        var criteriaReview = new AISummary
+                        {
+                            SubmissionId = request.SubmissionId,
+                            Content = criteriaReviewContent,
+                            SummaryType = $"CriteriaReview_{criterion.CriteriaId}",
+                            GeneratedAt = DateTime.UtcNow
+                        };
+
+                        await _aiSummaryRepository.AddAsync(criteriaReview);
+
+                        // Thêm vào response
+                        criteriaReviews.Add(new CriteriaReviewResponse
+                        {
+                            SummaryId = criteriaReview.SummaryId,
+                            Content = criteriaReviewContent,
+                            CriteriaTitle = criterion.Title,
+                            CriteriaDescription = criterion.Description ?? string.Empty,
+                            CriteriaWeight = criterion.Weight,
+                            CriteriaMaxScore = criterion.MaxScore,
+                            GeneratedAt = criteriaReview.GeneratedAt
+                        });
+                    }
+                }
+
+                var generationResponse = new EnhancedReviewResponse
+                {
+                    SummaryId = aiReview.SummaryId,
+                    Content = aiReview.Content,
+                    SummaryType = aiReview.SummaryType,
+                    GeneratedAt = aiReview.GeneratedAt,
+                    WasGenerated = true,
+                    Status = $"Enhanced review generated successfully with {criteriaReviews.Count} criteria reviews",
+                    CriteriaReviews = criteriaReviews
+                };
+
+                return new BaseResponse<EnhancedReviewResponse>(
+                    "Enhanced AI review generated successfully",
+                    StatusCodeEnum.Created_201,
+                    generationResponse);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error generating enhanced AI review for submission {SubmissionId}", request.SubmissionId);
+                return new BaseResponse<EnhancedReviewResponse>(
+                    $"Error generating enhanced AI review: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
+            }
+        }
+
+        private string BuildEnhancedContext(Assignment assignment, Rubric rubric, List<Criteria> criteria)
         {
             var contextBuilder = new StringBuilder();
 
@@ -636,26 +828,36 @@ namespace Service.Service
                 contextBuilder.AppendLine($"Description: {shortDesc}");
             }
 
-            // Tiêu chí đánh giá tổng quát (nếu có)
+            // Thông tin grading scale
+            contextBuilder.AppendLine($"Grading Scale: {assignment.GradingScale}");
+            if (assignment.PassThreshold.HasValue)
+            {
+                contextBuilder.AppendLine($"Pass Threshold: {assignment.PassThreshold}%");
+            }
+
+            // Tiêu chí đánh giá chi tiết
             if (criteria != null && criteria.Any())
             {
                 contextBuilder.AppendLine("Evaluation Criteria:");
-                foreach (var criterion in criteria.Take(4)) // Giới hạn 4 tiêu chí
+                foreach (var criterion in criteria)
                 {
-                    contextBuilder.AppendLine($"- {criterion.Title} (Weight: {criterion.Weight}%)");
+                    contextBuilder.AppendLine($"- {criterion.Title} (Weight: {criterion.Weight}%, Max Score: {criterion.MaxScore})");
+                    if (!string.IsNullOrEmpty(criterion.Description))
+                    {
+                        contextBuilder.AppendLine($"  Description: {criterion.Description}");
+                    }
                 }
             }
 
             return contextBuilder.ToString();
         }
-
         private async Task<AISummaryResponse> MapToResponse(AISummary aiSummary)
         {
             var submission = await _submissionRepository.GetByIdAsync(aiSummary.SubmissionId);
             var assignment = submission != null ? await _assignmentRepository.GetByIdAsync(submission.AssignmentId) : null;
             var student = submission != null ? await _userRepository.GetByIdAsync(submission.UserId) : null;
 
-            return new AISummaryResponse
+            var response = new AISummaryResponse
             {
                 SummaryId = aiSummary.SummaryId,
                 SubmissionId = aiSummary.SubmissionId,
@@ -667,8 +869,26 @@ namespace Service.Service
                 StudentName = student?.FirstName ?? string.Empty,
                 StudentCode = student?.StudentCode ?? string.Empty,
                 FileName = submission?.FileName ?? string.Empty,
-                SubmittedAt = submission?.SubmittedAt ?? DateTime.MinValue
+                SubmittedAt = submission?.SubmittedAt ?? DateTime.MinValue,
+
+                CriteriaTitle = string.Empty,
+                CriteriaDescription = string.Empty
             };
+
+            if (aiSummary.SummaryType.StartsWith("CriteriaReview_") &&
+                int.TryParse(aiSummary.SummaryType.Substring("CriteriaReview_".Length), out int criteriaId))
+            {
+                var criteria = await _criteriaRepository.GetByIdAsync(criteriaId);
+                if (criteria != null)
+                {
+                    response.CriteriaTitle = criteria.Title;
+                    response.CriteriaDescription = criteria.Description ?? string.Empty;
+                    response.CriteriaWeight = criteria.Weight;
+                    response.CriteriaMaxScore = criteria.MaxScore;
+                }
+            }
+
+            return response;
         }
 
         private async Task<string> GenerateMockSummaryAsync(Submission submission, string summaryType, string additionalInstructions)

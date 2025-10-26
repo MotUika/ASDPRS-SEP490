@@ -53,6 +53,13 @@ namespace Service.Service
                         null);
                 }
 
+                var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
+                if (assignment == null || assignment.Status != "GradesPublished")
+                {
+                    return new BaseResponse<RegradeRequestResponse>(
+                        "Cannot request regrade before grades are published", StatusCodeEnum.BadRequest_400, null);
+                }
+
                 // Check if student exists and is the owner of the submission
                 if (submission.UserId != request.RequestedByUserId)
                 {

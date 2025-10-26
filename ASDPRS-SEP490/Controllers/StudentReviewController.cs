@@ -396,19 +396,19 @@ public class StudentReviewController : ControllerBase
 )]
     [SwaggerResponse(201, "Tạo review thành công", typeof(BaseResponse<AISummaryGenerationResponse>))]
     [SwaggerResponse(404, "Không tìm thấy bài nộp")]
-    public async Task<IActionResult> GenerateUniversalReview(int submissionId)
+    public async Task<IActionResult> GenerateEnhancedReview(int submissionId, [FromBody] bool replaceExisting = false)
     {
         try
         {
             var studentId = GetCurrentStudentId();
 
-            // Kiểm tra quyền review bài này
+            // Kiểm tra quyền
             var reviewAssignments = await _reviewAssignmentService.GetReviewAssignmentsBySubmissionIdAsync(submissionId);
             var canReview = reviewAssignments.Data?.Any(ra => ra.ReviewerUserId == studentId) ?? false;
 
             if (!canReview)
             {
-                return StatusCode(403, new BaseResponse<AISummaryGenerationResponse>(
+                return StatusCode(403, new BaseResponse<EnhancedReviewResponse>(
                     "Access denied: You are not assigned to review this submission",
                     StatusCodeEnum.Forbidden_403,
                     null
@@ -418,7 +418,7 @@ public class StudentReviewController : ControllerBase
             var aiSummaryService = HttpContext.RequestServices.GetService<IAISummaryService>();
             if (aiSummaryService == null)
             {
-                return StatusCode(500, new BaseResponse<AISummaryGenerationResponse>(
+                return StatusCode(500, new BaseResponse<EnhancedReviewResponse>(
                     "AI Summary service not available",
                     StatusCodeEnum.InternalServerError_500,
                     null
@@ -428,22 +428,21 @@ public class StudentReviewController : ControllerBase
             var request = new GenerateReviewRequest
             {
                 SubmissionId = submissionId,
-                ReplaceExisting = true
+                ReplaceExisting = replaceExisting
             };
 
-            var result = await aiSummaryService.GenerateReviewAsync(request);
+            var result = await aiSummaryService.GenerateEnhancedReviewAsync(request);
             return StatusCode((int)result.StatusCode, result);
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new BaseResponse<AISummaryGenerationResponse>(
-                $"Error generating universal AI review: {ex.Message}",
+            return StatusCode(500, new BaseResponse<EnhancedReviewResponse>(
+                $"Error generating enhanced AI review: {ex.Message}",
                 StatusCodeEnum.InternalServerError_500,
                 null
             ));
         }
     }
-
     [HttpGet("submission/{submissionId}/Total-AI-review")]
     [SwaggerOperation(
         Summary = "Lấy AI Review tổng quát của bài nộp",
