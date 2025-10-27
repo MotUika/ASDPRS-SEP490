@@ -16,6 +16,15 @@ namespace Service.RequestAndResponse.Response.Submission
         public DateTime SubmittedAt { get; set; }
         public string Status { get; set; }
         public bool IsPublic { get; set; }
+        // 🎯 Thông tin điểm số
+        public decimal? InstructorScore { get; set; }
+        public decimal? PeerAverageScore { get; set; }
+        public decimal? FinalScore { get; set; }
+
+        // 🗒️ Thông tin feedback
+        public string? Feedback { get; set; }
+        public DateTime? GradedAt { get; set; }
+
 
         // Navigation properties
         public AssignmentInfoResponse Assignment { get; set; }

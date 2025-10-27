@@ -286,5 +286,19 @@ namespace API.Controllers
         //    return StatusCode((int)result.StatusCode, result);
         //}
 
+        [HttpGet("user/{userId}")]
+        [SwaggerOperation(
+            Summary = "Tìm kiếm rubric theo người tạo",
+            Description = "Tìm kiếm các rubric dựa trên người tạo"
+        )]
+        [SwaggerResponse(200, "Thành công", typeof(BaseResponse<IEnumerable<RubricResponse>>))]
+        [SwaggerResponse(500, "Lỗi server")]
+        public async Task<IActionResult> GetRubricsByUserId(int userId)
+        {
+            var result = await _rubricService.GetRubricsByUserIdAsync(userId);
+            return StatusCode((int)result.StatusCode, result);
+        }
+
+
     }
 }

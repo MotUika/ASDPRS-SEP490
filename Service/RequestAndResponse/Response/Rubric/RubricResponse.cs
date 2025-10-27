@@ -1,4 +1,6 @@
 ﻿using Service.RequestAndResponse.Response.Criteria;
+using Service.RequestAndResponse.Response.RubricTemplate; 
+using System.Collections.Generic;
 
 namespace Service.RequestAndResponse.Response.Rubric
 {
@@ -13,6 +15,10 @@ namespace Service.RequestAndResponse.Response.Rubric
         public bool IsModified { get; set; }
         public int CriteriaCount { get; set; }
         public string GradingScale { get; set; }
+
         public List<CriteriaResponse> Criteria { get; set; } = new List<CriteriaResponse>();
+
+        // 🔹 Thêm phần mới này để trả về assignments đang dùng rubric
+        public List<AssignmentUsingTemplateResponse> AssignmentsUsingTemplate { get; set; } = new();
     }
 }
