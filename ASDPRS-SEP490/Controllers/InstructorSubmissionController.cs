@@ -39,9 +39,9 @@ namespace ASDPRS_SEP490.Controllers
         [SwaggerOperation(Summary = "Xem danh sách bài nộp trong assignment",
                           Description = "Trả về danh sách tất cả submissions của sinh viên trong 1 bài tập cụ thể.")]
         [SwaggerResponse(200, "Danh sách bài nộp", typeof(BaseResponse<object>))]
-        public async Task<IActionResult> GetSubmissionsByAssignment(int assignmentId, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20)
+        public async Task<IActionResult> GetSubmissionsByAssignment(int assignmentId)
         {
-            var result = await _submissionService.GetSubmissionsByAssignmentIdAsync(assignmentId, pageNumber, pageSize);
+            var result = await _submissionService.GetSubmissionsByAssignmentIdAsync(assignmentId);
             return StatusCode((int)result.StatusCode, result);
         }
 

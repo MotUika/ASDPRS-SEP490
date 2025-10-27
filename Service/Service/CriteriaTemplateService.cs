@@ -83,17 +83,51 @@ namespace Service.Service
         {
             try
             {
+                // 🟩 Kiểm tra tổng trọng số hiện tại của rubric template
+                var totalWeight = await _context.CriteriaTemplates
+                    .Where(ct => ct.TemplateId == request.TemplateId)
+                    .SumAsync(ct => ct.Weight);
+
+                // 🟩 Nếu thêm mới mà tổng > 100% thì chặn lại
+                if (totalWeight + request.Weight > 100)
+                {
+                    return new BaseResponse<CriteriaTemplateResponse>(
+                        $"❌ Cannot add criteria template. Total weight would exceed 100%. Current total: {totalWeight}%",
+                        StatusCodeEnum.BadRequest_400,
+                        null
+                    );
+                }
+
+                // 🟩 Tạo mới criteria template
                 var criteriaTemplate = _mapper.Map<CriteriaTemplate>(request);
                 var createdCriteriaTemplate = await _criteriaTemplateRepository.AddAsync(criteriaTemplate);
                 var response = _mapper.Map<CriteriaTemplateResponse>(createdCriteriaTemplate);
 
-                return new BaseResponse<CriteriaTemplateResponse>("Criteria template created successfully", StatusCodeEnum.Created_201, response);
+                // 🟩 Kiểm tra lại tổng trọng số sau khi thêm
+                var newTotalWeight = await _context.CriteriaTemplates
+                    .Where(ct => ct.TemplateId == request.TemplateId)
+                    .SumAsync(ct => ct.Weight);
+
+                var message = newTotalWeight == 100
+                    ? "✅ Criteria template created successfully. Total weight = 100%"
+                    : $"⚠️ Criteria template created successfully. Current total weight = {newTotalWeight}% (should be 100%)";
+
+                return new BaseResponse<CriteriaTemplateResponse>(
+                    message,
+                    StatusCodeEnum.Created_201,
+                    response
+                );
             }
             catch (Exception ex)
             {
-                return new BaseResponse<CriteriaTemplateResponse>($"Error creating criteria template: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
+                return new BaseResponse<CriteriaTemplateResponse>(
+                    $"Error creating criteria template: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null
+                );
             }
         }
+
 
         public async Task<BaseResponse<CriteriaTemplateResponse>> UpdateCriteriaTemplateAsync(UpdateCriteriaTemplateRequest request)
         {
@@ -105,17 +139,39 @@ namespace Service.Service
                     return new BaseResponse<CriteriaTemplateResponse>("Criteria template not found", StatusCodeEnum.NotFound_404, null);
                 }
 
+                // 🟩 Validate tổng weight sau khi update (loại trừ weight cũ của template này)
+                var totalWeightExcludingCurrent = await _context.CriteriaTemplates
+                    .Where(ct => ct.TemplateId == existingCriteriaTemplate.TemplateId && ct.CriteriaTemplateId != existingCriteriaTemplate.CriteriaTemplateId)
+                    .SumAsync(ct => ct.Weight);
+
+                if (totalWeightExcludingCurrent + request.Weight > 100)
+                {
+                    return new BaseResponse<CriteriaTemplateResponse>(
+                        $"❌ Cannot update criteria template. Total weight would exceed 100%. Current total (excluding this one): {totalWeightExcludingCurrent}%",
+                        StatusCodeEnum.BadRequest_400,
+                        null
+                    );
+                }
+
+                // 🟩 Map và update
                 _mapper.Map(request, existingCriteriaTemplate);
                 var updatedCriteriaTemplate = await _criteriaTemplateRepository.UpdateAsync(existingCriteriaTemplate);
                 var response = _mapper.Map<CriteriaTemplateResponse>(updatedCriteriaTemplate);
 
-                return new BaseResponse<CriteriaTemplateResponse>("Criteria template updated successfully", StatusCodeEnum.OK_200, response);
+                // 🟩 Check tổng weight sau khi update
+                var (_, newTotalWeight, newMessage) = await ValidateTotalWeightAsync(existingCriteriaTemplate.TemplateId);
+                newMessage = newTotalWeight == 100
+                    ? "✅ Criteria template updated successfully. Total weight = 100%"
+                    : $"⚠️ Criteria template updated successfully. Current total weight = {newTotalWeight}% (should be 100%)";
+
+                return new BaseResponse<CriteriaTemplateResponse>(newMessage, StatusCodeEnum.OK_200, response);
             }
             catch (Exception ex)
             {
                 return new BaseResponse<CriteriaTemplateResponse>($"Error updating criteria template: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
+
 
         public async Task<BaseResponse<bool>> DeleteCriteriaTemplateAsync(int id)
         {
@@ -150,5 +206,21 @@ namespace Service.Service
                 return new BaseResponse<IEnumerable<CriteriaTemplateResponse>>($"Error retrieving criteria templates: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
+
+        public async Task<(bool isValid, int totalWeight, string message)> ValidateTotalWeightAsync(int templateId, int? additionalWeight = null)
+        {
+            var totalWeight = await _context.CriteriaTemplates
+                .Where(ct => ct.TemplateId == templateId)
+                .SumAsync(ct => ct.Weight);
+
+            if (additionalWeight.HasValue)
+                totalWeight += additionalWeight.Value;
+
+            if (totalWeight > 100)
+                return (false, totalWeight, $"❌ Total weight would exceed 100%. Current total with addition: {totalWeight}%");
+
+            return (true, totalWeight, $"✅ Total weight is valid: {totalWeight}%");
+        }
+
     }
 }

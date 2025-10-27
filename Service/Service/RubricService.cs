@@ -9,6 +9,7 @@ using Service.RequestAndResponse.Enums;
 using Service.RequestAndResponse.Request.Rubric;
 using Service.RequestAndResponse.Response.Criteria;
 using Service.RequestAndResponse.Response.Rubric;
+using Service.RequestAndResponse.Response.RubricTemplate;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -425,6 +426,78 @@ namespace Service.Service
         //        response
         //    );
         //}
+
+        public async Task<BaseResponse<IEnumerable<RubricResponse>>> GetRubricsByUserIdAsync(int userId)
+        {
+            try
+            {
+                // 🔹 Lấy danh sách rubric có template do user này tạo
+                var rubrics = await _context.Rubrics
+                    .Include(r => r.Template)
+                        .ThenInclude(t => t.CreatedByUser)
+                    .Include(r => r.Assignment)
+                        .ThenInclude(a => a.CourseInstance)
+                            .ThenInclude(ci => ci.Course)
+                    .Include(r => r.Assignment)
+                        .ThenInclude(a => a.CourseInstance)
+                            .ThenInclude(ci => ci.Campus)
+                    .Include(r => r.Criteria)
+                    .Where(r => r.Template.CreatedByUserId == userId)
+                    .ToListAsync();
+
+                if (rubrics == null || !rubrics.Any())
+                {
+                    return new BaseResponse<IEnumerable<RubricResponse>>(
+                        "No rubrics found for this user",
+                        StatusCodeEnum.NotFound_404,
+                        null
+                    );
+                }
+
+                // 🔹 Map sang response
+                var response = _mapper.Map<IEnumerable<RubricResponse>>(rubrics);
+
+                // 🔹 Gán danh sách assignment đang sử dụng rubric (giống bên RubricTemplateService)
+                foreach (var rubric in response)
+                {
+                    var assignments = await _context.Assignments
+                        .Include(a => a.CourseInstance)
+                            .ThenInclude(ci => ci.Course)
+                        .Include(a => a.CourseInstance)
+                            .ThenInclude(ci => ci.Campus)
+                        .Where(a => a.RubricId == rubric.RubricId)
+                        .ToListAsync();
+
+                    rubric.AssignmentsUsingTemplate = (assignments != null && assignments.Any())
+                        ? assignments.Select(a => new AssignmentUsingTemplateResponse
+                        {
+                            AssignmentId = a.AssignmentId,
+                            Title = a.Title,
+                            CourseName = a.CourseInstance?.Course?.CourseName,
+                            ClassName = $"{a.CourseInstance?.Course?.CourseName} - {a.CourseInstance?.SectionCode}",
+                            CampusName = a.CourseInstance?.Campus?.CampusName,
+                            Deadline = a.Deadline
+                        }).ToList()
+                        : new List<AssignmentUsingTemplateResponse>();
+                }
+
+                return new BaseResponse<IEnumerable<RubricResponse>>(
+                    "Rubrics retrieved successfully",
+                    StatusCodeEnum.OK_200,
+                    response
+                );
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<IEnumerable<RubricResponse>>(
+                    $"Error retrieving rubrics by user: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null
+                );
+            }
+        }
+
+
 
     }
 }
