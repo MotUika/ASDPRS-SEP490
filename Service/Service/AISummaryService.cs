@@ -722,7 +722,11 @@ namespace Service.Service
 
                 // Gọi AI service với prompt cải tiến
                 var reviewContent = await _genAIService.GenerateEnhancedReviewAsync(extractedText, context, criteria);
-
+                if (reviewContent.Length > 2000)
+                {
+                    reviewContent = reviewContent.Substring(0, 2000);
+                    _logger.LogInformation($"Truncated enhanced review content to 2000 characters for submission {request.SubmissionId}");
+                }
                 // Xóa review cũ nếu có
                 if (request.ReplaceExisting)
                 {
