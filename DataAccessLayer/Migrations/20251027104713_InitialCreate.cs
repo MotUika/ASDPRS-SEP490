@@ -632,7 +632,12 @@ namespace DataAccessLayer.Migrations
                     Keywords = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     SubmittedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
                     Status = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    IsPublic = table.Column<bool>(type: "bit", nullable: false)
+                    IsPublic = table.Column<bool>(type: "bit", nullable: false),
+                    InstructorScore = table.Column<decimal>(type: "decimal(18,2)", nullable: true),
+                    PeerAverageScore = table.Column<decimal>(type: "decimal(18,2)", nullable: true),
+                    FinalScore = table.Column<decimal>(type: "decimal(18,2)", nullable: true),
+                    Feedback = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true),
+                    GradedAt = table.Column<DateTime>(type: "datetime2", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -951,7 +956,7 @@ namespace DataAccessLayer.Migrations
             migrationBuilder.InsertData(
                 table: "AspNetUsers",
                 columns: new[] { "Id", "AccessFailedCount", "AvatarUrl", "CampusId", "ConcurrencyStamp", "CreatedAt", "Email", "EmailConfirmed", "FirstName", "IsActive", "LastName", "LockoutEnabled", "LockoutEnd", "NormalizedEmail", "NormalizedUserName", "PasswordHash", "PhoneNumber", "PhoneNumberConfirmed", "SecurityStamp", "StudentCode", "TwoFactorEnabled", "UserName" },
-                values: new object[] { 1, 0, null, 1, "e1e55997-c249-40b3-b5c0-e8e3b949125d", new DateTime(2025, 10, 26, 6, 23, 19, 634, DateTimeKind.Utc).AddTicks(5899), "admin@example.com", true, "Admin", true, "User", true, null, "ADMIN@EXAMPLE.COM", "ADMIN", "AQAAAAIAAYagAAAAEK95SlxvEPzqxJyTxIof0ufhmHVKdEGcuw7MxCBj92JUehpXlaMI0F4RrX3mzLDNzA==", null, false, "523e95c0-2c68-42bd-94f7-b87dc1d07310", "ADMIN001", false, "admin" });
+                values: new object[] { 1, 0, null, 1, "35ead0a8-77e2-468d-bf49-0775ebffdae7", new DateTime(2025, 10, 27, 10, 47, 11, 459, DateTimeKind.Utc).AddTicks(7222), "admin@example.com", true, "Admin", true, "User", true, null, "ADMIN@EXAMPLE.COM", "ADMIN", "AQAAAAIAAYagAAAAEK95SlxvEPzqxJyTxIof0ufhmHVKdEGcuw7MxCBj92JUehpXlaMI0F4RrX3mzLDNzA==", null, false, "576556bf-346d-4f0b-8c48-7a83c294d2c8", "ADMIN001", false, "admin" });
 
             migrationBuilder.InsertData(
                 table: "AspNetUserRoles",
@@ -963,10 +968,10 @@ namespace DataAccessLayer.Migrations
                 columns: new[] { "ConfigId", "ConfigKey", "ConfigValue", "Description", "UpdatedAt", "UpdatedByUserId" },
                 values: new object[,]
                 {
-                    { 100, "ScorePrecision", "0.5", "Độ chính xác điểm số (0.25, 0.5, 1.0)", new DateTime(2025, 10, 26, 6, 23, 19, 634, DateTimeKind.Utc).AddTicks(5962), 1 },
-                    { 101, "AISummaryMaxTokens", "1000", "Số token tối đa cho AI summary", new DateTime(2025, 10, 26, 6, 23, 19, 634, DateTimeKind.Utc).AddTicks(5967), 1 },
-                    { 102, "AISummaryMaxWords", "200", "Số từ tối đa cho AI summary", new DateTime(2025, 10, 26, 6, 23, 19, 634, DateTimeKind.Utc).AddTicks(5968), 1 },
-                    { 103, "DefaultPassThreshold", "50", "Ngưỡng điểm mặc định để Pass", new DateTime(2025, 10, 26, 6, 23, 19, 634, DateTimeKind.Utc).AddTicks(5969), 1 }
+                    { 100, "ScorePrecision", "0.5", "Độ chính xác điểm số (0.25, 0.5, 1.0)", new DateTime(2025, 10, 27, 10, 47, 11, 459, DateTimeKind.Utc).AddTicks(7281), 1 },
+                    { 101, "AISummaryMaxTokens", "1000", "Số token tối đa cho AI summary", new DateTime(2025, 10, 27, 10, 47, 11, 459, DateTimeKind.Utc).AddTicks(7284), 1 },
+                    { 102, "AISummaryMaxWords", "200", "Số từ tối đa cho AI summary", new DateTime(2025, 10, 27, 10, 47, 11, 459, DateTimeKind.Utc).AddTicks(7285), 1 },
+                    { 103, "DefaultPassThreshold", "50", "Ngưỡng điểm mặc định để Pass", new DateTime(2025, 10, 27, 10, 47, 11, 459, DateTimeKind.Utc).AddTicks(7286), 1 }
                 });
 
             migrationBuilder.CreateIndex(

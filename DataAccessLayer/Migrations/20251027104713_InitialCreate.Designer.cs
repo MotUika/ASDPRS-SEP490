@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DataAccessLayer.Migrations
 {
     [DbContext(typeof(ASDPRSContext))]
-    [Migration("20251026062321_InitialCreate")]
+    [Migration("20251027104713_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -898,6 +898,10 @@ namespace DataAccessLayer.Migrations
                     b.Property<int>("AssignmentId")
                         .HasColumnType("int");
 
+                    b.Property<string>("Feedback")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
                     b.Property<string>("FileName")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -905,6 +909,15 @@ namespace DataAccessLayer.Migrations
                     b.Property<string>("FileUrl")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal?>("FinalScore")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("GradedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal?>("InstructorScore")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<bool>("IsPublic")
                         .HasColumnType("bit");
@@ -916,6 +929,9 @@ namespace DataAccessLayer.Migrations
                     b.Property<string>("OriginalFileName")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal?>("PeerAverageScore")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -978,7 +994,7 @@ namespace DataAccessLayer.Migrations
                             ConfigKey = "ScorePrecision",
                             ConfigValue = "0.5",
                             Description = "Độ chính xác điểm số (0.25, 0.5, 1.0)",
-                            UpdatedAt = new DateTime(2025, 10, 26, 6, 23, 19, 634, DateTimeKind.Utc).AddTicks(5962),
+                            UpdatedAt = new DateTime(2025, 10, 27, 10, 47, 11, 459, DateTimeKind.Utc).AddTicks(7281),
                             UpdatedByUserId = 1
                         },
                         new
@@ -987,7 +1003,7 @@ namespace DataAccessLayer.Migrations
                             ConfigKey = "AISummaryMaxTokens",
                             ConfigValue = "1000",
                             Description = "Số token tối đa cho AI summary",
-                            UpdatedAt = new DateTime(2025, 10, 26, 6, 23, 19, 634, DateTimeKind.Utc).AddTicks(5967),
+                            UpdatedAt = new DateTime(2025, 10, 27, 10, 47, 11, 459, DateTimeKind.Utc).AddTicks(7284),
                             UpdatedByUserId = 1
                         },
                         new
@@ -996,7 +1012,7 @@ namespace DataAccessLayer.Migrations
                             ConfigKey = "AISummaryMaxWords",
                             ConfigValue = "200",
                             Description = "Số từ tối đa cho AI summary",
-                            UpdatedAt = new DateTime(2025, 10, 26, 6, 23, 19, 634, DateTimeKind.Utc).AddTicks(5968),
+                            UpdatedAt = new DateTime(2025, 10, 27, 10, 47, 11, 459, DateTimeKind.Utc).AddTicks(7285),
                             UpdatedByUserId = 1
                         },
                         new
@@ -1005,7 +1021,7 @@ namespace DataAccessLayer.Migrations
                             ConfigKey = "DefaultPassThreshold",
                             ConfigValue = "50",
                             Description = "Ngưỡng điểm mặc định để Pass",
-                            UpdatedAt = new DateTime(2025, 10, 26, 6, 23, 19, 634, DateTimeKind.Utc).AddTicks(5969),
+                            UpdatedAt = new DateTime(2025, 10, 27, 10, 47, 11, 459, DateTimeKind.Utc).AddTicks(7286),
                             UpdatedByUserId = 1
                         });
                 });
@@ -1111,8 +1127,8 @@ namespace DataAccessLayer.Migrations
                             Id = 1,
                             AccessFailedCount = 0,
                             CampusId = 1,
-                            ConcurrencyStamp = "e1e55997-c249-40b3-b5c0-e8e3b949125d",
-                            CreatedAt = new DateTime(2025, 10, 26, 6, 23, 19, 634, DateTimeKind.Utc).AddTicks(5899),
+                            ConcurrencyStamp = "35ead0a8-77e2-468d-bf49-0775ebffdae7",
+                            CreatedAt = new DateTime(2025, 10, 27, 10, 47, 11, 459, DateTimeKind.Utc).AddTicks(7222),
                             Email = "admin@example.com",
                             EmailConfirmed = true,
                             FirstName = "Admin",
@@ -1123,7 +1139,7 @@ namespace DataAccessLayer.Migrations
                             NormalizedUserName = "ADMIN",
                             PasswordHash = "AQAAAAIAAYagAAAAEK95SlxvEPzqxJyTxIof0ufhmHVKdEGcuw7MxCBj92JUehpXlaMI0F4RrX3mzLDNzA==",
                             PhoneNumberConfirmed = false,
-                            SecurityStamp = "523e95c0-2c68-42bd-94f7-b87dc1d07310",
+                            SecurityStamp = "576556bf-346d-4f0b-8c48-7a83c294d2c8",
                             StudentCode = "ADMIN001",
                             TwoFactorEnabled = false,
                             UserName = "admin"
