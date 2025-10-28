@@ -26,5 +26,6 @@ namespace Repository.IRepository
         Task<bool> CanStudentSubmitAssignmentAsync(int assignmentId, int studentId);
         Task<bool> ExistsAsync(int assignmentId);
         Task<List<Assignment>> GetAssignmentsByRubricTemplateIdAsync(int rubricTemplateId);
+        Task<IEnumerable<Assignment>> GetAllAsync();
     }
 }

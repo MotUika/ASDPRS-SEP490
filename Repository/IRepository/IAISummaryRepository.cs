@@ -16,6 +16,7 @@ namespace Repository.IRepository
         Task DeleteAsync(AISummary aiSummary);
         Task<bool> ExistsAsync(int submissionId, string summaryType);
         Task<IEnumerable<AISummary>> GetBySubmissionAndTypePrefixAsync(int submissionId, string typePrefix);
+        Task<IEnumerable<AISummary>> GetAllAsync();
 
     }
 }

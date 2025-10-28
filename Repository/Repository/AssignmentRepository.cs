@@ -298,7 +298,17 @@ namespace Repository.Repository
                 .ToListAsync();
         }
 
-
+        public async Task<IEnumerable<Assignment>> GetAllAsync()
+        {
+            return await _context.Assignments
+                .Include(a => a.CourseInstance)
+                    .ThenInclude(ci => ci.Course)
+                .Include(a => a.CourseInstance)
+                    .ThenInclude(ci => ci.Campus)
+                .Include(a => a.Rubric)
+                .OrderByDescending(a => a.CreatedAt)
+                .ToListAsync();
+        }
         Task IAssignmentRepository.AddAsync(Assignment assignment)
         {
             return AddAsync(assignment);

@@ -73,6 +73,14 @@ namespace Repository.Repository
                 .Where(a => a.SubmissionId == submissionId && a.SummaryType.StartsWith(typePrefix))
                 .ToListAsync();
         }
+        public async Task<IEnumerable<AISummary>> GetAllAsync()
+        {
+            return await _context.AISummaries
+                .Include(s => s.Submission)
+                .Include(s => s.DocumentEmbeddings)
+                .OrderByDescending(s => s.GeneratedAt)
+                .ToListAsync();
+        }
 
         public async Task<bool> ExistsAsync(int submissionId, string summaryType)
         {
