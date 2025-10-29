@@ -58,20 +58,6 @@ namespace DataAccessLayer.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "Role",
-                columns: table => new
-                {
-                    RoleId = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
-                    RoleName = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
-                    Description = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Role", x => x.RoleId);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "AspNetRoleClaims",
                 columns: table => new
                 {
@@ -121,6 +107,7 @@ namespace DataAccessLayer.Migrations
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
                     CampusId = table.Column<int>(type: "int", nullable: false),
+                    MajorId = table.Column<int>(type: "int", nullable: true),
                     FirstName = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
                     LastName = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
                     StudentCode = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
@@ -151,6 +138,11 @@ namespace DataAccessLayer.Migrations
                         principalTable: "Campuses",
                         principalColumn: "CampusId",
                         onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_AspNetUsers_Majors_MajorId",
+                        column: x => x.MajorId,
+                        principalTable: "Majors",
+                        principalColumn: "MajorId");
                 });
 
             migrationBuilder.CreateTable(
@@ -357,33 +349,6 @@ namespace DataAccessLayer.Migrations
                         principalTable: "AspNetUsers",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "UserRole",
-                columns: table => new
-                {
-                    UserRoleId = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
-                    UserId = table.Column<int>(type: "int", nullable: false),
-                    RoleId = table.Column<int>(type: "int", nullable: false),
-                    AssignedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_UserRole", x => x.UserRoleId);
-                    table.ForeignKey(
-                        name: "FK_UserRole_AspNetUsers_UserId",
-                        column: x => x.UserId,
-                        principalTable: "AspNetUsers",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_UserRole_Role_RoleId",
-                        column: x => x.RoleId,
-                        principalTable: "Role",
-                        principalColumn: "RoleId",
-                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -955,8 +920,8 @@ namespace DataAccessLayer.Migrations
 
             migrationBuilder.InsertData(
                 table: "AspNetUsers",
-                columns: new[] { "Id", "AccessFailedCount", "AvatarUrl", "CampusId", "ConcurrencyStamp", "CreatedAt", "Email", "EmailConfirmed", "FirstName", "IsActive", "LastName", "LockoutEnabled", "LockoutEnd", "NormalizedEmail", "NormalizedUserName", "PasswordHash", "PhoneNumber", "PhoneNumberConfirmed", "SecurityStamp", "StudentCode", "TwoFactorEnabled", "UserName" },
-                values: new object[] { 1, 0, null, 1, "35ead0a8-77e2-468d-bf49-0775ebffdae7", new DateTime(2025, 10, 27, 10, 47, 11, 459, DateTimeKind.Utc).AddTicks(7222), "admin@example.com", true, "Admin", true, "User", true, null, "ADMIN@EXAMPLE.COM", "ADMIN", "AQAAAAIAAYagAAAAEK95SlxvEPzqxJyTxIof0ufhmHVKdEGcuw7MxCBj92JUehpXlaMI0F4RrX3mzLDNzA==", null, false, "576556bf-346d-4f0b-8c48-7a83c294d2c8", "ADMIN001", false, "admin" });
+                columns: new[] { "Id", "AccessFailedCount", "AvatarUrl", "CampusId", "ConcurrencyStamp", "CreatedAt", "Email", "EmailConfirmed", "FirstName", "IsActive", "LastName", "LockoutEnabled", "LockoutEnd", "MajorId", "NormalizedEmail", "NormalizedUserName", "PasswordHash", "PhoneNumber", "PhoneNumberConfirmed", "SecurityStamp", "StudentCode", "TwoFactorEnabled", "UserName" },
+                values: new object[] { 1, 0, null, 1, "2a54ac74-5a34-4fd0-9185-452797b3213b", new DateTime(2025, 10, 29, 14, 3, 35, 499, DateTimeKind.Utc).AddTicks(6695), "admin@example.com", true, "Admin", true, "User", true, null, null, "ADMIN@EXAMPLE.COM", "ADMIN", "AQAAAAIAAYagAAAAEK95SlxvEPzqxJyTxIof0ufhmHVKdEGcuw7MxCBj92JUehpXlaMI0F4RrX3mzLDNzA==", null, false, "8e560281-1c9d-4e6b-8a3c-132ec399bb7d", "ADMIN001", false, "admin" });
 
             migrationBuilder.InsertData(
                 table: "AspNetUserRoles",
@@ -968,10 +933,10 @@ namespace DataAccessLayer.Migrations
                 columns: new[] { "ConfigId", "ConfigKey", "ConfigValue", "Description", "UpdatedAt", "UpdatedByUserId" },
                 values: new object[,]
                 {
-                    { 100, "ScorePrecision", "0.5", "Độ chính xác điểm số (0.25, 0.5, 1.0)", new DateTime(2025, 10, 27, 10, 47, 11, 459, DateTimeKind.Utc).AddTicks(7281), 1 },
-                    { 101, "AISummaryMaxTokens", "1000", "Số token tối đa cho AI summary", new DateTime(2025, 10, 27, 10, 47, 11, 459, DateTimeKind.Utc).AddTicks(7284), 1 },
-                    { 102, "AISummaryMaxWords", "200", "Số từ tối đa cho AI summary", new DateTime(2025, 10, 27, 10, 47, 11, 459, DateTimeKind.Utc).AddTicks(7285), 1 },
-                    { 103, "DefaultPassThreshold", "50", "Ngưỡng điểm mặc định để Pass", new DateTime(2025, 10, 27, 10, 47, 11, 459, DateTimeKind.Utc).AddTicks(7286), 1 }
+                    { 100, "ScorePrecision", "0.5", "Độ chính xác điểm số (0.25, 0.5, 1.0)", new DateTime(2025, 10, 29, 14, 3, 35, 499, DateTimeKind.Utc).AddTicks(6759), 1 },
+                    { 101, "AISummaryMaxTokens", "1000", "Số token tối đa cho AI summary", new DateTime(2025, 10, 29, 14, 3, 35, 499, DateTimeKind.Utc).AddTicks(6760), 1 },
+                    { 102, "AISummaryMaxWords", "200", "Số từ tối đa cho AI summary", new DateTime(2025, 10, 29, 14, 3, 35, 499, DateTimeKind.Utc).AddTicks(6761), 1 },
+                    { 103, "DefaultPassThreshold", "50", "Ngưỡng điểm mặc định để Pass", new DateTime(2025, 10, 29, 14, 3, 35, 499, DateTimeKind.Utc).AddTicks(6762), 1 }
                 });
 
             migrationBuilder.CreateIndex(
@@ -1020,6 +985,11 @@ namespace DataAccessLayer.Migrations
                 name: "IX_AspNetUsers_CampusId",
                 table: "AspNetUsers",
                 column: "CampusId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AspNetUsers_MajorId",
+                table: "AspNetUsers",
+                column: "MajorId");
 
             migrationBuilder.CreateIndex(
                 name: "UserNameIndex",
@@ -1255,16 +1225,6 @@ namespace DataAccessLayer.Migrations
                 name: "IX_SystemConfigs_UpdatedByUserId",
                 table: "SystemConfigs",
                 column: "UpdatedByUserId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_UserRole_RoleId",
-                table: "UserRole",
-                column: "RoleId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_UserRole_UserId",
-                table: "UserRole",
-                column: "UserId");
         }
 
         /// <inheritdoc />
@@ -1307,9 +1267,6 @@ namespace DataAccessLayer.Migrations
                 name: "SystemConfigs");
 
             migrationBuilder.DropTable(
-                name: "UserRole");
-
-            migrationBuilder.DropTable(
                 name: "AspNetRoles");
 
             migrationBuilder.DropTable(
@@ -1323,9 +1280,6 @@ namespace DataAccessLayer.Migrations
 
             migrationBuilder.DropTable(
                 name: "CourseInstructors");
-
-            migrationBuilder.DropTable(
-                name: "Role");
 
             migrationBuilder.DropTable(
                 name: "CriteriaTemplates");

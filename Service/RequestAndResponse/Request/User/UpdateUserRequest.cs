@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.ComponentModel.DataAnnotations;
 
 namespace Service.RequestAndResponse.Request.User
 {
@@ -13,6 +8,8 @@ namespace Service.RequestAndResponse.Request.User
         public int UserId { get; set; }
 
         public int CampusId { get; set; }
+
+        public int? MajorId { get; set; }
 
         [StringLength(100)]
         public string Username { get; set; }
