@@ -4,10 +4,12 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace BussinessObject.Models
 {
-    public class User : IdentityUser<int> // Inherit from IdentityUser<int>
+    public class User : IdentityUser<int>
     {
         [Required]
         public int CampusId { get; set; }
+
+        public int? MajorId { get; set; }
 
         [StringLength(50)]
         public string FirstName { get; set; }
@@ -29,7 +31,9 @@ namespace BussinessObject.Models
         [ForeignKey("CampusId")]
         public Campus Campus { get; set; }
 
-        public ICollection<UserRole> UserRoles { get; set; }
+        [ForeignKey("MajorId")]
+        public Major Major { get; set; }
+
         public ICollection<CourseInstructor> CourseInstructors { get; set; }
         public ICollection<CourseStudent> CourseStudents { get; set; }
         public ICollection<SystemConfig> SystemConfigs { get; set; }
