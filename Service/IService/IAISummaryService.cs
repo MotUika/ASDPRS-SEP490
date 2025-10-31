@@ -20,5 +20,7 @@ namespace Service.IService
         Task<BaseResponse<bool>> GenerateAllSummaryTypesAsync(int submissionId, bool forceRegenerate = false);
         Task<BaseResponse<AISummaryGenerationResponse>> GenerateReviewAsync(GenerateReviewRequest request);
         Task<BaseResponse<EnhancedReviewResponse>> GenerateEnhancedReviewAsync(GenerateReviewRequest request);
+        Task<BaseResponse<AIOverallResponse>> GenerateOverallSummaryAsync(GenerateAIOverallRequest request);
+        Task<BaseResponse<AICriteriaResponse>> GenerateCriteriaFeedbackAsync(GenerateAICriteriaRequest request);
     }
 }
