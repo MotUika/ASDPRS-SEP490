@@ -265,5 +265,33 @@ namespace Service.Service
 
             return await SummarizeAsync(prompt, maxOutputTokens: 300);
         }
+
+        public async Task<string> GenerateOverallSummaryAsync(string documentText, string context)
+        {
+            var prompt = $@"**AI OVERALL SUMMARY**
+
+CONTEXT: {context}
+
+DOCUMENT: {documentText}
+
+REQUIREMENTS: Provide a balanced overall summary of the submission (~100 words, max 200). Focus on structure, content, strengths/weaknesses without scores. Keep response in a single paragraph without line breaks.";
+
+            return await SummarizeAsync(prompt, maxOutputTokens: 400);  // Adjust tokens for ~200 words
+        }
+
+        public async Task<string> GenerateCriteriaSummaryAsync(string documentText, Criteria criteria, string context)
+        {
+            var prompt = $@"**AI CRITERIA SUMMARY: {criteria.Title}**
+
+CONTEXT: {context}
+
+CRITERIA: Title: {criteria.Title}, Desc: {criteria.Description}, Weight: {criteria.Weight}%, MaxScore: {criteria.MaxScore}
+
+DOCUMENT: {documentText}
+
+REQUIREMENTS: Evaluate this criterion. Return format: Score: X | Summary: [concise summary max 30 words]. Keep without line breaks. Score from 0 to {criteria.MaxScore}.";
+
+            return await SummarizeAsync(prompt, maxOutputTokens: 150);
+        }
     }
 }
