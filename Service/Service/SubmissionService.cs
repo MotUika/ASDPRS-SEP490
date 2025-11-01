@@ -33,6 +33,8 @@ namespace Service.Service
         private readonly IFileStorageService _fileStorageService;
         private readonly ASDPRSContext _context;
         private readonly IReviewAssignmentService _reviewAssignmentService;
+        private readonly ISystemConfigService _systemConfigService;
+        private readonly IDocumentTextExtractor _documentTextExtractor;
 
         public SubmissionService(
             ISubmissionRepository submissionRepository,
@@ -45,7 +47,8 @@ namespace Service.Service
             ILogger<SubmissionService> logger,
             IFileStorageService fileStorageService,
             ASDPRSContext context,
-            IReviewAssignmentService reviewAssignmentService)
+            IReviewAssignmentService reviewAssignmentService, ISystemConfigService systemConfigService,
+            IDocumentTextExtractor documentTextExtractor)
         {
             _submissionRepository = submissionRepository;
             _assignmentRepository = assignmentRepository;
@@ -58,6 +61,8 @@ namespace Service.Service
             _fileStorageService = fileStorageService;
             _context = context;
             _reviewAssignmentService = reviewAssignmentService;
+            _systemConfigService = systemConfigService;
+            _documentTextExtractor = documentTextExtractor;
         }
 
 
@@ -145,6 +150,97 @@ namespace Service.Service
             }
         }
 
+        public async Task<BaseResponse<SubmissionResponse>> CreateSubmissionWithCheckAsync(CreateSubmissionRequest request)
+        {
+            try
+            {
+                var assignment = await _assignmentRepository.GetByIdAsync(request.AssignmentId);
+                if (assignment == null)
+                    return new BaseResponse<SubmissionResponse>("Assignment not found", StatusCodeEnum.NotFound_404, null);
+
+
+                if (assignment.Status != AssignmentStatusEnum.Active.ToString())
+                {
+                    return new BaseResponse<SubmissionResponse>(
+                        $"Cannot submit assignment. Assignment status is: {assignment.Status}. Only Active assignments can be submitted.",
+                        StatusCodeEnum.BadRequest_400,
+                        null);
+                }
+
+                var user = await _userRepository.GetByIdAsync(request.UserId);
+                if (user == null)
+                    return new BaseResponse<SubmissionResponse>("User not found", StatusCodeEnum.NotFound_404, null);
+
+                var now = DateTime.UtcNow;
+                if (assignment.StartDate.HasValue && now < assignment.StartDate.Value)
+                {
+                    return new BaseResponse<SubmissionResponse>(
+                        $"Cannot submit assignment before start date: {assignment.StartDate.Value}",
+                        StatusCodeEnum.BadRequest_400,
+                        null);
+                }
+
+                if (now > (assignment.FinalDeadline ?? assignment.Deadline))
+                {
+                    return new BaseResponse<SubmissionResponse>(
+                        $"Cannot submit assignment after final deadline: {assignment.FinalDeadline ?? assignment.Deadline}",
+                        StatusCodeEnum.BadRequest_400,
+                        null);
+                }
+
+                var existingSubmission = await _submissionRepository.GetAllAsync();
+                if (existingSubmission.Any(s => s.AssignmentId == request.AssignmentId && s.UserId == request.UserId))
+                {
+                    return new BaseResponse<SubmissionResponse>("User has already submitted for this assignment", StatusCodeEnum.Conflict_409, null);
+                }
+
+                // Kiểm tra trùng lặp trước khi upload
+                var plagiarismCheck = await CheckPlagiarismAsync(request.AssignmentId, request.File);
+                if (plagiarismCheck.StatusCode != StatusCodeEnum.OK_200)
+                {
+                    return new BaseResponse<SubmissionResponse>(plagiarismCheck.Message, plagiarismCheck.StatusCode, null);
+                }
+
+                var uploadResult = await _fileStorageService.UploadFileAsync(request.File, folder: $"submissions/{request.AssignmentId}/{request.UserId}", makePublic: request.IsPublic);
+                if (!uploadResult.Success)
+                {
+                    return new BaseResponse<SubmissionResponse>(uploadResult.ErrorMessage, StatusCodeEnum.BadRequest_400, null);
+                }
+
+                var submission = new Submission
+                {
+                    AssignmentId = request.AssignmentId,
+                    UserId = request.UserId,
+                    FileUrl = uploadResult.FileUrl,        
+                    FileName = uploadResult.FileName,      
+                    OriginalFileName = request.File.FileName,
+                    Keywords = request.Keywords,
+                    SubmittedAt = DateTime.UtcNow,
+                    Status = "Submitted",
+                    IsPublic = request.IsPublic
+                };
+
+                var createdSubmission = await _submissionRepository.AddAsync(submission);
+                var response = await MapToSubmissionResponse(createdSubmission);
+
+                _logger.LogInformation($"Submission created successfully. SubmissionId: {createdSubmission.SubmissionId}");
+
+                // Late check
+                if (submission.SubmittedAt > assignment.Deadline && submission.SubmittedAt <= (assignment.FinalDeadline ?? DateTime.MaxValue))
+                {
+                    submission.Status = "Late";
+                    await _submissionRepository.UpdateAsync(submission);
+                }
+
+                return new BaseResponse<SubmissionResponse>("Submission created successfully", StatusCodeEnum.Created_201, response);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating submission");
+                return new BaseResponse<SubmissionResponse>("An error occurred while creating the submission", StatusCodeEnum.InternalServerError_500, null);
+            }
+        }
+
         private async Task AutoAssignReviewsForNewSubmission(int assignmentId)
         {
             try
@@ -190,6 +286,40 @@ namespace Service.Service
                 };
 
                 return await CreateSubmissionAsync(createRequest);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error submitting assignment");
+                return new BaseResponse<SubmissionResponse>("An error occurred while submitting the assignment", StatusCodeEnum.InternalServerError_500, null);
+            }
+        }
+
+        public async Task<BaseResponse<SubmissionResponse>> SubmitAssignmentWithCheckAsync(SubmitAssignmentRequest request)
+        {
+            try
+            {
+                var assignment = await _assignmentRepository.GetByIdAsync(request.AssignmentId);
+                if (assignment == null)
+                    return new BaseResponse<SubmissionResponse>("Assignment not found", StatusCodeEnum.NotFound_404, null);
+
+                if (assignment.Status != AssignmentStatusEnum.Active.ToString())
+                {
+                    return new BaseResponse<SubmissionResponse>(
+                        $"Cannot submit assignment. Assignment status is: {assignment.Status}",
+                        StatusCodeEnum.BadRequest_400,
+                        null);
+                }
+
+                var createRequest = new CreateSubmissionRequest
+                {
+                    AssignmentId = request.AssignmentId,
+                    UserId = request.UserId,
+                    File = request.File,
+                    Keywords = request.Keywords,
+                    IsPublic = request.IsPublic
+                };
+
+                return await CreateSubmissionWithCheckAsync(createRequest);
             }
             catch (Exception ex)
             {
@@ -354,6 +484,77 @@ namespace Service.Service
                         StatusCodeEnum.Forbidden_403,
                         null);
                 }
+                // Update file if provided
+                if (request.File != null)
+                {
+                    // Upload new file
+                    var uploadResult = await _fileStorageService.UploadFileAsync(request.File, folder: $"submissions/{existingSubmission.AssignmentId}/{existingSubmission.UserId}", makePublic: request.IsPublic ?? existingSubmission.IsPublic);
+                    if (!uploadResult.Success)
+                    {
+                        return new BaseResponse<SubmissionResponse>(uploadResult.ErrorMessage, StatusCodeEnum.BadRequest_400, null);
+                    }
+
+                    // Delete old file (prefer stored path but allow URL)
+                    var toDelete = !string.IsNullOrEmpty(existingSubmission.FileName) ? existingSubmission.FileName : existingSubmission.FileUrl;
+                    await _fileStorageService.DeleteFileAsync(toDelete);
+
+                    existingSubmission.FileUrl = uploadResult.FileUrl;
+                    existingSubmission.FileName = uploadResult.FileName;
+                    existingSubmission.OriginalFileName = request.File.FileName;
+                }
+
+                // Update other properties
+                if (!string.IsNullOrEmpty(request.Keywords))
+                    existingSubmission.Keywords = request.Keywords;
+
+                if (request.IsPublic.HasValue)
+                    existingSubmission.IsPublic = request.IsPublic.Value;
+
+                if (!string.IsNullOrEmpty(request.Status))
+                    existingSubmission.Status = request.Status;
+
+                var updatedSubmission = await _submissionRepository.UpdateAsync(existingSubmission);
+                var response = await MapToSubmissionResponse(updatedSubmission);
+
+                _logger.LogInformation($"Submission updated successfully. SubmissionId: {updatedSubmission.SubmissionId}");
+
+                return new BaseResponse<SubmissionResponse>("Submission updated successfully", StatusCodeEnum.OK_200, response);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error updating submission with ID: {request.SubmissionId}");
+                return new BaseResponse<SubmissionResponse>("An error occurred while updating the submission", StatusCodeEnum.InternalServerError_500, null);
+            }
+        }
+        public async Task<BaseResponse<SubmissionResponse>> UpdateSubmissionWithCheckAsync(UpdateSubmissionRequest request)
+        {
+            try
+            {
+                var existingSubmission = await _submissionRepository.GetByIdAsync(request.SubmissionId);
+                if (existingSubmission == null)
+                {
+                    return new BaseResponse<SubmissionResponse>("Submission not found", StatusCodeEnum.NotFound_404, null);
+                }
+                // Check if student can modify submission
+                var canModify = await CanStudentModifySubmissionAsync(request.SubmissionId, existingSubmission.UserId);
+                if (!canModify.Data)
+                {
+                    return new BaseResponse<SubmissionResponse>(
+                        "Cannot modify submission after deadline",
+                        StatusCodeEnum.Forbidden_403,
+                        null);
+                }
+
+                // Kiểm tra trùng lặp nếu có file mới
+                if (request.File != null)
+                {
+                    var plagiarismCheck = await CheckPlagiarismAsync(existingSubmission.AssignmentId, request.File, request.SubmissionId);
+                    if (plagiarismCheck.StatusCode != StatusCodeEnum.OK_200)
+                    {
+                        return new BaseResponse<SubmissionResponse>(plagiarismCheck.Message, plagiarismCheck.StatusCode, null);
+                    }
+                }
+
                 // Update file if provided
                 if (request.File != null)
                 {
@@ -910,7 +1111,109 @@ namespace Service.Service
 
 
 
+        private async Task<BaseResponse<bool>> CheckPlagiarismAsync(int assignmentId, IFormFile file, int? excludeSubmissionId = null)
+        {
+            if (file == null)
+            {
+                return new BaseResponse<bool>("No file provided for check", StatusCodeEnum.OK_200, true);
+            }
 
+            try
+            {
+                // Get threshold from config, default 80%
+                var thresholdStr = await _systemConfigService.GetSystemConfigAsync("PlagiarismThreshold") ?? "80";
+                double threshold = double.Parse(thresholdStr) / 100;
+
+                // Extract text from new file
+                using var newStream = file.OpenReadStream();
+                string newText = await _documentTextExtractor.ExtractTextAsync(newStream, file.FileName);
+
+                if (string.IsNullOrWhiteSpace(newText))
+                {
+                    return new BaseResponse<bool>("No text extracted from file", StatusCodeEnum.BadRequest_400, false);
+                }
+
+                // Get other submissions in same assignment
+                var otherSubmissions = (await _submissionRepository.GetByAssignmentIdAsync(assignmentId))
+                    .Where(s => s.SubmissionId != excludeSubmissionId)
+                    .ToList();
+
+                if (!otherSubmissions.Any())
+                {
+                    return new BaseResponse<bool>("No other submissions to compare", StatusCodeEnum.OK_200, true);
+                }
+
+                double maxSimilarity = 0;
+
+                foreach (var other in otherSubmissions)
+                {
+                    using var otherStream = await _fileStorageService.GetFileStreamAsync(other.FileUrl);
+                    if (otherStream == null) continue;
+
+                    string otherText = await _documentTextExtractor.ExtractTextAsync(otherStream, other.FileName);
+                    if (string.IsNullOrWhiteSpace(otherText)) continue;
+
+                    double sim = CosineSimilarity(newText, otherText);
+                    if (sim > maxSimilarity) maxSimilarity = sim;
+                }
+
+                if (maxSimilarity > threshold)
+                {
+                    return new BaseResponse<bool>(
+                        $"Submission too similar to existing one ({Math.Round(maxSimilarity * 100, 2)}% similarity). Threshold is {threshold * 100}%.",
+                        StatusCodeEnum.BadRequest_400,
+                        false);
+                }
+
+                return new BaseResponse<bool>("Plagiarism check passed", StatusCodeEnum.OK_200, true);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during plagiarism check");
+                return new BaseResponse<bool>(
+                    $"Error checking plagiarism: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    false);
+            }
+        }
+
+        private double CosineSimilarity(string text1, string text2)
+        {
+            var vec1 = TextToVector(text1);
+            var vec2 = TextToVector(text2);
+
+            var keys = new HashSet<string>(vec1.Keys);
+            keys.UnionWith(vec2.Keys);
+
+            double dot = 0;
+            double norm1 = 0;
+            double norm2 = 0;
+
+            foreach (var key in keys)
+            {
+                int freq1 = vec1.GetValueOrDefault(key, 0);
+                int freq2 = vec2.GetValueOrDefault(key, 0);
+
+                dot += freq1 * freq2;
+                norm1 += freq1 * freq1;
+                norm2 += freq2 * freq2;
+            }
+
+            norm1 = Math.Sqrt(norm1);
+            norm2 = Math.Sqrt(norm2);
+
+            if (norm1 == 0 || norm2 == 0) return 0;
+
+            return dot / (norm1 * norm2);
+        }
+
+        private Dictionary<string, int> TextToVector(string text)
+        {
+            return text.ToLower()
+                .Split(new[] { ' ', '\t', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
+                .GroupBy(word => word)
+                .ToDictionary(g => g.Key, g => g.Count());
+        }
         public async Task<BaseResponse<bool>> PublishGradesAsync(PublishGradesRequest request)
         {
             try

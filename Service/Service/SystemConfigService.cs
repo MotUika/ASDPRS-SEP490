@@ -1,7 +1,7 @@
-﻿using DataAccessLayer;
-using Microsoft.AspNetCore.Http;
+﻿using BussinessObject.Models;
+using DataAccessLayer;
 using Microsoft.EntityFrameworkCore;
-using Repository.IRepository;
+using Microsoft.Extensions.Logging;
 using Service.IService;
 using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Enums;
@@ -10,7 +10,6 @@ using Service.RequestAndResponse.Response.SystemConfig;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace Service.Service
@@ -18,18 +17,21 @@ namespace Service.Service
     public class SystemConfigService : ISystemConfigService
     {
         private readonly ASDPRSContext _context;
-        public SystemConfigService(
-            ASDPRSContext context)
-        {
+        private readonly ILogger<SystemConfigService> _logger;
 
+        public SystemConfigService(ASDPRSContext context, ILogger<SystemConfigService> logger)
+        {
             _context = context;
+            _logger = logger;
         }
+
         public async Task<string> GetSystemConfigAsync(string key)
         {
             var config = await _context.SystemConfigs
                 .FirstOrDefaultAsync(sc => sc.ConfigKey == key);
             return config?.ConfigValue;
         }
+
         public async Task<BaseResponse<List<SystemConfigResponse>>> GetAllConfigsAsync()
         {
             try
@@ -126,10 +128,16 @@ namespace Service.Service
                         null);
                 }
 
-                // Update fields
+                // Chỉ update ConfigValue, không cho phép thay đổi các field khác
                 config.ConfigValue = request.ConfigValue;
                 config.UpdatedAt = DateTime.UtcNow;
                 config.UpdatedByUserId = request.UpdatedByUserId;
+
+                // Không update Description nếu không cung cấp, nhưng theo request, Description optional nên không update nếu null
+                if (!string.IsNullOrEmpty(request.Description))
+                {
+                    config.Description = request.Description;
+                }
 
                 await _context.SaveChangesAsync();
 
@@ -166,6 +174,7 @@ namespace Service.Service
                 "AISummaryMaxTokens" => ValidatePositiveInteger(value, "AISummaryMaxTokens"),
                 "AISummaryMaxWords" => ValidatePositiveInteger(value, "AISummaryMaxWords"),
                 "DefaultPassThreshold" => ValidatePercentage(value),
+                "PlagiarismThreshold" => ValidatePercentage(value),
                 _ => (true, string.Empty) // Cho phép update các config khác không cần validate
             };
         }
@@ -193,7 +202,7 @@ namespace Service.Service
         private (bool IsValid, string ErrorMessage) ValidatePercentage(string value)
         {
             if (!decimal.TryParse(value, out decimal percentage) || percentage < 0 || percentage > 100)
-                return (false, "DefaultPassThreshold must be a percentage between 0 and 100");
+                return (false, "Value must be a percentage between 0 and 100");
 
             return (true, string.Empty);
         }

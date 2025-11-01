@@ -510,6 +510,15 @@ namespace DataAccessLayer
                     Description = "Ngưỡng điểm mặc định để Pass",
                     UpdatedAt = DateTime.UtcNow,
                     UpdatedByUserId = 1
+                },
+                new SystemConfig
+                {
+                    ConfigId = 104,
+                    ConfigKey = "PlagiarismThreshold",
+                    ConfigValue = "80",
+                    Description = "Maximum allowed plagiarism percentage before blocking submission (0-100)",
+                    UpdatedAt = DateTime.UtcNow,
+                    UpdatedByUserId = 1
                 }
             );
         }
