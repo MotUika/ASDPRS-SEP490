@@ -27,5 +27,8 @@ namespace Service.Interface
         Task<BaseResponse<bool>> PublishGradesAsync(PublishGradesRequest request);
         Task<BaseResponse<IEnumerable<SubmissionSummaryResponse>>> GetSubmissionSummaryAsync(
             int? courseId, int? classId, int? assignmentId);
+        Task<BaseResponse<SubmissionResponse>> CreateSubmissionWithCheckAsync(CreateSubmissionRequest request);
+        Task<BaseResponse<SubmissionResponse>> SubmitAssignmentWithCheckAsync(SubmitAssignmentRequest request);
+        Task<BaseResponse<SubmissionResponse>> UpdateSubmissionWithCheckAsync(UpdateSubmissionRequest request);
     }
 }
