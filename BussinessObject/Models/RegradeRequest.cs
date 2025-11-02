@@ -25,7 +25,7 @@ namespace BussinessObject.Models
 
         public int? ReviewedByInstructorId { get; set; }
 
-        public string ResolutionNotes { get; set; }
+        public string? ResolutionNotes { get; set; }
 
         [ForeignKey("SubmissionId")]
         public Submission Submission { get; set; }

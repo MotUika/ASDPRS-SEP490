@@ -44,6 +44,10 @@ namespace Service.BackgroundJobs
 
                 foreach (var assignment in assignments)
                 {
+                    // Skip updating if status is already GradesPublished (prevent auto-change unless manual)
+                    if (assignment.Status == "GradesPublished")
+                        continue;
+
                     var newStatus = CalculateAssignmentStatus(assignment, context);
                     if (assignment.Status != newStatus)
                     {
