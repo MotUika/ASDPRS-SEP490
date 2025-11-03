@@ -22,5 +22,8 @@ namespace Service.IService
         Task<BaseResponse<EnhancedReviewResponse>> GenerateEnhancedReviewAsync(GenerateReviewRequest request);
         Task<BaseResponse<AIOverallResponse>> GenerateOverallSummaryAsync(GenerateAIOverallRequest request);
         Task<BaseResponse<AICriteriaResponse>> GenerateCriteriaFeedbackAsync(GenerateAICriteriaRequest request);
+        Task<BaseResponse<AIOverallResponse>> GenerateInstructorOverallSummaryAsync(GenerateAIOverallRequest request);
+        Task<BaseResponse<AICriteriaResponse>> GenerateInstructorCriteriaFeedbackAsync(GenerateAICriteriaRequest request);
+
     }
 }
