@@ -653,4 +653,34 @@ public class StudentReviewController : ControllerBase
             ));
         }
     }
+
+    [HttpGet("assignment/{assignmentId}/my-score")]
+    [SwaggerOperation(
+        Summary = "Lấy điểm final score của sinh viên cho assignment",
+        Description = "Trả về final score của assignment cho sinh viên hiện tại, chỉ khi assignment đã publish grades"
+    )]
+    [SwaggerResponse(200, "Thành công", typeof(BaseResponse<decimal?>))]
+    [SwaggerResponse(403, "Access denied hoặc chưa publish")]
+    [SwaggerResponse(404, "Không tìm thấy submission")]
+    public async Task<IActionResult> GetMyScore(int assignmentId)
+    {
+        var studentId = GetCurrentStudentId();
+        var result = await _submissionService.GetMyScoreAsync(assignmentId, studentId);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpGet("assignment/{assignmentId}/my-score-details")]
+    [SwaggerOperation(
+        Summary = "Lấy chi tiết điểm của sinh viên cho assignment",
+        Description = "Trả về instructor score, peer average, final score, feedback, và info khiếu nại cho assignment của sinh viên hiện tại"
+    )]
+    [SwaggerResponse(200, "Thành công", typeof(BaseResponse<MyScoreDetailsResponse>))]
+    [SwaggerResponse(403, "Access denied hoặc chưa publish")]
+    [SwaggerResponse(404, "Không tìm thấy submission")]
+    public async Task<IActionResult> GetMyScoreDetails(int assignmentId)
+    {
+        var studentId = GetCurrentStudentId();
+        var result = await _submissionService.GetMyScoreDetailsAsync(assignmentId, studentId);
+        return StatusCode((int)result.StatusCode, result);
+    }
 }
