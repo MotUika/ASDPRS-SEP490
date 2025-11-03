@@ -29,7 +29,7 @@ namespace BussinessObject.Models
         [Required]
         public decimal MaxScore { get; set; }
 
-        [Required]
+        //[Required]
         [StringLength(50)]
         public string ScoringType { get; set; }
 

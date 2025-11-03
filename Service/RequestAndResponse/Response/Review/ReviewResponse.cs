@@ -27,6 +27,7 @@ namespace Service.RequestAndResponse.Response.Review
         public int? ReviewerId { get; set; }
 
         public string ReviewerName { get; set; }
+        public string StudentCode { get; set; }
         public string ReviewerEmail { get; set; }
         public string AssignmentTitle { get; set; }
         public string CourseName { get; set; }

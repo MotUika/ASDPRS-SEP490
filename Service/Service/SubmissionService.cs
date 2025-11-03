@@ -1000,6 +1000,7 @@ namespace Service.Service
                     AssignmentId = s.AssignmentId,
                     UserId = s.UserId,
                     StudentName = s.User?.UserName,
+                    StudentCode = s.User?.StudentCode,
                     StudentEmail = s.User?.Email,
                     CourseName = s.Assignment?.CourseInstance?.Course?.CourseName,
                     ClassName = s.Assignment?.CourseInstance?.SectionCode,
@@ -1007,6 +1008,7 @@ namespace Service.Service
                     PeerAverageScore = s.PeerAverageScore ?? 0,
                     InstructorScore = s.InstructorScore ?? 0,
                     FinalScore = s.FinalScore ?? 0,
+                    Feedback = s.Feedback,
                     Status = s.Status,
                     GradedAt = s.GradedAt
                 }).OrderByDescending(x => x.GradedAt).ToList();
