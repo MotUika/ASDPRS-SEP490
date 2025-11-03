@@ -981,6 +981,16 @@ namespace Service.Service
             }
         }
 
+        public async Task<BaseResponse<AIOverallResponse>> GenerateInstructorOverallSummaryAsync(GenerateAIOverallRequest request)
+        {
+            return await GenerateOverallSummaryAsync(request);
+        }
+
+        public async Task<BaseResponse<AICriteriaResponse>> GenerateInstructorCriteriaFeedbackAsync(GenerateAICriteriaRequest request)
+        {
+            return await GenerateCriteriaFeedbackAsync(request);
+        }
+
 
         private string BuildEnhancedContext(Assignment assignment, Rubric rubric, List<Criteria> criteria)
         {

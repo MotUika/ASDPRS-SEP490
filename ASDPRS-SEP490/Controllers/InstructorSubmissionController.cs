@@ -3,7 +3,9 @@ using Service.Interface;
 using Service.IService;
 using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Enums;
+using Service.RequestAndResponse.Request.AISummary;
 using Service.RequestAndResponse.Request.Submission;
+using Service.RequestAndResponse.Response.AISummary;
 using Service.RequestAndResponse.Response.Review;
 using Service.RequestAndResponse.Response.Submission;
 using Swashbuckle.AspNetCore.Annotations;
@@ -163,6 +165,36 @@ namespace ASDPRS_SEP490.Controllers
         //    return Ok(result);
         //}
 
+        [HttpPost("submission/{submissionId}/generate-overall-summary")]
+        [SwaggerOperation(
+                Summary = "Generate AI Overall Summary for submission (for instructor)",
+                Description = "Tạo tóm tắt tổng quát AI cho bài nộp, dành cho giảng viên, không lưu vào DB"
+            )]
+        [SwaggerResponse(200, "Thành công", typeof(BaseResponse<AIOverallResponse>))]
+        [SwaggerResponse(400, "Yêu cầu không hợp lệ")]
+        [SwaggerResponse(404, "Không tìm thấy bài nộp")]
+        [SwaggerResponse(500, "Lỗi hệ thống")]
+        public async Task<IActionResult> GenerateInstructorOverallSummary(int submissionId)
+        {
+            var request = new GenerateAIOverallRequest { SubmissionId = submissionId };
+            var result = await _aiSummaryService.GenerateInstructorOverallSummaryAsync(request);
+            return StatusCode((int)result.StatusCode, result);
+        }
 
+        [HttpPost("submission/{submissionId}/generate-criteria-feedback")]
+        [SwaggerOperation(
+            Summary = "Generate AI Criteria Feedback for submission (for instructor)",
+            Description = "Tạo feedback AI theo từng tiêu chí cho bài nộp, dành cho giảng viên, không lưu vào DB"
+        )]
+        [SwaggerResponse(200, "Thành công", typeof(BaseResponse<AICriteriaResponse>))]
+        [SwaggerResponse(400, "Yêu cầu không hợp lệ")]
+        [SwaggerResponse(404, "Không tìm thấy bài nộp hoặc rubric")]
+        [SwaggerResponse(500, "Lỗi hệ thống")]
+        public async Task<IActionResult> GenerateInstructorCriteriaFeedback(int submissionId)
+        {
+            var request = new GenerateAICriteriaRequest { SubmissionId = submissionId };
+            var result = await _aiSummaryService.GenerateInstructorCriteriaFeedbackAsync(request);
+            return StatusCode((int)result.StatusCode, result);
+        }
     }
 }
