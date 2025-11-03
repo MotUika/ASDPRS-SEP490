@@ -276,5 +276,31 @@ namespace Service.Service
                 return new BaseResponse<IEnumerable<CourseResponse>>($"Error retrieving courses: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
+
+        public async Task<BaseResponse<IEnumerable<CourseResponse>>> GetCoursesByUserIdAsync(int userId)
+        {
+            try
+            {
+                var courses = await (from ci in _context.CourseInstances
+                                     join ciu in _context.CourseInstructors on ci.CourseInstanceId equals ciu.CourseInstanceId
+                                     join c in _context.Courses on ci.CourseId equals c.CourseId
+                                     where ciu.UserId == userId
+                                     select c)
+                                    .Distinct()
+                                    .Include(c => c.Curriculum)
+                                        .ThenInclude(cur => cur.Major)
+                                    .Include(c => c.CourseInstances)
+                                    .ToListAsync();
+
+                var response = _mapper.Map<IEnumerable<CourseResponse>>(courses);
+                return new BaseResponse<IEnumerable<CourseResponse>>("Courses retrieved successfully", StatusCodeEnum.OK_200, response);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<IEnumerable<CourseResponse>>($"Error retrieving courses: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
+            }
+        }
+
+
     }
 }
