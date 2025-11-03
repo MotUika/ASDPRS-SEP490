@@ -11,6 +11,7 @@ namespace Service.RequestAndResponse.Response.Submission
         public int UserId { get; set; }
         public string? StudentName { get; set; }
         public string? StudentCode { get; set; }
+
         public string FileUrl { get; set; }
         public string FileName { get; set; }
         public string OriginalFileName { get; set; }

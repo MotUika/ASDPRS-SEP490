@@ -669,6 +669,7 @@ namespace Service.Service
                 response.User = _mapper.Map<UserInfoResponse>(submission.User);
                 response.StudentName = $"{submission.User.FirstName} {submission.User.LastName}".Trim();
                 response.StudentCode = submission.User.StudentCode;
+
             }
             else
             {
