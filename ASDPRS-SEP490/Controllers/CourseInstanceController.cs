@@ -4,6 +4,7 @@ using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Enums;
 using Service.RequestAndResponse.Request.CourseInstance;
 using Service.RequestAndResponse.Response.CourseInstance;
+using Service.Service;
 using Swashbuckle.AspNetCore.Annotations;
 using System.Threading.Tasks;
 
@@ -206,5 +207,20 @@ namespace ASDPRS_SEP490.Controllers
                 _ => StatusCode(500, result)
             };
         }
+
+        [HttpGet("classes-by-user/{userId}")]
+        [SwaggerOperation(
+    Summary = "Lấy danh sách lớp học theo user",
+    Description = "Trả về danh sách lớp (CourseInstance) của user, có thể lọc theo CourseId")]
+        [SwaggerResponse(200, "Danh sách lớp học", typeof(BaseResponse<IEnumerable<CourseInstanceResponse>>))]
+        [SwaggerResponse(204, "Không có dữ liệu")]
+        [SwaggerResponse(500, "Lỗi hệ thống")]
+        public async Task<IActionResult> GetClassesByUserId(int userId, [FromQuery] int? courseId)
+        {
+            var result = await _courseInstanceService.GetClassesByUserIdAsync(userId, courseId);
+            return StatusCode((int)result.StatusCode, result);
+        }
+
+
     }
 }

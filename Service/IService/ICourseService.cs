@@ -17,5 +17,6 @@ namespace Service.IService
         Task<BaseResponse<IEnumerable<CourseResponse>>> GetCoursesByCodeAsync(string courseCode);
         Task<BaseResponse<IEnumerable<CourseResponse>>> GetActiveCoursesAsync();
         Task<BaseResponse<IEnumerable<CourseResponse>>> GetCoursesByMajorAsync(int majorId);
+        Task<BaseResponse<IEnumerable<CourseResponse>>> GetCoursesByUserIdAsync(int userId);
     }
 }

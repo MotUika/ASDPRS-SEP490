@@ -197,5 +197,16 @@ namespace ASDPRS_SEP490.Controllers
                 _ => StatusCode(500, result)
             };
         }
+
+        [HttpGet("by-user/{userId}")]
+        [SwaggerOperation(
+    Summary = "Lấy danh sách môn học theo user",
+    Description = "Trả về danh sách các môn mà user (sinh viên hoặc giảng viên) đang tham gia")]
+        public async Task<IActionResult> GetCoursesByUserId(int userId)
+        {
+            var result = await _courseService.GetCoursesByUserIdAsync(userId);
+            return StatusCode((int)result.StatusCode, result);
+        }
+
     }
 }

@@ -393,5 +393,44 @@ namespace Service.Service
                 return "LateSubmission";
             return "Closed";
         }
+
+        public async Task<BaseResponse<IEnumerable<CourseInstanceResponse>>> GetClassesByUserIdAsync(int userId, int? courseId)
+        {
+            try
+            {
+                // 🟩 Bắt đầu query từ CourseInstances
+                var query = _context.CourseInstances
+                    .Include(ci => ci.Course)
+                    .Include(ci => ci.Semester)
+                    .Include(ci => ci.Campus)
+                    .Include(ci => ci.CourseInstructors)
+                    .Include(ci => ci.CourseStudents)
+                    .Include(ci => ci.Assignments)
+                    .Where(ci => ci.CourseInstructors.Any(ciu => ciu.UserId == userId));
+
+                // 🟩 Nếu có lọc theo CourseId thì thêm điều kiện
+                if (courseId.HasValue && courseId > 0)
+                    query = query.Where(ci => ci.CourseId == courseId);
+
+                // 🟩 Lấy danh sách
+                var courseInstances = await query.ToListAsync();
+
+                if (!courseInstances.Any())
+                {
+                    return new BaseResponse<IEnumerable<CourseInstanceResponse>>("No classes found for this user", StatusCodeEnum.NoContent_204, null);
+                }
+
+                // 🟩 Map sang Response
+                var response = _mapper.Map<IEnumerable<CourseInstanceResponse>>(courseInstances);
+
+                return new BaseResponse<IEnumerable<CourseInstanceResponse>>("Classes retrieved successfully", StatusCodeEnum.OK_200, response);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<IEnumerable<CourseInstanceResponse>>($"Error retrieving classes: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
+            }
+        }
+
+
     }
 }
