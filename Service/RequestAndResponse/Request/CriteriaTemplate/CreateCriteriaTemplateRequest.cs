@@ -20,7 +20,7 @@ namespace Service.RequestAndResponse.Request.CriteriaTemplate
         [Required]
         public decimal MaxScore { get; set; }
 
-        [Required]
+        
         [StringLength(50)]
         public string ScoringType { get; set; }
 

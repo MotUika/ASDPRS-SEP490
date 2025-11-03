@@ -880,6 +880,7 @@ namespace Service.Service
                 ReviewerEmail = review.FeedbackSource == "AI" ? string.Empty : (reviewerUser?.Email ?? string.Empty),
                 AssignmentTitle = assignment?.Title ?? string.Empty,
                 CourseName = assignment?.CourseInstance?.Course?.CourseName ?? string.Empty,
+                StudentCode = reviewerUser?.StudentCode ?? reviewerUser?.UserName,
                 CriteriaFeedbacks = criteriaFeedbackResponses
             };
         }

@@ -19,10 +19,10 @@ namespace Service.RequestAndResponse.Request.CriteriaTemplate
 
         public decimal MaxScore { get; set; }
 
-        [StringLength(50)]
-        public string ScoringType { get; set; }
+        //[StringLength(50)]
+        //public string ScoringType { get; set; }
 
-        [StringLength(50)]
-        public string ScoreLabel { get; set; }
+        //[StringLength(50)]
+        //public string ScoreLabel { get; set; }
     }
 }
