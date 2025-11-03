@@ -1268,6 +1268,89 @@ namespace Service.Service
             }
         }
 
+        public async Task<BaseResponse<decimal?>> GetMyScoreAsync(int assignmentId, int studentId)
+        {
+            try
+            {
+                var assignment = await _assignmentRepository.GetByIdAsync(assignmentId);
+                if (assignment == null)
+                {
+                    return new BaseResponse<decimal?>("Assignment not found", StatusCodeEnum.NotFound_404, null);
+                }
+
+                if (assignment.Status != "GradesPublished")
+                {
+                    return new BaseResponse<decimal?>("Grades not yet published", StatusCodeEnum.Forbidden_403, null);
+                }
+
+                var submission = await _submissionRepository.GetByAssignmentAndUserAsync(assignmentId, studentId);
+                if (submission == null)
+                {
+                    return new BaseResponse<decimal?>("No submission found", StatusCodeEnum.NotFound_404, null);
+                }
+
+                if (submission.Status != "Graded")
+                {
+                    return new BaseResponse<decimal?>("Submission not graded", StatusCodeEnum.BadRequest_400, null);
+                }
+
+                return new BaseResponse<decimal?>("Score retrieved successfully", StatusCodeEnum.OK_200, submission.FinalScore);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error retrieving score for assignment {assignmentId} and student {studentId}");
+                return new BaseResponse<decimal?>("An error occurred", StatusCodeEnum.InternalServerError_500, null);
+            }
+        }
+
+        public async Task<BaseResponse<MyScoreDetailsResponse>> GetMyScoreDetailsAsync(int assignmentId, int studentId)
+        {
+            try
+            {
+                var assignment = await _assignmentRepository.GetByIdAsync(assignmentId);
+                if (assignment == null)
+                {
+                    return new BaseResponse<MyScoreDetailsResponse>("Assignment not found", StatusCodeEnum.NotFound_404, null);
+                }
+
+                if (assignment.Status != "GradesPublished")
+                {
+                    return new BaseResponse<MyScoreDetailsResponse>("Grades not yet published", StatusCodeEnum.Forbidden_403, null);
+                }
+
+                var submission = await _submissionRepository.GetByAssignmentAndUserAsync(assignmentId, studentId);
+                if (submission == null)
+                {
+                    return new BaseResponse<MyScoreDetailsResponse>("No submission found", StatusCodeEnum.NotFound_404, null);
+                }
+
+                if (submission.Status != "Graded")
+                {
+                    return new BaseResponse<MyScoreDetailsResponse>("Submission not graded", StatusCodeEnum.BadRequest_400, null);
+                }
+
+                // Lấy regrade requests nếu có
+                var regradeRequests = await _regradeRequestRepository.GetBySubmissionIdAsync(submission.SubmissionId);
+                var hasPendingRegrade = regradeRequests.Any(r => r.Status == "Pending");
+
+                var response = new MyScoreDetailsResponse
+                {
+                    InstructorScore = submission.InstructorScore ?? 0,
+                    PeerAverageScore = submission.PeerAverageScore ?? 0,
+                    FinalScore = submission.FinalScore ?? 0,
+                    Feedback = submission.Feedback,
+                    GradedAt = submission.GradedAt,
+                };
+
+                return new BaseResponse<MyScoreDetailsResponse>("Score details retrieved successfully", StatusCodeEnum.OK_200, response);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error retrieving score details for assignment {assignmentId} and student {studentId}");
+                return new BaseResponse<MyScoreDetailsResponse>("An error occurred", StatusCodeEnum.InternalServerError_500, null);
+            }
+        } 
+
         public async Task<BaseResponse<IEnumerable<SubmissionSummaryResponse>>> GetSubmissionSummaryAsync(
             int? courseId, int? classId, int? assignmentId)
         {
