@@ -4,6 +4,7 @@ namespace Service.RequestAndResponse.Response.Submission
 {
     public class MyScoreDetailsResponse
     {
+        public int SubmissionId { get; set; }
         public decimal InstructorScore { get; set; }
         public decimal PeerAverageScore { get; set; }
         public decimal FinalScore { get; set; }
