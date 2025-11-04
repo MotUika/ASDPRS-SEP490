@@ -1335,6 +1335,7 @@ namespace Service.Service
 
                 var response = new MyScoreDetailsResponse
                 {
+                    SubmissionId = submission.SubmissionId,
                     InstructorScore = submission.InstructorScore ?? 0,
                     PeerAverageScore = submission.PeerAverageScore ?? 0,
                     FinalScore = submission.FinalScore ?? 0,
