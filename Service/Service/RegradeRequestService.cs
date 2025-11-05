@@ -174,6 +174,12 @@ namespace Service.Service
                         .Take(request.PageSize);
                 }
 
+                // Nếu có cả StudentId và AssignmentId, filter thêm
+                if (request.StudentId.HasValue && request.AssignmentId.HasValue)
+                {
+                    requests = requests.Where(r => r.Submission.AssignmentId == request.AssignmentId.Value && r.Submission.UserId == request.StudentId.Value);
+                }
+
                 var requestList = requests.ToList();
                 var responseList = new List<RegradeRequestResponse>();
 
