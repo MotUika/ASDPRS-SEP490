@@ -645,7 +645,7 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error generating enhanced AI review for submission {SubmissionId}", request.SubmissionId);
+                _logger.LogError(ex, "Error generating AI review for submission {SubmissionId}", request.SubmissionId);
                 return new BaseResponse<AISummaryGenerationResponse>(
                     $"Error generating AI review: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
@@ -818,180 +818,6 @@ namespace Service.Service
             }
         }
 
-        public async Task<BaseResponse<AIOverallResponse>> GenerateOverallSummaryAsync(GenerateAIOverallRequest request)
-        {
-            try
-            {
-                var submission = await _submissionRepository.GetByIdAsync(request.SubmissionId);
-                if (submission == null)
-                {
-                    return new BaseResponse<AIOverallResponse>("Submission not found", StatusCodeEnum.NotFound_404, null);
-                }
-
-                var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
-                if (assignment == null)
-                {
-                    return new BaseResponse<AIOverallResponse>("Assignment not found", StatusCodeEnum.NotFound_404, null);
-                }
-
-                // Extract text (reuse logic)
-                using var fileStream = await _fileStorageService.GetFileStreamAsync(submission.FileUrl);
-                if (fileStream == null)
-                {
-                    return new BaseResponse<AIOverallResponse>("Could not download file", StatusCodeEnum.BadRequest_400, null);
-                }
-
-                var fileName = submission.FileName ?? submission.OriginalFileName;
-                var extractedText = await _documentTextExtractor.ExtractTextAsync(fileStream, fileName);
-
-                if (string.IsNullOrWhiteSpace(extractedText))
-                {
-                    return new BaseResponse<AIOverallResponse>("No text extracted", StatusCodeEnum.BadRequest_400, null);
-                }
-
-                if (extractedText.Length > 12000) extractedText = extractedText.Substring(0, 12000) + "...";
-
-                // Get max words from config
-                var maxWordsConfig = await _systemConfigService.GetSystemConfigAsync("AISummaryMaxWords");
-                int maxWords = int.Parse(maxWordsConfig ?? "200");
-
-                // Build context (reuse)
-                var context = BuildEnhancedContext(assignment, null, null);  // No rubric for overall
-
-                // Call AI
-                var summary = await _genAIService.GenerateOverallSummaryAsync(extractedText, context);
-
-                // Truncate if needed
-                if (summary.Split(' ').Length > maxWords)
-                {
-                    var words = summary.Split(' ').Take(maxWords).ToArray();
-                    summary = string.Join(" ", words) + "...";
-                }
-
-                var response = new AIOverallResponse { Summary = summary };
-                return new BaseResponse<AIOverallResponse>("AI overall summary generated", StatusCodeEnum.OK_200, response);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error generating AI overall summary");
-                return new BaseResponse<AIOverallResponse>($"Error: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
-            }
-        }
-
-        public async Task<BaseResponse<AICriteriaResponse>> GenerateCriteriaFeedbackAsync(GenerateAICriteriaRequest request)
-        {
-            try
-            {
-                var submission = await _submissionRepository.GetByIdAsync(request.SubmissionId);
-                if (submission == null)
-                {
-                    return new BaseResponse<AICriteriaResponse>("Submission not found", StatusCodeEnum.NotFound_404, null);
-                }
-
-                var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
-                if (assignment == null)
-                {
-                    return new BaseResponse<AICriteriaResponse>("Assignment not found", StatusCodeEnum.NotFound_404, null);
-                }
-
-                // Get rubric & criteria
-                Rubric rubric = null;
-                List<Criteria> criteria = null;
-                if (assignment.RubricId.HasValue)
-                {
-                    rubric = await _rubricRepository.GetByIdAsync(assignment.RubricId.Value);
-                    if (rubric != null)
-                    {
-                        criteria = (await _criteriaRepository.GetByRubricIdAsync(rubric.RubricId)).ToList();
-                    }
-                }
-                if (criteria == null || !criteria.Any())
-                {
-                    return new BaseResponse<AICriteriaResponse>("No rubric criteria found", StatusCodeEnum.NotFound_404, null);
-                }
-
-                // Extract text (reuse)
-                using var fileStream = await _fileStorageService.GetFileStreamAsync(submission.FileUrl);
-                if (fileStream == null)
-                {
-                    return new BaseResponse<AICriteriaResponse>("Could not download file", StatusCodeEnum.BadRequest_400, null);
-                }
-
-                var fileName = submission.FileName ?? submission.OriginalFileName;
-                var extractedText = await _documentTextExtractor.ExtractTextAsync(fileStream, fileName);
-
-                if (string.IsNullOrWhiteSpace(extractedText))
-                {
-                    return new BaseResponse<AICriteriaResponse>("No text extracted", StatusCodeEnum.BadRequest_400, null);
-                }
-
-                if (extractedText.Length > 12000) extractedText = extractedText.Substring(0, 12000) + "...";
-
-                // Build context
-                var context = BuildEnhancedContext(assignment, rubric, criteria);
-
-                // Generate per criteria
-                var feedbacks = new List<AICriteriaFeedbackItem>();
-                foreach (var criterion in criteria)
-                {
-                    var criteriaSummary = await _genAIService.GenerateCriteriaSummaryAsync(extractedText, criterion, context);
-
-                    // Parse score from AI response (assume AI returns "Score: X/Y | Summary: ...")
-                    decimal score = 0;
-                    string summaryText = criteriaSummary;
-                    if (criteriaSummary.Contains("Score:"))
-                    {
-                        var parts = criteriaSummary.Split('|');
-                        if (parts.Length >= 2)
-                        {
-                            var scoreStr = parts[0].Replace("Score:", "").Trim();
-                            decimal.TryParse(scoreStr, out score);
-                            summaryText = parts[1].Replace("Summary:", "").Trim();
-                        }
-                    }
-
-                    // Truncate summary
-                    if (summaryText.Split(' ').Length > 30)
-                    {
-                        var words = summaryText.Split(' ').Take(30).ToArray();
-                        summaryText = string.Join(" ", words) + "...";
-                    }
-
-                    // Clamp score
-                    score = Math.Clamp(score, 0, criterion.MaxScore);
-
-                    feedbacks.Add(new AICriteriaFeedbackItem
-                    {
-                        CriteriaId = criterion.CriteriaId,
-                        Title = criterion.Title,
-                        Description = criterion.Description ?? "",
-                        Summary = summaryText,
-                        Score = score,
-                        MaxScore = criterion.MaxScore
-                    });
-                }
-
-                var response = new AICriteriaResponse { Feedbacks = feedbacks };
-                return new BaseResponse<AICriteriaResponse>("AI criteria feedback generated", StatusCodeEnum.OK_200, response);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error generating AI criteria feedback");
-                return new BaseResponse<AICriteriaResponse>($"Error: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
-            }
-        }
-
-        public async Task<BaseResponse<AIOverallResponse>> GenerateInstructorOverallSummaryAsync(GenerateAIOverallRequest request)
-        {
-            return await GenerateOverallSummaryAsync(request);
-        }
-
-        public async Task<BaseResponse<AICriteriaResponse>> GenerateInstructorCriteriaFeedbackAsync(GenerateAICriteriaRequest request)
-        {
-            return await GenerateCriteriaFeedbackAsync(request);
-        }
-
-
         private string BuildEnhancedContext(Assignment assignment, Rubric rubric, List<Criteria> criteria)
         {
             var contextBuilder = new StringBuilder();
@@ -1084,6 +910,265 @@ namespace Service.Service
                 "keypoints" => $"Key points: the submission covers all required topics and demonstrates understanding of the subject matter. {additionalInstructions}",
                 _ => $"AI-generated summary for {summaryType}: This is a mock summary for demonstration purposes. {additionalInstructions}"
             };
+        }
+
+        public async Task<BaseResponse<AIOverallResponse>> GenerateOverallSummaryAsync(GenerateAIOverallRequest request)
+        {
+            try
+            {
+                var submission = await _submissionRepository.GetByIdAsync(request.SubmissionId);
+                if (submission == null)
+                {
+                    return new BaseResponse<AIOverallResponse>("Submission not found", StatusCodeEnum.NotFound_404, null);
+                }
+
+                var summaryType = "OverallSummary";
+
+                // Check if exists
+                var existing = await _aiSummaryRepository.GetBySubmissionAndTypeAsync(request.SubmissionId, summaryType);
+                var existingSummary = existing.FirstOrDefault();
+                if (existingSummary != null)
+                {
+                    return new BaseResponse<AIOverallResponse>(
+                        "Existing overall summary loaded",
+                        StatusCodeEnum.OK_200,
+                        new AIOverallResponse { Summary = existingSummary.Content });
+                }
+
+                var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
+                if (assignment == null)
+                {
+                    return new BaseResponse<AIOverallResponse>("Assignment not found", StatusCodeEnum.NotFound_404, null);
+                }
+
+                // Extract text (reuse)
+                using var fileStream = await _fileStorageService.GetFileStreamAsync(submission.FileUrl);
+                if (fileStream == null)
+                {
+                    return new BaseResponse<AIOverallResponse>("Could not download file", StatusCodeEnum.BadRequest_400, null);
+                }
+
+                var fileName = submission.FileName ?? submission.OriginalFileName;
+                var extractedText = await _documentTextExtractor.ExtractTextAsync(fileStream, fileName);
+
+                if (string.IsNullOrWhiteSpace(extractedText))
+                {
+                    return new BaseResponse<AIOverallResponse>("No text extracted", StatusCodeEnum.BadRequest_400, null);
+                }
+
+                if (extractedText.Length > 12000) extractedText = extractedText.Substring(0, 12000) + "...";
+
+                // Get max words from config
+                var maxWordsConfig = await _systemConfigService.GetSystemConfigAsync("AISummaryMaxWords");
+                int maxWords = int.Parse(maxWordsConfig ?? "200");
+
+                // Build context (reuse)
+                var context = BuildEnhancedContext(assignment, null, null);  // No rubric for overall
+
+                // Call AI
+                var summary = await _genAIService.GenerateOverallSummaryAsync(extractedText, context);
+
+                // Truncate if needed
+                if (summary.Split(' ').Length > maxWords)
+                {
+                    var words = summary.Split(' ').Take(maxWords).ToArray();
+                    summary = string.Join(" ", words) + "...";
+                }
+
+                if (summary.Length > 2000) summary = summary.Substring(0, 2000);
+
+                // Lưu vào DB
+                var aiSummary = new AISummary
+                {
+                    SubmissionId = request.SubmissionId,
+                    Content = summary,
+                    SummaryType = summaryType,
+                    GeneratedAt = DateTime.UtcNow
+                };
+                await _aiSummaryRepository.AddAsync(aiSummary);
+
+                var response = new AIOverallResponse { Summary = summary };
+                return new BaseResponse<AIOverallResponse>("AI overall summary generated and saved", StatusCodeEnum.Created_201, response);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error generating overall summary");
+                return new BaseResponse<AIOverallResponse>($"Error: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
+            }
+        }
+
+        public async Task<BaseResponse<AICriteriaResponse>> GenerateCriteriaFeedbackAsync(GenerateAICriteriaRequest request)
+        {
+            try
+            {
+                var submission = await _submissionRepository.GetByIdAsync(request.SubmissionId);
+                if (submission == null)
+                {
+                    return new BaseResponse<AICriteriaResponse>("Submission not found", StatusCodeEnum.NotFound_404, null);
+                }
+
+                var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
+                if (assignment == null)
+                {
+                    return new BaseResponse<AICriteriaResponse>("Assignment not found", StatusCodeEnum.NotFound_404, null);
+                }
+
+                // Get rubric & criteria
+                Rubric rubric = null;
+                List<Criteria> criteria = null;
+                if (assignment.RubricId.HasValue)
+                {
+                    rubric = await _rubricRepository.GetByIdAsync(assignment.RubricId.Value);
+                    if (rubric != null)
+                    {
+                        criteria = (await _criteriaRepository.GetByRubricIdAsync(rubric.RubricId)).ToList();
+                    }
+                }
+                if (criteria == null || !criteria.Any())
+                {
+                    return new BaseResponse<AICriteriaResponse>("No rubric criteria found", StatusCodeEnum.NotFound_404, null);
+                }
+
+                var feedbacks = new List<AICriteriaFeedbackItem>();
+                var allExist = true;
+
+                foreach (var criterion in criteria)
+                {
+                    var summaryType = $"CriteriaFeedback_{criterion.CriteriaId}";
+                    var existing = await _aiSummaryRepository.GetBySubmissionAndTypeAsync(request.SubmissionId, summaryType);
+                    var existingSummary = existing.FirstOrDefault();
+
+                    if (existingSummary != null)
+                    {
+                        // Parse score and summary from existing
+                        decimal score = 0;
+                        string summaryText = existingSummary.Content;
+                        if (summaryText.Contains("Score:"))
+                        {
+                            var parts = summaryText.Split('|');
+                            if (parts.Length >= 2)
+                            {
+                                var scoreStr = parts[0].Replace("Score:", "").Trim();
+                                decimal.TryParse(scoreStr, out score);
+                                summaryText = parts[1].Replace("Summary:", "").Trim();
+                            }
+                        }
+
+                        feedbacks.Add(new AICriteriaFeedbackItem
+                        {
+                            CriteriaId = criterion.CriteriaId,
+                            Title = criterion.Title,
+                            Description = criterion.Description ?? "",
+                            Summary = summaryText,
+                            Score = score,
+                            MaxScore = criterion.MaxScore
+                        });
+                    }
+                    else
+                    {
+                        allExist = false;
+                        break;
+                    }
+                }
+
+                if (allExist)
+                {
+                    return new BaseResponse<AICriteriaResponse>(
+                        "Existing criteria feedback loaded",
+                        StatusCodeEnum.OK_200,
+                        new AICriteriaResponse { Feedbacks = feedbacks });
+                }
+
+                // Nếu không tồn tại hết, generate mới
+                // Extract text (reuse)
+                using var fileStream = await _fileStorageService.GetFileStreamAsync(submission.FileUrl);
+                if (fileStream == null)
+                {
+                    return new BaseResponse<AICriteriaResponse>("Could not download file", StatusCodeEnum.BadRequest_400, null);
+                }
+
+                var fileName = submission.FileName ?? submission.OriginalFileName;
+                var extractedText = await _documentTextExtractor.ExtractTextAsync(fileStream, fileName);
+
+                if (string.IsNullOrWhiteSpace(extractedText))
+                {
+                    return new BaseResponse<AICriteriaResponse>("No text extracted", StatusCodeEnum.BadRequest_400, null);
+                }
+
+                if (extractedText.Length > 12000) extractedText = extractedText.Substring(0, 12000) + "...";
+
+                // Build context
+                var context = BuildEnhancedContext(assignment, rubric, criteria);
+
+                // Generate per criteria
+                feedbacks.Clear();
+                foreach (var criterion in criteria)
+                {
+                    var criteriaSummary = await _genAIService.GenerateCriteriaSummaryAsync(extractedText, criterion, context);
+
+                    // Parse score from AI response (assume "Score: X | Summary: ...")
+                    decimal score = 0;
+                    string summaryText = criteriaSummary;
+                    if (criteriaSummary.Contains("Score:"))
+                    {
+                        var parts = criteriaSummary.Split('|');
+                        if (parts.Length >= 2)
+                        {
+                            var scoreStr = parts[0].Replace("Score:", "").Trim();
+                            decimal.TryParse(scoreStr, out score);
+                            summaryText = parts[1].Replace("Summary:", "").Trim();
+                        }
+                    }
+
+                    // Truncate summary
+                    if (summaryText.Split(' ').Length > 30)
+                    {
+                        var words = summaryText.Split(' ').Take(30).ToArray();
+                        summaryText = string.Join(" ", words) + "...";
+                    }
+
+                    // Clamp score
+                    score = Math.Clamp(score, 0, criterion.MaxScore);
+
+                    // Lưu vào DB
+                    var aiSummary = new AISummary
+                    {
+                        SubmissionId = request.SubmissionId,
+                        Content = $"Score: {score} | Summary: {summaryText}",
+                        SummaryType = $"CriteriaFeedback_{criterion.CriteriaId}",
+                        GeneratedAt = DateTime.UtcNow
+                    };
+                    await _aiSummaryRepository.AddAsync(aiSummary);
+
+                    feedbacks.Add(new AICriteriaFeedbackItem
+                    {
+                        CriteriaId = criterion.CriteriaId,
+                        Title = criterion.Title,
+                        Description = criterion.Description ?? "",
+                        Summary = summaryText,
+                        Score = score,
+                        MaxScore = criterion.MaxScore
+                    });
+                }
+
+                var response = new AICriteriaResponse { Feedbacks = feedbacks };
+                return new BaseResponse<AICriteriaResponse>("AI criteria feedback generated and saved", StatusCodeEnum.Created_201, response);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error generating criteria feedback");
+                return new BaseResponse<AICriteriaResponse>($"Error: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
+            }
+        }
+
+        public async Task<BaseResponse<AIOverallResponse>> GenerateInstructorOverallSummaryAsync(GenerateAIOverallRequest request)
+        {
+            return await GenerateOverallSummaryAsync(request);
+        }
+
+        public async Task<BaseResponse<AICriteriaResponse>> GenerateInstructorCriteriaFeedbackAsync(GenerateAICriteriaRequest request)
+        {
+            return await GenerateCriteriaFeedbackAsync(request);
         }
     }
 }

@@ -496,6 +496,89 @@ public class StudentReviewController : ControllerBase
             ));
         }
     }
+    [HttpPost("submission/{submissionId}/ai-overall-summary")]
+    [SwaggerOperation(
+        Summary = "Generate or load AI Overall Summary for submission",
+        Description = "Nếu chưa tồn tại, generate tóm tắt tổng quát ~100 từ và lưu DB; nếu có, load từ DB."
+    )]
+    [SwaggerResponse(200, "Thành công (load hoặc generate)", typeof(BaseResponse<AIOverallResponse>))]
+    [SwaggerResponse(403, "Access denied")]
+    [SwaggerResponse(404, "Không tìm thấy submission")]
+    [SwaggerResponse(500, "Lỗi server")]
+    public async Task<IActionResult> GenerateAIOverallSummary(int submissionId)
+    {
+        try
+        {
+            var studentId = GetCurrentStudentId();
+
+            // Kiểm tra quyền (tương tự existing)
+            var reviewAssignments = await _reviewAssignmentService.GetReviewAssignmentsBySubmissionIdAsync(submissionId);
+            var canReview = reviewAssignments.Data?.Any(ra => ra.ReviewerUserId == studentId) ?? false;
+
+            if (!canReview)
+            {
+                return StatusCode(403, new BaseResponse<AIOverallResponse>(
+                    "Access denied: You are not assigned to review this submission",
+                    StatusCodeEnum.Forbidden_403,
+                    null
+                ));
+            }
+
+            var request = new GenerateAIOverallRequest { SubmissionId = submissionId };
+            var result = await _aISummaryService.GenerateOverallSummaryAsync(request);  // Method đã modify để lưu
+            return StatusCode((int)result.StatusCode, result);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new BaseResponse<AIOverallResponse>(
+                $"Error generating/loading AI overall summary: {ex.Message}",
+                StatusCodeEnum.InternalServerError_500,
+                null
+            ));
+        }
+    }
+
+    [HttpPost("submission/{submissionId}/ai-criteria-feedback")]
+    [SwaggerOperation(
+        Summary = "Generate or load AI Criteria Feedback for submission",
+        Description = "Nếu chưa tồn tại, generate feedback theo từng criteria và lưu DB; nếu có, load từ DB."
+    )]
+    [SwaggerResponse(200, "Thành công (load hoặc generate)", typeof(BaseResponse<AICriteriaResponse>))]
+    [SwaggerResponse(403, "Access denied")]
+    [SwaggerResponse(404, "Không tìm thấy submission hoặc rubric")]
+    [SwaggerResponse(500, "Lỗi server")]
+    public async Task<IActionResult> GenerateAICriteriaFeedback(int submissionId)
+    {
+        try
+        {
+            var studentId = GetCurrentStudentId();
+
+            // Kiểm tra quyền (tương tự)
+            var reviewAssignments = await _reviewAssignmentService.GetReviewAssignmentsBySubmissionIdAsync(submissionId);
+            var canReview = reviewAssignments.Data?.Any(ra => ra.ReviewerUserId == studentId) ?? false;
+
+            if (!canReview)
+            {
+                return StatusCode(403, new BaseResponse<AICriteriaResponse>(
+                    "Access denied: You are not assigned to review this submission",
+                    StatusCodeEnum.Forbidden_403,
+                    null
+                ));
+            }
+
+            var request = new GenerateAICriteriaRequest { SubmissionId = submissionId };
+            var result = await _aISummaryService.GenerateCriteriaFeedbackAsync(request);  // Method đã modify để lưu
+            return StatusCode((int)result.StatusCode, result);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new BaseResponse<AICriteriaResponse>(
+                $"Error generating/loading AI criteria feedback: {ex.Message}",
+                StatusCodeEnum.InternalServerError_500,
+                null
+            ));
+        }
+    }
 
     [HttpGet("assignment/{assignmentId}/user/{userId}")]
     [SwaggerOperation(
