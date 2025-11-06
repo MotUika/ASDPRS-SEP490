@@ -168,9 +168,10 @@ namespace ASDPRS_SEP490.Controllers
         [HttpPost("submission/{submissionId}/generate-overall-summary")]
         [SwaggerOperation(
                 Summary = "Generate AI Overall Summary for submission (for instructor)",
-                Description = "Tạo tóm tắt tổng quát AI cho bài nộp, dành cho giảng viên, không lưu vào DB"
+                Description = "Tạo tóm tắt tổng quát AI cho bài nộp, dành cho giảng viên. Nếu chưa tồn tại, generate và lưu DB; nếu có, load từ DB."
             )]
-        [SwaggerResponse(200, "Thành công", typeof(BaseResponse<AIOverallResponse>))]
+        [SwaggerResponse(200, "Thành công (load existing)", typeof(BaseResponse<AIOverallResponse>))]
+        [SwaggerResponse(201, "Thành công (generated mới)", typeof(BaseResponse<AIOverallResponse>))]
         [SwaggerResponse(400, "Yêu cầu không hợp lệ")]
         [SwaggerResponse(404, "Không tìm thấy bài nộp")]
         [SwaggerResponse(500, "Lỗi hệ thống")]
@@ -184,9 +185,10 @@ namespace ASDPRS_SEP490.Controllers
         [HttpPost("submission/{submissionId}/generate-criteria-feedback")]
         [SwaggerOperation(
             Summary = "Generate AI Criteria Feedback for submission (for instructor)",
-            Description = "Tạo feedback AI theo từng tiêu chí cho bài nộp, dành cho giảng viên, không lưu vào DB"
+            Description = "Tạo feedback AI theo từng tiêu chí cho bài nộp, dành cho giảng viên. Nếu chưa tồn tại, generate và lưu DB; nếu có, load từ DB."
         )]
-        [SwaggerResponse(200, "Thành công", typeof(BaseResponse<AICriteriaResponse>))]
+        [SwaggerResponse(200, "Thành công (load existing)", typeof(BaseResponse<AICriteriaResponse>))]
+        [SwaggerResponse(201, "Thành công (generated mới)", typeof(BaseResponse<AICriteriaResponse>))]
         [SwaggerResponse(400, "Yêu cầu không hợp lệ")]
         [SwaggerResponse(404, "Không tìm thấy bài nộp hoặc rubric")]
         [SwaggerResponse(500, "Lỗi hệ thống")]
