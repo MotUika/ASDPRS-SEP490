@@ -20,8 +20,7 @@ namespace Repository.Repository
         {
             return await _context.Users
                 .Include(u => u.Campus)
-                .Include(u => u.UserRoles)
-                .ThenInclude(ur => ur.Role)
+                .Include(u => u.Major)
                 .FirstOrDefaultAsync(u => u.Email == email);
         }
 
@@ -29,36 +28,27 @@ namespace Repository.Repository
         {
             return await _context.Users
                 .Include(u => u.Campus)
-                .Include(u => u.UserRoles)
-                .ThenInclude(ur => ur.Role)
+                .Include(u => u.Major)
                 .Where(u => u.CampusId == campusId)
                 .ToListAsync();
         }
 
-        public async Task<IEnumerable<User>> GetByRoleAsync(string roleName)
-        {
-            return await _context.Users
-                .Include(u => u.Campus)
-                .Include(u => u.UserRoles)
-                .ThenInclude(ur => ur.Role)
-                .Where(u => u.UserRoles.Any(ur => ur.Role.RoleName == roleName))
-                .ToListAsync();
-        }
-
-        public async Task<User> GetUserWithRolesAsync(int userId)
-        {
-            return await _context.Users
-                .Include(u => u.UserRoles)
-                .ThenInclude(ur => ur.Role)
-                .FirstOrDefaultAsync(u => u.Id == userId);
-        }
+        
         public async Task<User> GetByStudentCodeAsync(string studentCode)
         {
             return await _context.Users
                 .Include(u => u.Campus)
-                .Include(u => u.UserRoles)
-                .ThenInclude(ur => ur.Role)
+                .Include(u => u.Major) 
                 .FirstOrDefaultAsync(u => u.StudentCode == studentCode);
+        }
+
+        public async Task<IEnumerable<User>> GetByMajorIdAsync(int majorId)
+        {
+            return await _context.Users
+                .Include(u => u.Campus)
+                .Include(u => u.Major)
+                .Where(u => u.MajorId == majorId)
+                .ToListAsync();
         }
     }
 }

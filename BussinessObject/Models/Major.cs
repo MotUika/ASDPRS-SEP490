@@ -22,5 +22,7 @@ namespace BussinessObject.Models
         // Navigation properties
         public virtual ICollection<Curriculum> Curriculums { get; set; } = new List<Curriculum>();
         public virtual ICollection<RubricTemplate> RubricTemplates { get; set; } = new List<RubricTemplate>();
+        public virtual ICollection<User> Users { get; set; } = new List<User>();
+
     }
 }

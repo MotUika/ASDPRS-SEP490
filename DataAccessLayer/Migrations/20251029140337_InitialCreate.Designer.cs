@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DataAccessLayer.Migrations
 {
     [DbContext(typeof(ASDPRSContext))]
-    [Migration("20251023071140_InitialCreate")]
+    [Migration("20251029140337_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -52,6 +52,14 @@ namespace DataAccessLayer.Migrations
                         .IsRequired()
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("FileName")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("FileUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<DateTime?>("FinalDeadline")
                         .HasColumnType("datetime2");
@@ -97,6 +105,9 @@ namespace DataAccessLayer.Migrations
                     b.Property<int?>("RubricId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("RubricTemplateId")
+                        .HasColumnType("int");
+
                     b.Property<DateTime?>("StartDate")
                         .HasColumnType("datetime2");
 
@@ -117,6 +128,8 @@ namespace DataAccessLayer.Migrations
                     b.HasIndex("Deadline");
 
                     b.HasIndex("FinalDeadline");
+
+                    b.HasIndex("RubricTemplateId");
 
                     b.HasIndex("StartDate");
 
@@ -822,29 +835,6 @@ namespace DataAccessLayer.Migrations
                     b.ToTable("ReviewAssignments");
                 });
 
-            modelBuilder.Entity("BussinessObject.Models.Role", b =>
-                {
-                    b.Property<int>("RoleId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("RoleId"));
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("RoleName")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.HasKey("RoleId");
-
-                    b.ToTable("Role");
-                });
-
             modelBuilder.Entity("BussinessObject.Models.Semester", b =>
                 {
                     b.Property<int>("SemesterId")
@@ -885,6 +875,10 @@ namespace DataAccessLayer.Migrations
                     b.Property<int>("AssignmentId")
                         .HasColumnType("int");
 
+                    b.Property<string>("Feedback")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
                     b.Property<string>("FileName")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -892,6 +886,15 @@ namespace DataAccessLayer.Migrations
                     b.Property<string>("FileUrl")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal?>("FinalScore")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("GradedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal?>("InstructorScore")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<bool>("IsPublic")
                         .HasColumnType("bit");
@@ -903,6 +906,9 @@ namespace DataAccessLayer.Migrations
                     b.Property<string>("OriginalFileName")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal?>("PeerAverageScore")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -965,7 +971,7 @@ namespace DataAccessLayer.Migrations
                             ConfigKey = "ScorePrecision",
                             ConfigValue = "0.5",
                             Description = "Độ chính xác điểm số (0.25, 0.5, 1.0)",
-                            UpdatedAt = new DateTime(2025, 10, 23, 7, 11, 40, 513, DateTimeKind.Utc).AddTicks(8933),
+                            UpdatedAt = new DateTime(2025, 10, 29, 14, 3, 35, 499, DateTimeKind.Utc).AddTicks(6759),
                             UpdatedByUserId = 1
                         },
                         new
@@ -974,7 +980,7 @@ namespace DataAccessLayer.Migrations
                             ConfigKey = "AISummaryMaxTokens",
                             ConfigValue = "1000",
                             Description = "Số token tối đa cho AI summary",
-                            UpdatedAt = new DateTime(2025, 10, 23, 7, 11, 40, 513, DateTimeKind.Utc).AddTicks(8938),
+                            UpdatedAt = new DateTime(2025, 10, 29, 14, 3, 35, 499, DateTimeKind.Utc).AddTicks(6760),
                             UpdatedByUserId = 1
                         },
                         new
@@ -983,7 +989,7 @@ namespace DataAccessLayer.Migrations
                             ConfigKey = "AISummaryMaxWords",
                             ConfigValue = "200",
                             Description = "Số từ tối đa cho AI summary",
-                            UpdatedAt = new DateTime(2025, 10, 23, 7, 11, 40, 513, DateTimeKind.Utc).AddTicks(8939),
+                            UpdatedAt = new DateTime(2025, 10, 29, 14, 3, 35, 499, DateTimeKind.Utc).AddTicks(6761),
                             UpdatedByUserId = 1
                         },
                         new
@@ -992,7 +998,7 @@ namespace DataAccessLayer.Migrations
                             ConfigKey = "DefaultPassThreshold",
                             ConfigValue = "50",
                             Description = "Ngưỡng điểm mặc định để Pass",
-                            UpdatedAt = new DateTime(2025, 10, 23, 7, 11, 40, 513, DateTimeKind.Utc).AddTicks(8940),
+                            UpdatedAt = new DateTime(2025, 10, 29, 14, 3, 35, 499, DateTimeKind.Utc).AddTicks(6762),
                             UpdatedByUserId = 1
                         });
                 });
@@ -1047,6 +1053,9 @@ namespace DataAccessLayer.Migrations
                     b.Property<DateTimeOffset?>("LockoutEnd")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<int?>("MajorId")
+                        .HasColumnType("int");
+
                     b.Property<string>("NormalizedEmail")
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
@@ -1082,6 +1091,8 @@ namespace DataAccessLayer.Migrations
 
                     b.HasIndex("CampusId");
 
+                    b.HasIndex("MajorId");
+
                     b.HasIndex("NormalizedEmail")
                         .HasDatabaseName("EmailIndex");
 
@@ -1098,8 +1109,8 @@ namespace DataAccessLayer.Migrations
                             Id = 1,
                             AccessFailedCount = 0,
                             CampusId = 1,
-                            ConcurrencyStamp = "e5cdedef-78e0-4c5e-b4d0-411fb8ed6608",
-                            CreatedAt = new DateTime(2025, 10, 23, 7, 11, 40, 513, DateTimeKind.Utc).AddTicks(8881),
+                            ConcurrencyStamp = "2a54ac74-5a34-4fd0-9185-452797b3213b",
+                            CreatedAt = new DateTime(2025, 10, 29, 14, 3, 35, 499, DateTimeKind.Utc).AddTicks(6695),
                             Email = "admin@example.com",
                             EmailConfirmed = true,
                             FirstName = "Admin",
@@ -1110,37 +1121,11 @@ namespace DataAccessLayer.Migrations
                             NormalizedUserName = "ADMIN",
                             PasswordHash = "AQAAAAIAAYagAAAAEK95SlxvEPzqxJyTxIof0ufhmHVKdEGcuw7MxCBj92JUehpXlaMI0F4RrX3mzLDNzA==",
                             PhoneNumberConfirmed = false,
-                            SecurityStamp = "5c93463f-f720-4ee0-9621-c752bf13bd06",
+                            SecurityStamp = "8e560281-1c9d-4e6b-8a3c-132ec399bb7d",
                             StudentCode = "ADMIN001",
                             TwoFactorEnabled = false,
                             UserName = "admin"
                         });
-                });
-
-            modelBuilder.Entity("BussinessObject.Models.UserRole", b =>
-                {
-                    b.Property<int>("UserRoleId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("UserRoleId"));
-
-                    b.Property<DateTime>("AssignedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("RoleId")
-                        .HasColumnType("int");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("int");
-
-                    b.HasKey("UserRoleId");
-
-                    b.HasIndex("RoleId");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("UserRole");
                 });
 
             modelBuilder.Entity("Course", b =>
@@ -1411,9 +1396,15 @@ namespace DataAccessLayer.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("RubricTemplate", "RubricTemplate")
+                        .WithMany()
+                        .HasForeignKey("RubricTemplateId");
+
                     b.Navigation("ClonedFromAssignment");
 
                     b.Navigation("CourseInstance");
+
+                    b.Navigation("RubricTemplate");
                 });
 
             modelBuilder.Entity("BussinessObject.Models.AISummary", b =>
@@ -1759,26 +1750,13 @@ namespace DataAccessLayer.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("BussinessObject.Models.Major", "Major")
+                        .WithMany("Users")
+                        .HasForeignKey("MajorId");
+
                     b.Navigation("Campus");
-                });
 
-            modelBuilder.Entity("BussinessObject.Models.UserRole", b =>
-                {
-                    b.HasOne("BussinessObject.Models.Role", "Role")
-                        .WithMany("UserRoles")
-                        .HasForeignKey("RoleId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("BussinessObject.Models.User", "User")
-                        .WithMany("UserRoles")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Role");
-
-                    b.Navigation("User");
+                    b.Navigation("Major");
                 });
 
             modelBuilder.Entity("Course", b =>
@@ -1936,6 +1914,8 @@ namespace DataAccessLayer.Migrations
             modelBuilder.Entity("BussinessObject.Models.Major", b =>
                 {
                     b.Navigation("Curriculums");
+
+                    b.Navigation("Users");
                 });
 
             modelBuilder.Entity("BussinessObject.Models.Review", b =>
@@ -1950,11 +1930,6 @@ namespace DataAccessLayer.Migrations
                     b.Navigation("Notifications");
 
                     b.Navigation("Reviews");
-                });
-
-            modelBuilder.Entity("BussinessObject.Models.Role", b =>
-                {
-                    b.Navigation("UserRoles");
                 });
 
             modelBuilder.Entity("BussinessObject.Models.Semester", b =>
@@ -1996,8 +1971,6 @@ namespace DataAccessLayer.Migrations
                     b.Navigation("Submissions");
 
                     b.Navigation("SystemConfigs");
-
-                    b.Navigation("UserRoles");
                 });
 
             modelBuilder.Entity("Course", b =>

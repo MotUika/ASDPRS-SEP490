@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using BussinessObject.Models;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Service.IService;
 using System;
@@ -182,6 +183,115 @@ namespace Service.Service
                     - Use bullet points for clarity";
 
             return await SummarizeAsync(prompt, maxOutputTokens: 600);
+        }
+        public async Task<string> GenerateEnhancedReviewAsync(string documentText, string context, List<Criteria> criteria)
+        {
+            var criteriaSection = "";
+            if (criteria != null && criteria.Any())
+            {
+                criteriaSection = "\n\n**DETAILED CRITERIA ANALYSIS:**\n";
+                foreach (var criterion in criteria)
+                {
+                    criteriaSection += $"- {criterion.Title}: [AI will analyze this specific criterion]\n";
+                }
+            }
+
+            var prompt = $@"**ENHANCED DOCUMENT REVIEW**
+
+            CONTEXT INFORMATION:
+            {context}
+
+            DOCUMENT CONTENT:
+            {documentText}
+
+            **REVIEW STRUCTURE - Provide analysis in this exact format:**
+
+            **OVERALL ASSESSMENT**
+            [2-3 sentences giving balanced overall evaluation]
+
+            **CRITERIA-BASED EVALUATION**
+            {criteriaSection}
+
+            **KEY STRENGTHS**
+            • [Most significant strength]
+            • [Second key strength] 
+            • [Third notable strength]
+
+            **AREAS FOR IMPROVEMENT**
+            • [Most important improvement area]
+            • [Second area to develop]
+
+            **RECOMMENDATIONS**
+            • [Most actionable recommendation]
+            • [Second practical suggestion]
+
+            **SCORING INSIGHTS**
+            [Brief notes on how this might translate to rubric scoring]
+
+            **GUIDELINES:**
+            - Be objective and evidence-based
+            - Reference specific criteria from the context
+            - Balance positive and constructive feedback
+            - Keep total under 400 words";
+
+            return await SummarizeAsync(prompt, maxOutputTokens: 800);
+        }
+        public async Task<string> GenerateCriteriaReviewAsync(string documentText, Criteria criteria, string context)
+        {
+            var prompt = $@"**CRITERIA-SPECIFIC REVIEW: {criteria.Title}**
+
+            CONTEXT:
+            {context}
+
+            CRITERIA DETAILS:
+            - Title: {criteria.Title}
+            - Description: {criteria.Description}
+            - Weight: {criteria.Weight}%
+            - Max Score: {criteria.MaxScore}
+
+            DOCUMENT CONTENT:
+            {documentText}
+
+            **REQUIREMENTS:**
+            Provide focused analysis specifically for this criterion. Evaluate how well the document addresses this particular aspect.
+
+            **ANALYSIS FORMAT:**
+            - Performance Level: [Excellent/Good/Fair/Poor]
+            - Key Observations: [2-3 specific points]
+            - Evidence: [Quotes or examples from document]
+            - Suggestions: [1-2 specific improvements]
+
+            **KEEP UNDER 150 WORDS**";
+
+            return await SummarizeAsync(prompt, maxOutputTokens: 300);
+        }
+
+        public async Task<string> GenerateOverallSummaryAsync(string documentText, string context)
+        {
+            var prompt = $@"**AI OVERALL SUMMARY**
+
+CONTEXT: {context}
+
+DOCUMENT: {documentText}
+
+REQUIREMENTS: Provide a balanced overall summary of the submission (~100 words, max 200). Focus on structure, content, strengths/weaknesses without scores. Keep response in a single paragraph without line breaks.";
+
+            return await SummarizeAsync(prompt, maxOutputTokens: 400);  // Adjust tokens for ~200 words
+        }
+
+        public async Task<string> GenerateCriteriaSummaryAsync(string documentText, Criteria criteria, string context)
+        {
+            var prompt = $@"**AI CRITERIA SUMMARY: {criteria.Title}**
+
+CONTEXT: {context}
+
+CRITERIA: Title: {criteria.Title}, Desc: {criteria.Description}, Weight: {criteria.Weight}%, MaxScore: {criteria.MaxScore}
+
+DOCUMENT: {documentText}
+
+REQUIREMENTS: Evaluate this criterion. Return format: Score: X | Summary: [concise summary max 30 words]. Keep without line breaks. Score from 0 to {criteria.MaxScore}.";
+
+            return await SummarizeAsync(prompt, maxOutputTokens: 150);
         }
     }
 }

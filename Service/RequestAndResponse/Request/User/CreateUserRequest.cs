@@ -7,6 +7,8 @@ namespace Service.RequestAndResponse.Request.User
         [Required]
         public int CampusId { get; set; }
 
+        public int? MajorId { get; set; }
+
         [Required]
         [StringLength(100)]
         public string Username { get; set; }
