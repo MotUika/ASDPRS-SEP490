@@ -681,6 +681,118 @@ namespace Service.Service
             return await GetSubmissionsByFilterAsync(filterRequest);
         }
 
+        public async Task<BaseResponse<SubmissionListResponse>> GetSubmissionsAllStudentByAssignmentIdAsync(int assignmentId)
+        {
+            try
+            {
+                // 1. Lấy Assignment
+                var assignment = await _assignmentRepository.GetByIdAsync(assignmentId);
+                if (assignment == null)
+                {
+                    return new BaseResponse<SubmissionListResponse>(
+                        "Assignment not found",
+                        StatusCodeEnum.NotFound_404,
+                        null);
+                }
+
+                var courseInstanceId = assignment.CourseInstanceId;
+
+                // 2. Lấy tất cả sinh viên trong lớp (CourseInstance)
+                var enrolledStudents = await _context.CourseStudents
+                    .Where(cs => cs.CourseInstanceId == courseInstanceId)
+                    .Include(cs => cs.User)
+                    .Select(cs => cs.User)
+                    .ToListAsync();
+
+                if (!enrolledStudents.Any())
+                {
+                    return new BaseResponse<SubmissionListResponse>(
+                        "No students enrolled in this class",
+                        StatusCodeEnum.NoContent_204,
+                        new SubmissionListResponse
+                        {
+                            Submissions = new List<SubmissionResponse>(),
+                            TotalCount = 0,
+                            TotalStudents = 0
+                        });
+                }
+
+                // 3. Lấy submissions
+                var submissions = await _submissionRepository.GetByAssignmentIdAsync(assignmentId);
+
+                // 4. Tạo danh sách đầy đủ
+                var responseList = new List<SubmissionResponse>();
+
+                foreach (var student in enrolledStudents)
+                {
+                    var submission = submissions.FirstOrDefault(s => s.UserId == student.Id);
+
+                    if (submission != null)
+                    {
+                        responseList.Add(await MapToSubmissionResponse(submission));
+                    }
+                    else
+                    {
+                        var assignmentInfo = _mapper.Map<AssignmentInfoResponse>(assignment);
+                        var userInfo = _mapper.Map<UserInfoResponse>(student);
+
+                        responseList.Add(new SubmissionResponse
+                        {
+                            SubmissionId = 0,
+                            AssignmentId = assignmentId,
+                            UserId = student.Id,
+                            StudentName = $"{student.FirstName} {student.LastName}".Trim(),
+                            StudentCode = student.StudentCode,
+                            FileUrl = null,
+                            FileName = null,
+                            OriginalFileName = null,
+                            Keywords = null,
+                            SubmittedAt = DateTime.MinValue,
+                            Status = "Not Submitted",
+                            IsPublic = false,
+                            InstructorScore = null,
+                            PeerAverageScore = null,
+                            FinalScore = null,
+                            Feedback = null,
+                            GradedAt = null,
+                            Assignment = assignmentInfo,
+                            User = userInfo,
+                            ReviewAssignments = new List<SubmissionReviewAssignmentResponse>(),
+                            AISummaries = new List<AISummaryResponse>(),
+                            RegradeRequests = new List<RegradeRequestResponse>()
+                        });
+                    }
+                }
+
+                // 5. Sắp xếp
+                responseList = responseList
+                    .OrderBy(x => x.StudentName)
+                    .ThenBy(x => x.StudentCode)
+                    .ToList();
+
+                // 6. Tạo response
+                var response = new SubmissionListResponse
+                {
+                    Submissions = responseList,
+                    TotalCount = responseList.Count,
+                    TotalStudents = enrolledStudents.Count
+                };
+
+                return new BaseResponse<SubmissionListResponse>(
+                    "Full student submission list retrieved successfully",
+                    StatusCodeEnum.OK_200,
+                    response);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error in GetSubmissionsByAssignmentIdAsync for assignment {assignmentId}");
+                return new BaseResponse<SubmissionListResponse>(
+                    "An error occurred while retrieving the submission list",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
+            }
+        }
+
         public async Task<BaseResponse<SubmissionListResponse>> GetSubmissionsByUserIdAsync(int userId, int pageNumber = 1, int pageSize = 20)
         {
             var filterRequest = new GetSubmissionsByFilterRequest

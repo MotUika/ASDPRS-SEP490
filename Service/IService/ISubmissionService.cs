@@ -16,6 +16,7 @@ namespace Service.Interface
         Task<BaseResponse<SubmissionResponse>> UpdateSubmissionStatusAsync(UpdateSubmissionStatusRequest request);
         Task<BaseResponse<bool>> DeleteSubmissionAsync(int submissionId);
         Task<BaseResponse<SubmissionListResponse>> GetSubmissionsByAssignmentIdAsync(int assignmentId, int pageNumber = 1, int pageSize = 20);
+        Task<BaseResponse<SubmissionListResponse>> GetSubmissionsAllStudentByAssignmentIdAsync(int assignmentId);
         Task<BaseResponse<SubmissionListResponse>> GetSubmissionsByUserIdAsync(int userId, int pageNumber = 1, int pageSize = 20);
         Task<BaseResponse<SubmissionStatisticsResponse>> GetSubmissionStatisticsAsync(int assignmentId);
         Task<BaseResponse<bool>> CheckSubmissionExistsAsync(int assignmentId, int userId);

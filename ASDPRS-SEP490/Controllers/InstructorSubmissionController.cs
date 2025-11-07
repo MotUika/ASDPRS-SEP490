@@ -38,12 +38,17 @@ namespace ASDPRS_SEP490.Controllers
 
         // 1️⃣ Xem danh sách bài nộp trong Assignment
         [HttpGet("assignment/{assignmentId}/submissions")]
-        [SwaggerOperation(Summary = "Xem danh sách bài nộp trong assignment",
-                          Description = "Trả về danh sách tất cả submissions của sinh viên trong 1 bài tập cụ thể.")]
-        [SwaggerResponse(200, "Danh sách bài nộp", typeof(BaseResponse<object>))]
+        [SwaggerOperation(
+    Summary = "Xem danh sách tất cả sinh viên (có nộp + chưa nộp) trong assignment",
+    Description = "Trả về danh sách đầy đủ sinh viên trong lớp, bao gồm cả những người chưa nộp bài. " +
+                  "Thông tin bao gồm: trạng thái nộp bài, điểm, file, và thông tin cá nhân.")]
+        [SwaggerResponse(200, "Danh sách đầy đủ sinh viên với trạng thái nộp bài", typeof(BaseResponse<SubmissionListResponse>))]
+        [SwaggerResponse(204, "Không có sinh viên nào trong lớp")]
+        [SwaggerResponse(404, "Không tìm thấy assignment")]
         public async Task<IActionResult> GetSubmissionsByAssignment(int assignmentId)
         {
-            var result = await _submissionService.GetSubmissionsByAssignmentIdAsync(assignmentId);
+            var result = await _submissionService.GetSubmissionsAllStudentByAssignmentIdAsync(assignmentId);
+
             return StatusCode((int)result.StatusCode, result);
         }
 
