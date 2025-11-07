@@ -97,22 +97,47 @@ namespace Repository.Repository
                 .ToListAsync();
         }
 
+        //public async Task<decimal?> GetPeerAverageScoreBySubmissionIdAsync(int submissionId)
+        //{
+        //    var peerScores = await _context.ReviewAssignments
+        //        .Where(ra => ra.SubmissionId == submissionId)
+        //        .SelectMany(ra => ra.Reviews)
+        //        .Where(r => r.OverallScore.HasValue)
+        //        .Select(r => r.OverallScore.Value)
+        //        .ToListAsync();
+
+        //    if (peerScores == null || peerScores.Count == 0)
+        //        return null;
+
+        //    return peerScores.Average();
+        //}
+
         public async Task<decimal?> GetPeerAverageScoreBySubmissionIdAsync(int submissionId)
         {
+            //  Lấy tất cả review thuộc loại "Peer" và có điểm
             var peerScores = await _context.ReviewAssignments
                 .Where(ra => ra.SubmissionId == submissionId)
                 .SelectMany(ra => ra.Reviews)
-                .Where(r => r.OverallScore.HasValue)
+                .Where(r =>
+                    r.ReviewType == "Peer" &&               // chỉ tính peer review
+                    r.OverallScore.HasValue &&              // phải có điểm
+                    r.OverallScore.Value >= 0               // điểm hợp lệ
+                )
                 .Select(r => r.OverallScore.Value)
                 .ToListAsync();
 
+            //  Nếu chưa có review nào → trả 0 thay vì null
             if (peerScores == null || peerScores.Count == 0)
-                return null;
+                return 0;
 
-            return peerScores.Average();
+            // Tính trung bình
+            var average = Math.Round(peerScores.Average(), 2);
+
+            return average;
         }
 
-       
+
+
 
 
     }

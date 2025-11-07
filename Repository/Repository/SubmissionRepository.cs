@@ -21,15 +21,31 @@ namespace Repository.Repository
             _context = context;
         }
 
+        //public async Task<IEnumerable<Submission>> GetByAssignmentIdAsync(int assignmentId)
+        //{
+        //    return await _context.Submissions
+        //        .Include(s => s.Assignment)
+        //        .Include(s => s.User)
+        //        .Include(s => s.ReviewAssignments)
+        //        .Where(s => s.AssignmentId == assignmentId)
+        //        .ToListAsync();
+        //}
+
         public async Task<IEnumerable<Submission>> GetByAssignmentIdAsync(int assignmentId)
         {
             return await _context.Submissions
+                .Where(s => s.AssignmentId == assignmentId)
                 .Include(s => s.Assignment)
+                    .ThenInclude(a => a.CourseInstance)
+                        .ThenInclude(ci => ci.Course)
                 .Include(s => s.User)
                 .Include(s => s.ReviewAssignments)
-                .Where(s => s.AssignmentId == assignmentId)
+                .Include(s => s.AISummaries)
+                .Include(s => s.RegradeRequests)
                 .ToListAsync();
         }
+
+
 
         public async Task<IEnumerable<Submission>> GetByUserIdAsync(int userId)
         {
@@ -45,6 +61,8 @@ namespace Repository.Repository
         {
             return await _context.Submissions
                 .Include(s => s.Assignment)
+                .ThenInclude(a => a.CourseInstance)
+                        .ThenInclude(ci => ci.Course)
                 .Include(s => s.User)
                 .Include(s => s.ReviewAssignments)
                     .ThenInclude(ra => ra.Reviews)
@@ -52,6 +70,9 @@ namespace Repository.Repository
                             .ThenInclude(cf => cf.Criteria)
                 .FirstOrDefaultAsync(s => s.SubmissionId == submissionId);
         }
+
+        
+
 
         public async Task<Submission> GetByAssignmentAndUserAsync(int assignmentId, int userId)
         {
@@ -81,6 +102,12 @@ namespace Repository.Repository
                 .Include(s => s.ReviewAssignments)
                 .Where(s => s.UserId == userId && s.Assignment.CourseInstance.SemesterId == semesterId)
                 .ToListAsync();
+        }
+
+        public async Task AddRangeAsync(IEnumerable<Submission> submissions)
+        {
+            await _context.Submissions.AddRangeAsync(submissions);
+            await _context.SaveChangesAsync();
         }
     }
 }

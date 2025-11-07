@@ -15,5 +15,7 @@
         public string ScoreLabel { get; set; }
         public bool IsModified { get; set; }
         public int CriteriaFeedbackCount { get; set; }
+        public string CourseName { get; set; }
+        public string ClassName { get; set; }
     }
 }

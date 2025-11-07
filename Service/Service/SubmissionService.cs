@@ -743,6 +743,8 @@ namespace Service.Service
                             UserId = student.Id,
                             StudentName = $"{student.FirstName} {student.LastName}".Trim(),
                             StudentCode = student.StudentCode,
+                            CourseName = assignment.CourseInstance?.Course?.CourseName,
+                            ClassName = assignment.CourseInstance?.SectionCode,
                             FileUrl = null,
                             FileName = null,
                             OriginalFileName = null,
@@ -1004,6 +1006,9 @@ namespace Service.Service
                 response.AISummaries = _mapper.Map<List<AISummaryResponse>>(aiSummaries);
             }
 
+            response.CourseName = submission.Assignment?.CourseInstance?.Course?.CourseName;
+            response.ClassName = submission.Assignment?.CourseInstance?.SectionCode;
+
             return response;
         }
 
@@ -1136,32 +1141,134 @@ namespace Service.Service
                 if (assignment == null)
                     return new BaseResponse<GradeSubmissionResponse>("Assignment not found", StatusCodeEnum.NotFound_404, null);
 
-                // 3️⃣ Validate điểm instructor nhập
-                if (request.InstructorScore < 0 || request.InstructorScore > 100)
+                decimal instructorScore = 0;
+
+                // 3️⃣ Nếu giảng viên chấm theo từng tiêu chí (rubric)
+                if (request.CriteriaFeedbacks != null && request.CriteriaFeedbacks.Any())
                 {
-                    return new BaseResponse<GradeSubmissionResponse>(
-                        "Instructor score must be between 0 and 100",
-                        StatusCodeEnum.BadRequest_400,
-                        null
-                    );
+                    // Xóa feedback cũ của instructor (nếu có)
+                    var oldInstructorReviews = await _context.ReviewAssignments
+                        .Where(ra => ra.SubmissionId == submission.SubmissionId)
+                        .SelectMany(ra => ra.Reviews)
+                        .Where(r => r.ReviewType == "Instructor")
+                        .ToListAsync();
+
+                    foreach (var oldReview in oldInstructorReviews)
+                    {
+                        var oldFeedbacks = await _context.CriteriaFeedbacks
+                            .Where(cf => cf.ReviewId == oldReview.ReviewId)
+                            .ToListAsync();
+
+                        _context.CriteriaFeedbacks.RemoveRange(oldFeedbacks);
+                        _context.Reviews.Remove(oldReview);
+                    }
+
+                    // Tạo ReviewAssignment mới cho instructor nếu chưa có
+                    var instructorReviewAssignment = await _context.ReviewAssignments
+                        .FirstOrDefaultAsync(ra => ra.SubmissionId == submission.SubmissionId && ra.ReviewerUserId == request.InstructorId && ra.IsAIReview == false);
+
+                    if (instructorReviewAssignment == null)
+                    {
+                        instructorReviewAssignment = new ReviewAssignment
+                        {
+                            SubmissionId = submission.SubmissionId,
+                            ReviewerUserId = request.InstructorId,
+                            AssignedAt = DateTime.UtcNow,
+                            Deadline = DateTime.UtcNow.AddDays(7),
+                            Status = "Completed",
+                            IsAIReview = false
+                        };
+                        _context.ReviewAssignments.Add(instructorReviewAssignment);
+                        await _context.SaveChangesAsync();
+                    }
+
+                    // Tạo review mới
+                    var review = new Review
+                    {
+                        ReviewAssignmentId = instructorReviewAssignment.ReviewAssignmentId,
+                        OverallScore = 0,
+                        GeneralFeedback = request.Feedback,
+                        ReviewedAt = DateTime.UtcNow,
+                        ReviewType = "Instructor",
+                        FeedbackSource = "Instructor"
+                    };
+                    _context.Reviews.Add(review);
+                    await _context.SaveChangesAsync();
+
+                    // Tính tổng điểm có trọng số
+                    decimal totalScore = 0;
+                    decimal totalWeight = 0;
+
+                    foreach (var cf in request.CriteriaFeedbacks)
+                    {
+                        var criteria = await _context.Criteria.FirstOrDefaultAsync(c => c.CriteriaId == cf.CriteriaId);
+                        if (criteria == null) continue;
+
+                        var weight = criteria.Weight > 0 ? criteria.Weight : 1;
+                        totalScore += (cf.Score ?? 0) * weight;
+                        totalWeight += weight;
+
+                        var criteriaFeedback = new CriteriaFeedback
+                        {
+                            ReviewId = review.ReviewId,
+                            CriteriaId = cf.CriteriaId,
+                            ScoreAwarded = cf.Score,
+                            Feedback = cf.Feedback,
+                            FeedbackSource = "Instructor"
+                        };
+                        _context.CriteriaFeedbacks.Add(criteriaFeedback);
+                    }
+
+                    instructorScore = totalWeight > 0 ? Math.Round(totalScore / totalWeight, 2) : 0;
+                    review.OverallScore = instructorScore;
+                    await _context.SaveChangesAsync();
+                }
+                else
+                {
+                    // Nếu không chấm theo tiêu chí → chỉ lưu feedback tổng quát
+                    var reviewAssignment = await _context.ReviewAssignments
+                        .FirstOrDefaultAsync(ra => ra.SubmissionId == submission.SubmissionId && ra.ReviewerUserId == request.InstructorId);
+
+                    if (reviewAssignment == null)
+                    {
+                        reviewAssignment = new ReviewAssignment
+                        {
+                            SubmissionId = submission.SubmissionId,
+                            ReviewerUserId = request.InstructorId,
+                            AssignedAt = DateTime.UtcNow,
+                            Deadline = DateTime.UtcNow.AddDays(7),
+                            Status = "Completed",
+                            IsAIReview = false
+                        };
+                        _context.ReviewAssignments.Add(reviewAssignment);
+                        await _context.SaveChangesAsync();
+                    }
+
+                    var review = new Review
+                    {
+                        ReviewAssignmentId = reviewAssignment.ReviewAssignmentId,
+                        OverallScore = null,
+                        GeneralFeedback = request.Feedback,
+                        ReviewedAt = DateTime.UtcNow,
+                        ReviewType = "Instructor",
+                        FeedbackSource = "Instructor"
+                    };
+                    _context.Reviews.Add(review);
+                    await _context.SaveChangesAsync();
                 }
 
-                // 4️⃣ Lấy điểm trung bình peer review
+                // 4️⃣ Lấy điểm trung bình từ peer review
                 var peerAverage = await _reviewAssignmentRepository.GetPeerAverageScoreBySubmissionIdAsync(submission.SubmissionId);
                 var peerAvg = peerAverage ?? 0;
 
-                // 5️⃣ Normalize trọng số
+                // 5️⃣ Chuẩn hóa trọng số
                 var instructorWeight = assignment.InstructorWeight;
                 var peerWeight = assignment.PeerWeight;
-
-                // Nếu cả hai = 0, gán mặc định
                 if (instructorWeight == 0 && peerWeight == 0)
                 {
                     instructorWeight = 50.0m;
                     peerWeight = 50.0m;
                 }
-
-                // Nếu tổng khác 100, tự động chuẩn hóa
                 if (instructorWeight + peerWeight != 100)
                 {
                     var total = instructorWeight + peerWeight;
@@ -1171,17 +1278,15 @@ namespace Service.Service
 
                 // 6️⃣ Tính điểm cuối cùng
                 var finalScore = Math.Round(
-                    (request.InstructorScore * instructorWeight / 100) +
-                    (peerAvg * peerWeight / 100), 2);
+                    (instructorScore * instructorWeight / 100) + (peerAvg * peerWeight / 100), 2);
 
                 // 7️⃣ Cập nhật submission
-                submission.InstructorScore = request.InstructorScore;
+                submission.InstructorScore = instructorScore;
                 submission.PeerAverageScore = peerAvg;
                 submission.FinalScore = finalScore;
                 submission.Feedback = request.Feedback ?? submission.Feedback;
                 submission.GradedAt = DateTime.UtcNow;
                 submission.Status = "Graded";
-
                 if (request.PublishImmediately)
                     submission.IsPublic = true;
 
@@ -1389,67 +1494,118 @@ namespace Service.Service
 
             if (norm1 == 0 || norm2 == 0) return 0;
 
-            return dot / (norm1 * norm2);
-        }
 
-        private Dictionary<string, int> TextToVector(string text)
-        {
-            return text.ToLower()
-                .Split(new[] { ' ', '\t', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
-                .GroupBy(word => word)
-                .ToDictionary(g => g.Key, g => g.Count());
-        }
-        public async Task<BaseResponse<bool>> PublishGradesAsync(PublishGradesRequest request)
+        public async Task<BaseResponse<PublishGradesResponse>> PublishGradesAsync(PublishGradesRequest request)
         {
             try
             {
                 var assignment = await _assignmentRepository.GetByIdAsync(request.AssignmentId);
                 if (assignment == null)
-                    return new BaseResponse<bool>("Assignment not found", StatusCodeEnum.NotFound_404, false);
+                    return new BaseResponse<PublishGradesResponse>("Assignment not found", StatusCodeEnum.NotFound_404, null);
 
+                var now = DateTime.UtcNow;
+                var finalDeadline = assignment.FinalDeadline ?? assignment.Deadline;
+                var isPastDeadline = now > finalDeadline;
+
+                // Lấy sinh viên trong lớp
+                var enrolledStudents = await _context.CourseStudents
+                    .Where(cs => cs.CourseInstanceId == assignment.CourseInstanceId)
+                    .Include(cs => cs.User)
+                    .ToListAsync();
+
+                var totalStudents = enrolledStudents.Count;
+                if (totalStudents == 0)
+                    return new BaseResponse<PublishGradesResponse>("No students in class", StatusCodeEnum.NoContent_204, null);
+
+                // Lấy submissions
                 var submissions = await _submissionRepository.GetByAssignmentIdAsync(request.AssignmentId);
-                if (!submissions.Any())
-                    return new BaseResponse<bool>("No submissions found", StatusCodeEnum.NotFound_404, false);
+                var submittedUserIds = submissions.Select(s => s.UserId).ToHashSet();
 
-                // Đếm tỷ lệ nộp bài
-                var totalStudents = await _context.CourseStudents
-                    .CountAsync(cs => cs.CourseInstanceId == assignment.CourseInstanceId);
+                int submittedCount = submittedUserIds.Count;
+                int notSubmittedCount = totalStudents - submittedCount;
+                int gradedCount = submissions.Count(s => s.Status == "Graded");
+                int ungradedCount = submittedCount - gradedCount;
 
-                var submittedCount = submissions.Count(s => s.Status == "Submitted" || s.Status == "Graded");
-                var submissionRate = (decimal)submittedCount / totalStudents * 100;
-
-                var canPublish = submissionRate >= 50 || DateTime.UtcNow >= (assignment.FinalDeadline ?? assignment.Deadline);
-
-                if (!canPublish && !request.ForcePublish)
+                var response = new PublishGradesResponse
                 {
-                    return new BaseResponse<bool>(
-                        "Cannot publish yet. Less than 50% submissions or before FinalDeadline.",
+                    AssignmentId = assignment.AssignmentId,
+                    AssignmentTitle = assignment.Title ?? "Unknown",
+                    TotalStudents = totalStudents,
+                    SubmittedCount = submittedCount,
+                    NotSubmittedCount = notSubmittedCount,
+                    GradedCount = gradedCount,
+                    UngradedCount = ungradedCount,
+                    IsPublished = false
+                };
+
+                var blockingReasons = new List<string>();
+
+                // Kiểm tra điều kiện
+                if (ungradedCount > 0 && !request.ForcePublish)
+                    blockingReasons.Add($"Còn {ungradedCount} bài chưa chấm.");
+
+                if (notSubmittedCount > 0 && !request.ForcePublish)
+                    blockingReasons.Add($"Còn {notSubmittedCount} sinh viên không nộp. Dùng auto-grade-zero.");
+
+                if (!isPastDeadline && !request.ForcePublish)
+                    blockingReasons.Add("Chưa đến hạn cuối.");
+
+                // Không public → trả lỗi
+                if (blockingReasons.Any() && !request.ForcePublish)
+                {
+                    response.Note = "Không thể công bố điểm.";
+                    response.BlockingReasons = blockingReasons;
+                    return new BaseResponse<PublishGradesResponse>(
+                        string.Join(" ", blockingReasons),
                         StatusCodeEnum.BadRequest_400,
-                        false
-                    );
+                        response);
                 }
 
-                foreach (var s in submissions.Where(s => s.Status == "Graded"))
+                // === PUBLIC THÀNH CÔNG ===
+                bool changed = false;
+                foreach (var s in submissions.Where(s => s.Status == "Graded" || s.FinalScore == 0))
                 {
-                    s.IsPublic = true;
+                    if (!s.IsPublic)
+                    {
+                        s.IsPublic = true;
+                        changed = true;
+                    }
+                }
+                if (changed) await _context.SaveChangesAsync();
+
+                // Tạo danh sách kết quả
+                foreach (var student in enrolledStudents)
+                {
+                    var submission = submissions.FirstOrDefault(s => s.UserId == student.UserId);
+                    var user = student.User;
+
+                    response.Results.Add(new GradeStudentResult
+                    {
+                        StudentId = user.Id,
+                        StudentName = $"{user.FirstName} {user.LastName}".Trim(),
+                        StudentCode = user.StudentCode,
+                        FinalScore = submission?.FinalScore,
+                        Feedback = submission?.Feedback ?? (submission == null ? "Không nộp bài" : null),
+                        Status = submission?.Status ?? "Not Submitted"
+                    });
                 }
 
-                await _context.SaveChangesAsync();
+                response.IsPublished = true;
+                response.PublishedAt = now;
+                response.Note = request.ForcePublish ? "Công bố bắt buộc." : "Công bố thành công.";
 
-                return new BaseResponse<bool>(
-                    "Grades published successfully",
+                _logger.LogInformation($"Grades published for assignment {request.AssignmentId}");
+
+                return new BaseResponse<PublishGradesResponse>(
+                    response.Note,
                     StatusCodeEnum.OK_200,
-                    true
-                );
+                    response);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error publishing grades");
-                return new BaseResponse<bool>(
-                    "An error occurred while publishing grades",
-                    StatusCodeEnum.InternalServerError_500,
-                    false
-                );
+                return new BaseResponse<PublishGradesResponse>(
+                    "Lỗi hệ thống", StatusCodeEnum.InternalServerError_500, null);
             }
         }
 
@@ -1572,55 +1728,126 @@ namespace Service.Service
         }
 
         public async Task<BaseResponse<IEnumerable<SubmissionSummaryResponse>>> GetSubmissionSummaryAsync(
-            int? courseId, int? classId, int? assignmentId)
+     int? courseId, int? classId, int? assignmentId)
         {
             try
             {
-                var query = _context.Submissions
-                    .Include(s => s.User)
-                    .Include(s => s.Assignment)
-                        .ThenInclude(a => a.CourseInstance)
-                            .ThenInclude(ci => ci.Course)
-                    .AsQueryable();
+                // 1. XÁC ĐỊNH CourseInstanceId
+                int? courseInstanceId = null;
 
                 if (assignmentId.HasValue)
-                    query = query.Where(s => s.AssignmentId == assignmentId.Value);
+                {
+                    var assignment = await _assignmentRepository.GetByIdAsync(assignmentId.Value);
+                    if (assignment == null)
+                        return new BaseResponse<IEnumerable<SubmissionSummaryResponse>>("Assignment not found", StatusCodeEnum.NotFound_404, null);
+                    courseInstanceId = assignment.CourseInstanceId;
+                }
                 else if (classId.HasValue)
-                    query = query.Where(s => s.Assignment.CourseInstanceId == classId.Value);
+                {
+                    courseInstanceId = classId.Value;
+                }
                 else if (courseId.HasValue)
-                    query = query.Where(s => s.Assignment.CourseInstance.CourseId == courseId.Value);
+                {
+                    var instance = await _context.CourseInstances
+                        .FirstOrDefaultAsync(ci => ci.CourseId == courseId.Value);
+                    if (instance == null)
+                        return new BaseResponse<IEnumerable<SubmissionSummaryResponse>>("Class not found", StatusCodeEnum.NotFound_404, null);
+                    courseInstanceId = instance.CourseInstanceId;
+                }
+                else
+                {
+                    return new BaseResponse<IEnumerable<SubmissionSummaryResponse>>("Invalid filter", StatusCodeEnum.BadRequest_400, null);
+                }
 
-                var submissions = await query.ToListAsync();
+                // 2. LẤY TOÀN BỘ SINH VIÊN TRONG LỚP
+                var enrolledStudents = await _context.CourseStudents
+                    .Where(cs => cs.CourseInstanceId == courseInstanceId)
+                    .Include(cs => cs.User)
+                    .Select(cs => cs.User)
+                    .ToListAsync();
 
-                if (!submissions.Any())
+                if (!enrolledStudents.Any())
                 {
                     return new BaseResponse<IEnumerable<SubmissionSummaryResponse>>(
-                        "No submissions found",
+                        "No students enrolled",
                         StatusCodeEnum.NoContent_204,
                         Enumerable.Empty<SubmissionSummaryResponse>());
                 }
 
-                var result = submissions.Select(s => new SubmissionSummaryResponse
+                // 3. LẤY SUBMISSIONS (nếu có assignmentId)
+                List<Submission> submissions = new();
+                if (assignmentId.HasValue)
                 {
-                    SubmissionId = s.SubmissionId,
-                    AssignmentId = s.AssignmentId,
-                    UserId = s.UserId,
-                    StudentName = s.User?.UserName,
-                    StudentCode = s.User?.StudentCode,
-                    StudentEmail = s.User?.Email,
-                    CourseName = s.Assignment?.CourseInstance?.Course?.CourseName,
-                    ClassName = s.Assignment?.CourseInstance?.SectionCode,
-                    AssignmentTitle = s.Assignment?.Title,
-                    PeerAverageScore = s.PeerAverageScore ?? 0,
-                    InstructorScore = s.InstructorScore ?? 0,
-                    FinalScore = s.FinalScore ?? 0,
-                    Feedback = s.Feedback,
-                    Status = s.Status,
-                    GradedAt = s.GradedAt
-                }).OrderByDescending(x => x.GradedAt).ToList();
+                    submissions = await _context.Submissions
+                        .Where(s => s.AssignmentId == assignmentId.Value)
+                        .Include(s => s.Assignment)
+                            .ThenInclude(a => a.CourseInstance)
+                                .ThenInclude(ci => ci.Course)
+                        .ToListAsync();
+                }
+
+                // 4. TẠO DANH SÁCH ĐẦY ĐỦ
+                var result = new List<SubmissionSummaryResponse>();
+
+                foreach (var student in enrolledStudents)
+                {
+                    var submission = assignmentId.HasValue
+                        ? submissions.FirstOrDefault(s => s.UserId == student.Id)
+                        : null;
+
+                    if (submission != null)
+                    {
+                        result.Add(new SubmissionSummaryResponse
+                        {
+                            SubmissionId = submission.SubmissionId,
+                            AssignmentId = submission.AssignmentId,
+                            UserId = student.Id,
+                            StudentName = $"{student.FirstName} {student.LastName}".Trim(),
+                            StudentCode = student.StudentCode,
+                            StudentEmail = student.Email,
+                            CourseName = submission.Assignment?.CourseInstance?.Course?.CourseName,
+                            ClassName = submission.Assignment?.CourseInstance?.SectionCode,
+                            AssignmentTitle = submission.Assignment?.Title,
+                            PeerAverageScore = submission.PeerAverageScore ?? 0,
+                            InstructorScore = submission.InstructorScore ?? 0,
+                            FinalScore = submission.FinalScore ?? 0,
+                            Feedback = submission.Feedback,
+                            Status = submission.Status,
+                            GradedAt = submission.GradedAt
+                        });
+                    }
+                    else
+                    {
+                        // SINH VIÊN KHÔNG NỘP
+                        var assignment = assignmentId.HasValue
+                            ? await _assignmentRepository.GetByIdAsync(assignmentId.Value)
+                            : null;
+
+                        result.Add(new SubmissionSummaryResponse
+                        {
+                            SubmissionId = 0,
+                            AssignmentId = assignmentId ?? 0,
+                            UserId = student.Id,
+                            StudentName = $"{student.FirstName} {student.LastName}".Trim(),
+                            StudentCode = student.StudentCode,
+                            StudentEmail = student.Email,
+                            CourseName = assignment?.CourseInstance?.Course?.CourseName,
+                            ClassName = assignment?.CourseInstance?.SectionCode,
+                            AssignmentTitle = assignment?.Title,
+                            PeerAverageScore = 0,
+                            InstructorScore = 0,
+                            FinalScore = 0,
+                            Feedback = "Không nộp bài",
+                            Status = "Not Submitted",
+                            GradedAt = null
+                        });
+                    }
+                }
+
+                result = result.OrderBy(x => x.StudentName).ThenBy(x => x.StudentCode).ToList();
 
                 return new BaseResponse<IEnumerable<SubmissionSummaryResponse>>(
-                    "Submission summary fetched successfully",
+                    "Submission summary fetched successfully (full class)",
                     StatusCodeEnum.OK_200,
                     result);
             }
@@ -1632,6 +1859,109 @@ namespace Service.Service
                     StatusCodeEnum.InternalServerError_500,
                     null);
             }
-        } 
+        }
+
+        public async Task<BaseResponse<AutoGradeZeroResponse>> AutoGradeZeroForNonSubmittersAsync(AutoGradeZeroRequest request)
+        {
+            try
+            {
+                // 1. Validate
+                if (!request.ConfirmZeroGrade)
+                    return new BaseResponse<AutoGradeZeroResponse>(
+                        "Bạn phải xác nhận (ConfirmZeroGrade = true) để chấm 0 điểm.",
+                        StatusCodeEnum.BadRequest_400, null);
+
+                var assignment = await _assignmentRepository.GetByIdAsync(request.AssignmentId);
+                if (assignment == null)
+                    return new BaseResponse<AutoGradeZeroResponse>("Assignment not found", StatusCodeEnum.NotFound_404, null);
+
+                var now = DateTime.UtcNow;
+                var finalDeadline = assignment.FinalDeadline ?? assignment.Deadline;
+                if (now <= finalDeadline)
+                    return new BaseResponse<AutoGradeZeroResponse>(
+                        $"Chưa đến hạn cuối ({finalDeadline:yyyy-MM-dd HH:mm}). Không thể chấm 0.",
+                        StatusCodeEnum.BadRequest_400, null);
+
+                // 2. Lấy danh sách sinh viên trong lớp
+                var courseInstanceId = assignment.CourseInstanceId;
+                var enrolledStudentIds = await _context.CourseStudents
+                    .Where(cs => cs.CourseInstanceId == courseInstanceId)
+                    .Select(cs => cs.UserId)
+                    .ToListAsync();
+
+                // 3. Lấy submissions hiện có
+                var submissions = await _submissionRepository.GetByAssignmentIdAsync(request.AssignmentId);
+                var submittedUserIds = submissions.Select(s => s.UserId).ToHashSet();
+
+                // 4. Tìm sinh viên chưa nộp
+                var nonSubmitters = enrolledStudentIds.Except(submittedUserIds).ToList();
+                if (!nonSubmitters.Any())
+                    return new BaseResponse<AutoGradeZeroResponse>(
+                        "Tất cả sinh viên đã nộp bài hoặc đã được chấm 0.",
+                        StatusCodeEnum.OK_200,
+                        new AutoGradeZeroResponse { Success = true, NonSubmittedCount = 0 });
+
+                // 5. Lấy thông tin sinh viên
+                var users = await _context.Users
+                    .Where(u => nonSubmitters.Contains(u.Id))
+                    .Select(u => new { u.Id, u.StudentCode })
+                    .ToListAsync();
+
+                // 6. Tạo submission chấm 0
+                var newSubmissions = new List<Submission>();
+                var studentCodes = new List<string>();
+
+                foreach (var userId in nonSubmitters)
+                {
+                    var user = users.First(u => u.Id == userId);
+                    var submission = new Submission
+                    {
+                        AssignmentId = request.AssignmentId,
+                        UserId = userId,
+                        FileUrl = null,
+                        FileName = null,
+                        OriginalFileName = null,
+                        Keywords = null,
+                        SubmittedAt = DateTime.MinValue,
+                        Status = "Graded",
+                        FinalScore = 0,
+                        Feedback = "Không nộp bài, tự động chấm 0 điểm.",
+                        GradedAt = now,
+                        IsPublic = true
+                    };
+                    newSubmissions.Add(submission);
+                    studentCodes.Add(user.StudentCode ?? $"User_{userId}");
+                }
+
+                await _submissionRepository.AddRangeAsync(newSubmissions);
+
+                // 7. Response
+                var response = new AutoGradeZeroResponse
+                {
+                    AssignmentId = request.AssignmentId,
+                    AssignmentTitle = assignment.Title ?? "Unknown",
+                    NonSubmittedCount = nonSubmitters.Count,
+                    GradedZeroCount = newSubmissions.Count,
+                    StudentCodes = studentCodes,
+                    Success = true,
+                    Message = $"Đã chấm 0 điểm cho {newSubmissions.Count} sinh viên chưa nộp bài."
+                };
+
+                _logger.LogInformation($"Auto graded 0 for {response.GradedZeroCount} students in assignment {request.AssignmentId}");
+
+                return new BaseResponse<AutoGradeZeroResponse>(
+                    response.Message,
+                    StatusCodeEnum.OK_200,
+                    response);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in AutoGradeZeroForNonSubmittersAsync");
+                return new BaseResponse<AutoGradeZeroResponse>(
+                    "Lỗi hệ thống khi chấm 0 điểm tự động",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
+            }
+        }
     }
 }
