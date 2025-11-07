@@ -653,6 +653,36 @@ public class StudentReviewController : ControllerBase
         }
     }
 
+    [HttpGet("assignment/{assignmentId}/my-score")]
+    [SwaggerOperation(
+        Summary = "Lấy điểm final score của sinh viên cho assignment",
+        Description = "Trả về final score của assignment cho sinh viên hiện tại, chỉ khi assignment đã publish grades"
+    )]
+    [SwaggerResponse(200, "Thành công", typeof(BaseResponse<decimal?>))]
+    [SwaggerResponse(403, "Access denied hoặc chưa publish")]
+    [SwaggerResponse(404, "Không tìm thấy submission")]
+    public async Task<IActionResult> GetMyScore(int assignmentId)
+    {
+        var studentId = GetCurrentStudentId();
+        var result = await _submissionService.GetMyScoreAsync(assignmentId, studentId);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpGet("assignment/{assignmentId}/my-score-details")]
+    [SwaggerOperation(
+        Summary = "Lấy chi tiết điểm của sinh viên cho assignment",
+        Description = "Trả về instructor score, peer average, final score, feedback, và info khiếu nại cho assignment của sinh viên hiện tại"
+    )]
+    [SwaggerResponse(200, "Thành công", typeof(BaseResponse<MyScoreDetailsResponse>))]
+    [SwaggerResponse(403, "Access denied hoặc chưa publish")]
+    [SwaggerResponse(404, "Không tìm thấy submission")]
+    public async Task<IActionResult> GetMyScoreDetails(int assignmentId)
+    {
+        var studentId = GetCurrentStudentId();
+        var result = await _submissionService.GetMyScoreDetailsAsync(assignmentId, studentId);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
     [HttpGet("my-regrade-history")]
     [SwaggerOperation(
         Summary = "Lấy lịch sử khiếu nại toàn bộ của sinh viên",
@@ -687,6 +717,27 @@ public class StudentReviewController : ControllerBase
             PageSize = pageSize
         };
         var result = await _regradeRequestService.GetRegradeRequestsByFilterAsync(filterRequest);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpPost("assignment/{assignmentId}/check-plagiarism")]
+    [SwaggerOperation(
+        Summary = "Kiểm tra tỷ lệ trùng lặp bài nộp (chủ động)",
+        Description = "Sinh viên upload file để check tỷ lệ similarity với các bài khác trong assignment, không lưu file."
+    )]
+    [SwaggerResponse(200, "Thành công", typeof(BaseResponse<PlagiarismCheckResponse>))]
+    [SwaggerResponse(403, "Access denied")]
+    [SwaggerResponse(404, "Không tìm thấy assignment")]
+    [SwaggerResponse(500, "Lỗi server")]
+    public async Task<IActionResult> CheckPlagiarism(int assignmentId, IFormFile file)
+    {
+        if (file == null || file.Length == 0)
+        {
+            return BadRequest(new BaseResponse<PlagiarismCheckResponse>("No file uploaded", StatusCodeEnum.BadRequest_400, null));
+        }
+
+        var studentId = GetCurrentStudentId();
+        var result = await _submissionService.CheckPlagiarismActiveAsync(assignmentId, file, studentId);
         return StatusCode((int)result.StatusCode, result);
     }
 }

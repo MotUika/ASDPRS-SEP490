@@ -480,7 +480,7 @@ namespace DataAccessLayer
                     ConfigId = 100,
                     ConfigKey = "ScorePrecision",
                     ConfigValue = "0.5",
-                    Description = "Độ chính xác điểm số (0.25, 0.5, 1.0)",
+                    Description = "Number accuracy (0.25, 0.5, 1.0)",
                     UpdatedAt = DateTime.UtcNow,
                     UpdatedByUserId = 1
                 },
@@ -489,7 +489,7 @@ namespace DataAccessLayer
                     ConfigId = 101,
                     ConfigKey = "AISummaryMaxTokens",
                     ConfigValue = "1000",
-                    Description = "Số token tối đa cho AI summary",
+                    Description = "Maximum number of tokens for AI summary",
                     UpdatedAt = DateTime.UtcNow,
                     UpdatedByUserId = 1
                 },
@@ -498,7 +498,7 @@ namespace DataAccessLayer
                     ConfigId = 102,
                     ConfigKey = "AISummaryMaxWords",
                     ConfigValue = "200",
-                    Description = "Số từ tối đa cho AI summary",
+                    Description = "Maximum word count for AI summary",
                     UpdatedAt = DateTime.UtcNow,
                     UpdatedByUserId = 1
                 },
