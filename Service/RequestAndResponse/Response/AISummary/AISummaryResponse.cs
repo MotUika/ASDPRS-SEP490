@@ -15,5 +15,9 @@ namespace Service.RequestAndResponse.Response.AISummary
         public string StudentCode { get; set; }
         public string FileName { get; set; }
         public DateTime SubmittedAt { get; set; }
+        public string CriteriaTitle { get; set; }
+        public string CriteriaDescription { get; set; }
+        public decimal? CriteriaWeight { get; set; }
+        public decimal? CriteriaMaxScore { get; set; }
     }
 }

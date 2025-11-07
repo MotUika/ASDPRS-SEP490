@@ -16,8 +16,8 @@ namespace Repository.IRepository
         Task<IEnumerable<User>> GetAllAsync();
         Task<User> GetByEmailAsync(string email);
         Task<IEnumerable<User>> GetByCampusIdAsync(int campusId);
-        Task<IEnumerable<User>> GetByRoleAsync(string roleName);
-        Task<User> GetUserWithRolesAsync(int userId);
         Task<User> GetByStudentCodeAsync(string studentCode);
+        Task<IEnumerable<User>> GetByMajorIdAsync(int majorId);
+
     }
 }
