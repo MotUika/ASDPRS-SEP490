@@ -4,6 +4,7 @@ using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Enums;
 using Service.RequestAndResponse.Request.Assignment;
 using Service.RequestAndResponse.Response.Assignment;
+using Service.Service;
 using Swashbuckle.AspNetCore.Annotations;
 using System;
 using System.Collections.Generic;
@@ -18,10 +19,13 @@ namespace ASDPRS_SEP490.Controllers
     public class AssignmentController : ControllerBase
     {
         private readonly IAssignmentService _assignmentService;
+        private readonly ICriteriaService _criteriaService;
 
-        public AssignmentController(IAssignmentService assignmentService)
+
+        public AssignmentController(IAssignmentService assignmentService, ICriteriaService criteriaService)
         {
             _assignmentService = assignmentService;
+            _criteriaService = criteriaService;
         }
 
         // ===================== CRUD =====================
@@ -95,6 +99,15 @@ namespace ASDPRS_SEP490.Controllers
                 _ => StatusCode(500, result)
             };
         }
+
+        [HttpGet("assignment/{assignmentId}/criteria")]
+        [SwaggerOperation(Summary = "Lấy chi tiết criteria", Description = "Trả về thông tin bài tập bao gồm các tiêu chí")]
+        public async Task<IActionResult> GetCriteriaByAssignment(int assignmentId)
+        {
+            var criteriaList = await _criteriaService.GetCriteriaByAssignmentIdAsync(assignmentId);
+            return Ok(criteriaList);
+        }
+
 
         // ===================== FILTER BY COURSE / USER =====================
 

@@ -25,7 +25,8 @@ namespace Service.Interface
         Task<BaseResponse<List<SubmissionResponse>>> GetSubmissionsByCourseInstanceAndUserAsync(int courseInstanceId, int userId);
         Task<BaseResponse<List<SubmissionResponse>>> GetSubmissionsByUserAndSemesterAsync(int userId, int semesterId);
         Task<BaseResponse<GradeSubmissionResponse>> GradeSubmissionAsync(GradeSubmissionRequest request);
-        Task<BaseResponse<bool>> PublishGradesAsync(PublishGradesRequest request);
+        Task<BaseResponse<PublishGradesResponse>> PublishGradesAsync(PublishGradesRequest request);
+        Task<BaseResponse<AutoGradeZeroResponse>> AutoGradeZeroForNonSubmittersAsync(AutoGradeZeroRequest request);
         Task<BaseResponse<IEnumerable<SubmissionSummaryResponse>>> GetSubmissionSummaryAsync(
             int? courseId, int? classId, int? assignmentId);
     }

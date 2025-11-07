@@ -2,6 +2,14 @@
 
 namespace Service.RequestAndResponse.Request.Submission
 {
+    public class SubmissionCriteriaFeedbackRequest
+    {
+        public int CriteriaId { get; set; }
+        public decimal? Score { get; set; }
+        public string? Feedback { get; set; }
+    }
+
+
     public class GradeSubmissionRequest
     {
         [Required(ErrorMessage = "SubmissionId is required")]
@@ -10,13 +18,12 @@ namespace Service.RequestAndResponse.Request.Submission
         [Required(ErrorMessage = "InstructorId is required")]
         public int InstructorId { get; set; }
 
-        [Range(0, 100, ErrorMessage = "Score must be between 0 and 100")]
-        public decimal InstructorScore { get; set; }
-
         [StringLength(1000, ErrorMessage = "Feedback cannot exceed 1000 characters")]
-        public string Feedback { get; set; }
+        public string? Feedback { get; set; }
 
-        // Tùy chọn: nếu bạn muốn update trạng thái submission -> “Graded”
         public bool PublishImmediately { get; set; } = false;
+
+        // 👇 Thêm phần rubric criteria
+        public List<SubmissionCriteriaFeedbackRequest>? CriteriaFeedbacks { get; set; }
     }
 }

@@ -184,16 +184,43 @@ namespace Service.Service
         {
             try
             {
-                var criteria = await _criteriaRepository.GetByRubricIdAsync(rubricId);
-                var response = _mapper.Map<IEnumerable<CriteriaResponse>>(criteria);
+                var criteriaList = await _criteriaRepository.GetByRubricIdAsync(rubricId);
 
-                return new BaseResponse<IEnumerable<CriteriaResponse>>("Criteria retrieved successfully", StatusCodeEnum.OK_200, response);
+                var response = criteriaList.Select(c => new CriteriaResponse
+                {
+                    CriteriaId = c.CriteriaId,
+                    RubricId = c.RubricId,
+                    RubricTitle = c.Rubric?.Title,
+                    CriteriaTemplateId = c.CriteriaTemplateId,
+                    CriteriaTemplateTitle = c.CriteriaTemplate?.Title,
+                    Title = c.Title,
+                    Description = c.Description,
+                    Weight = c.Weight,
+                    MaxScore = c.MaxScore,
+                    ScoringType = c.ScoringType,
+                    ScoreLabel = c.ScoreLabel,
+                    IsModified = c.IsModified,
+                    CriteriaFeedbackCount = c.CriteriaFeedbacks?.Count ?? 0,
+
+                    // 🟩 Thêm 2 dòng này:
+                    CourseName = c.Rubric?.Assignment?.CourseInstance?.Course?.CourseName,
+                    ClassName = c.Rubric?.Assignment?.CourseInstance?.SectionCode
+                });
+
+                return new BaseResponse<IEnumerable<CriteriaResponse>>(
+                    "Criteria retrieved successfully",
+                    StatusCodeEnum.OK_200,
+                    response);
             }
             catch (Exception ex)
             {
-                return new BaseResponse<IEnumerable<CriteriaResponse>>($"Error retrieving criteria: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
+                return new BaseResponse<IEnumerable<CriteriaResponse>>(
+                    $"Error retrieving criteria: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
             }
         }
+
 
         public async Task<BaseResponse<IEnumerable<CriteriaResponse>>> GetCriteriaByTemplateIdAsync(int criteriaTemplateId)
         {
@@ -234,6 +261,84 @@ namespace Service.Service
                     $"Error calculating total weight: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
                     0
+                );
+            }
+        }
+
+
+        public async Task<BaseResponse<IEnumerable<CriteriaResponse>>> GetCriteriaByAssignmentIdAsync(int assignmentId)
+        {
+            try
+            {
+                // 🟩 Kiểm tra Assignment tồn tại
+                var assignment = await _context.Assignments
+                    .Include(a => a.Rubric)
+                    .FirstOrDefaultAsync(a => a.AssignmentId == assignmentId);
+
+                if (assignment == null)
+                {
+                    return new BaseResponse<IEnumerable<CriteriaResponse>>(
+                        $"AssignmentId {assignmentId} not found.",
+                        StatusCodeEnum.NotFound_404,
+                        null
+                    );
+                }
+
+                // 🟩 Lấy danh sách tiêu chí thuộc rubric của assignment
+                if (assignment.RubricId == null)
+                {
+                    return new BaseResponse<IEnumerable<CriteriaResponse>>(
+                        $"Assignment {assignment.Title} does not have an assigned rubric.",
+                        StatusCodeEnum.NotFound_404,
+                        null
+                    );
+                }
+
+                var criteriaList = await _context.Criteria
+                    .Where(c => c.RubricId == assignment.RubricId)
+                    .Include(c => c.CriteriaTemplate)
+                    .Include(c => c.CriteriaFeedbacks)
+                    .ToListAsync();
+
+                if (!criteriaList.Any())
+                {
+                    return new BaseResponse<IEnumerable<CriteriaResponse>>(
+                        $"No criteria found for AssignmentId {assignmentId}.",
+                        StatusCodeEnum.NotFound_404,
+                        null
+                    );
+                }
+
+                // 🟩 Map sang response
+                var response = criteriaList.Select(c => new CriteriaResponse
+                {
+                    CriteriaId = c.CriteriaId,
+                    RubricId = c.RubricId,
+                    RubricTitle = c.Rubric?.Title,
+                    CriteriaTemplateId = c.CriteriaTemplateId,
+                    CriteriaTemplateTitle = c.CriteriaTemplate?.Title,
+                    Title = c.Title,
+                    Description = c.Description,
+                    Weight = c.Weight,
+                    MaxScore = c.MaxScore,
+                    ScoringType = c.ScoringType,
+                    ScoreLabel = c.ScoreLabel,
+                    IsModified = c.IsModified,
+                    CriteriaFeedbackCount = c.CriteriaFeedbacks?.Count ?? 0
+                });
+
+                return new BaseResponse<IEnumerable<CriteriaResponse>>(
+                    "Criteria retrieved successfully",
+                    StatusCodeEnum.OK_200,
+                    response
+                );
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<IEnumerable<CriteriaResponse>>(
+                    $"Error retrieving criteria for assignment: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null
                 );
             }
         }

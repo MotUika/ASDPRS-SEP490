@@ -25,6 +25,9 @@ namespace Repository.Repository
         {
             return await _context.Criteria
                 .Include(c => c.Rubric)
+                .ThenInclude(r => r.Assignment)
+                        .ThenInclude(a => a.CourseInstance)
+                            .ThenInclude(ci => ci.Course)
                 .Include(c => c.CriteriaTemplate)
                 .Where(c => c.RubricId == rubricId)
                 .ToListAsync();

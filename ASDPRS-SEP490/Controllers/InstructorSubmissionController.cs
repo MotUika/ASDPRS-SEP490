@@ -114,18 +114,87 @@ namespace ASDPRS_SEP490.Controllers
 
         // 7️⃣ Chấm điểm (Instructor grading)
         [HttpPost("grade")]
-        [SwaggerOperation(Summary = "Chấm điểm bài nộp", Description = "Instructor chấm điểm và ghi nhận feedback cho submission")]
+        [SwaggerOperation(
+            Summary = "Chấm điểm bài nộp",
+            Description = "Giảng viên chấm điểm và ghi nhận feedback cho submission. Có thể chấm theo từng tiêu chí nếu assignment có rubric."
+        )]
+        [SwaggerResponse(200, "Chấm điểm thành công", typeof(BaseResponse<GradeSubmissionResponse>))]
+        [SwaggerResponse(400, "Dữ liệu không hợp lệ hoặc thiếu thông tin")]
+        [SwaggerResponse(404, "Không tìm thấy bài nộp hoặc assignment")]
+        [SwaggerResponse(500, "Lỗi hệ thống trong quá trình chấm điểm")]
         public async Task<IActionResult> GradeSubmission([FromBody] GradeSubmissionRequest request)
         {
+            // ✅ Kiểm tra đầu vào
+            if (!ModelState.IsValid)
+            {
+                var errors = ModelState.Values
+                    .SelectMany(v => v.Errors)
+                    .Select(e => e.ErrorMessage)
+                    .ToList();
+
+                return BadRequest(new BaseResponse<string>(
+                    $"Invalid input: {string.Join("; ", errors)}",
+                    StatusCodeEnum.BadRequest_400,
+                    null
+                ));
+            }
+
+            // ✅ Gọi service xử lý
             var result = await _submissionService.GradeSubmissionAsync(request);
+
+            // ✅ Trả về kết quả theo status code
             return StatusCode((int)result.StatusCode, result);
         }
 
+
         [HttpPost("publish-grades")]
-        [SwaggerOperation(Summary = "Công bố điểm cho Assignment", Description = "Public toàn bộ điểm sau khi đủ 50% lớp hoặc qua deadline")]
+        [SwaggerOperation(
+    Summary = "Công bố điểm cho Assignment",
+    Description =
+        "Kiểm tra điều kiện trước khi công bố:\n" +
+        "- Đã chấm hết tất cả bài đã nộp\n" +
+        "- Đã chấm 0 điểm cho sinh viên không nộp (nếu có)\n" +
+        "- Qua FinalDeadline hoặc tỷ lệ nộp ≥ 50%\n\n" +
+        "Dùng `ForcePublish = true` để bỏ qua tất cả điều kiện.\n\n" +
+        "Trả về:\n" +
+        "- Danh sách sinh viên + điểm cuối\n" +
+        "- Tỷ lệ nộp / chấm\n" +
+        "- Lý do chặn (nếu không thể public)"
+)]
+        [SwaggerResponse(200, "Công bố thành công hoặc thông báo trạng thái", typeof(BaseResponse<PublishGradesResponse>))]
+        [SwaggerResponse(400, "Không thể công bố do còn bài chưa chấm / chưa nộp / chưa đến hạn")]
+        [SwaggerResponse(404, "Không tìm thấy Assignment")]
         public async Task<IActionResult> PublishGrades([FromBody] PublishGradesRequest request)
         {
+            if (request == null || request.AssignmentId <= 0)
+                return BadRequest("Invalid request: AssignmentId is required.");
+
             var result = await _submissionService.PublishGradesAsync(request);
+
+            return StatusCode((int)result.StatusCode, result);
+        }
+
+        [HttpPost("auto-grade-zero")]
+        [SwaggerOperation(
+    Summary = "Chấm 0 điểm tự động cho sinh viên KHÔNG NỘP bài",
+    Description =
+        "Chỉ thực hiện khi:\n" +
+        "- Đã qua FinalDeadline\n" +
+        "- `ConfirmZeroGrade = true`\n\n" +
+        "Tạo bản ghi `Submission` với:\n" +
+        "- `FinalScore = 0`\n" +
+        "- `Status = Graded`\n" +
+        "- `IsPublic = true`"
+)]
+        [SwaggerResponse(200, "Chấm 0 thành công", typeof(BaseResponse<AutoGradeZeroResponse>))]
+        [SwaggerResponse(400, "Chưa xác nhận hoặc chưa đến hạn")]
+        [SwaggerResponse(404, "Không tìm thấy Assignment")]
+        public async Task<IActionResult> AutoGradeZero([FromBody] AutoGradeZeroRequest request)
+        {
+            if (request == null || request.AssignmentId <= 0)
+                return BadRequest("AssignmentId và ConfirmZeroGrade là bắt buộc.");
+
+            var result = await _submissionService.AutoGradeZeroForNonSubmittersAsync(request);
             return StatusCode((int)result.StatusCode, result);
         }
 
