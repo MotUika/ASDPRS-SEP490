@@ -1,6 +1,7 @@
-﻿using Service.RequestAndResponse.Request.Submission;
-using Service.RequestAndResponse.Response.Submission;
+﻿using Microsoft.AspNetCore.Http;
 using Service.RequestAndResponse.BaseResponse;
+using Service.RequestAndResponse.Request.Submission;
+using Service.RequestAndResponse.Response.Submission;
 using System.Threading.Tasks;
 
 namespace Service.Interface
@@ -30,6 +31,7 @@ namespace Service.Interface
         Task<BaseResponse<SubmissionResponse>> CreateSubmissionWithCheckAsync(CreateSubmissionRequest request);
         Task<BaseResponse<SubmissionResponse>> SubmitAssignmentWithCheckAsync(SubmitAssignmentRequest request);
         Task<BaseResponse<SubmissionResponse>> UpdateSubmissionWithCheckAsync(UpdateSubmissionRequest request);
+        Task<BaseResponse<PlagiarismCheckResponse>> CheckPlagiarismActiveAsync(int assignmentId, IFormFile file, int? excludeSubmissionId = null);
         Task<BaseResponse<decimal?>> GetMyScoreAsync(int assignmentId, int studentId);
         Task<BaseResponse<MyScoreDetailsResponse>> GetMyScoreDetailsAsync(int assignmentId, int studentId);
     }

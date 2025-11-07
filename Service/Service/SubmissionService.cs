@@ -16,6 +16,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace Service.Service
@@ -1180,6 +1181,75 @@ namespace Service.Service
             }
         }
 
+        // method cho check plagiarism chủ động (trả details)
+        public async Task<BaseResponse<PlagiarismCheckResponse>> CheckPlagiarismActiveAsync(int assignmentId, IFormFile file, int? excludeSubmissionId = null)
+        {
+            if (file == null)
+            {
+                return new BaseResponse<PlagiarismCheckResponse>("No file provided for check", StatusCodeEnum.BadRequest_400, null);
+            }
+
+            try
+            {
+                // Get threshold from config, default 80%
+                var thresholdStr = await _systemConfigService.GetSystemConfigAsync("PlagiarismThreshold") ?? "80";
+                double threshold = double.Parse(thresholdStr) / 100;
+
+                // Extract text from new file
+                using var newStream = file.OpenReadStream();
+                string newText = await _documentTextExtractor.ExtractTextAsync(newStream, file.FileName);
+
+                if (string.IsNullOrWhiteSpace(newText))
+                {
+                    return new BaseResponse<PlagiarismCheckResponse>("No text extracted from file", StatusCodeEnum.BadRequest_400, new PlagiarismCheckResponse { MaxSimilarity = 0, IsAboveThreshold = false });
+                }
+
+                // Get other submissions in same assignment
+                var otherSubmissions = (await _submissionRepository.GetByAssignmentIdAsync(assignmentId))
+                    .Where(s => s.SubmissionId != excludeSubmissionId)
+                    .ToList();
+
+                if (!otherSubmissions.Any())
+                {
+                    return new BaseResponse<PlagiarismCheckResponse>("No other submissions to compare", StatusCodeEnum.OK_200, new PlagiarismCheckResponse { MaxSimilarity = 0, IsAboveThreshold = false });
+                }
+
+                double maxSimilarity = 0;
+
+                foreach (var other in otherSubmissions)
+                {
+                    using var otherStream = await _fileStorageService.GetFileStreamAsync(other.FileUrl);
+                    if (otherStream == null) continue;
+
+                    string otherText = await _documentTextExtractor.ExtractTextAsync(otherStream, other.FileName);
+                    if (string.IsNullOrWhiteSpace(otherText)) continue;
+
+                    double sim = CosineSimilarity(newText, otherText);
+                    if (sim > maxSimilarity) maxSimilarity = sim;
+                }
+
+                var response = new PlagiarismCheckResponse
+                {
+                    MaxSimilarity = maxSimilarity * 100,
+                    IsAboveThreshold = maxSimilarity > threshold,
+                    Threshold = threshold * 100
+                };
+
+                return new BaseResponse<PlagiarismCheckResponse>(
+                    response.IsAboveThreshold ? "High similarity detected" : "Plagiarism check passed",
+                    StatusCodeEnum.OK_200,
+                    response);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during plagiarism check");
+                return new BaseResponse<PlagiarismCheckResponse>(
+                    $"Error checking plagiarism: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
+            }
+        }
+
         private double CosineSimilarity(string text1, string text2)
         {
             var vec1 = TextToVector(text1);
@@ -1271,6 +1341,7 @@ namespace Service.Service
             }
         }
 
+        // Thêm method để lấy final score đơn giản
         public async Task<BaseResponse<decimal?>> GetMyScoreAsync(int assignmentId, int studentId)
         {
             try
@@ -1306,6 +1377,7 @@ namespace Service.Service
             }
         }
 
+        // Thêm method để lấy chi tiết điểm
         public async Task<BaseResponse<MyScoreDetailsResponse>> GetMyScoreDetailsAsync(int assignmentId, int studentId)
         {
             try
@@ -1336,14 +1408,24 @@ namespace Service.Service
                 var regradeRequests = await _regradeRequestRepository.GetBySubmissionIdAsync(submission.SubmissionId);
                 var hasPendingRegrade = regradeRequests.Any(r => r.Status == "Pending");
 
+                // Tính điểm trung bình và cao nhất lớp
+                var classSubmissions = await _submissionRepository.GetByAssignmentIdAsync(assignmentId);
+                var gradedScores = classSubmissions.Where(s => s.Status == "Graded" && s.FinalScore.HasValue).Select(s => s.FinalScore.Value).ToList();
+
+                decimal classAverage = gradedScores.Any() ? gradedScores.Average() : 0;
+                decimal classMax = gradedScores.Any() ? gradedScores.Max() : 0;
+
                 var response = new MyScoreDetailsResponse
                 {
-                    SubmissionId = submission.SubmissionId,
                     InstructorScore = submission.InstructorScore ?? 0,
                     PeerAverageScore = submission.PeerAverageScore ?? 0,
                     FinalScore = submission.FinalScore ?? 0,
                     Feedback = submission.Feedback,
                     GradedAt = submission.GradedAt,
+                    RegradeStatus = hasPendingRegrade ? "Pending" : (regradeRequests.Any() ? regradeRequests.First().Status : null),
+                    ClassAverageScore = classAverage,
+                    ClassMaxScore = classMax,
+                    Note = GenerateScoreNote(submission.FinalScore ?? 0, classAverage, classMax)
                 };
 
                 return new BaseResponse<MyScoreDetailsResponse>("Score details retrieved successfully", StatusCodeEnum.OK_200, response);
@@ -1353,7 +1435,29 @@ namespace Service.Service
                 _logger.LogError(ex, $"Error retrieving score details for assignment {assignmentId} and student {studentId}");
                 return new BaseResponse<MyScoreDetailsResponse>("An error occurred", StatusCodeEnum.InternalServerError_500, null);
             }
-        } 
+        }
+
+        private string GenerateScoreNote(decimal myScore, decimal classAverage, decimal classMax)
+        {
+            var note = new StringBuilder("Thống kê lớp: ");
+
+            if (myScore > classMax)
+            {
+                note.Append("Điểm của bạn cao nhất lớp! Tuyệt vời, hãy khoe với bạn bè đi. ");
+            }
+            else if (myScore >= classAverage)
+            {
+                note.Append("Điểm của bạn ổn, trên mức trung bình lớp. Tiếp tục cố gắng nhé! ");
+            }
+            else
+            {
+                note.Append("Điểm của bạn dưới trung bình lớp. Hãy xem lại và cải thiện ở bài sau. ");
+            }
+
+            note.Append($"Trung bình lớp: {classAverage:F1}, Cao nhất: {classMax:F1}");
+
+            return note.ToString();
+        }
 
         public async Task<BaseResponse<IEnumerable<SubmissionSummaryResponse>>> GetSubmissionSummaryAsync(
             int? courseId, int? classId, int? assignmentId)

@@ -719,4 +719,25 @@ public class StudentReviewController : ControllerBase
         var result = await _regradeRequestService.GetRegradeRequestsByFilterAsync(filterRequest);
         return StatusCode((int)result.StatusCode, result);
     }
+
+    [HttpPost("assignment/{assignmentId}/check-plagiarism")]
+    [SwaggerOperation(
+        Summary = "Kiểm tra tỷ lệ trùng lặp bài nộp (chủ động)",
+        Description = "Sinh viên upload file để check tỷ lệ similarity với các bài khác trong assignment, không lưu file."
+    )]
+    [SwaggerResponse(200, "Thành công", typeof(BaseResponse<PlagiarismCheckResponse>))]
+    [SwaggerResponse(403, "Access denied")]
+    [SwaggerResponse(404, "Không tìm thấy assignment")]
+    [SwaggerResponse(500, "Lỗi server")]
+    public async Task<IActionResult> CheckPlagiarism(int assignmentId, IFormFile file)
+    {
+        if (file == null || file.Length == 0)
+        {
+            return BadRequest(new BaseResponse<PlagiarismCheckResponse>("No file uploaded", StatusCodeEnum.BadRequest_400, null));
+        }
+
+        var studentId = GetCurrentStudentId();
+        var result = await _submissionService.CheckPlagiarismActiveAsync(assignmentId, file, studentId);
+        return StatusCode((int)result.StatusCode, result);
+    }
 }
