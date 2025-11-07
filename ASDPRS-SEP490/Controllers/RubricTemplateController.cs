@@ -196,5 +196,32 @@ namespace ASDPRS_SEP490.Controllers
                 _ => StatusCode(500, result)
             };
         }
+
+        // GET: Lấy Rubric Template theo UserId và MajorId
+        [HttpGet("major/{majorId}/user/{userId}")]
+        [SwaggerOperation(
+            Summary = "Lấy Rubric Template theo Major và User",
+            Description = "Trả về danh sách Rubric Template công khai thuộc Major cụ thể, và template riêng của user (nếu có)"
+        )]
+        [SwaggerResponse(200, "Thành công", typeof(BaseResponse<IEnumerable<RubricTemplateResponse>>))]
+        [SwaggerResponse(400, "MajorId hoặc UserId không hợp lệ")]
+        [SwaggerResponse(404, "Không tìm thấy template nào cho Major và User này")]
+        [SwaggerResponse(500, "Lỗi server")]
+        public async Task<IActionResult> GetRubricTemplatesByUserAndMajor(int majorId, int userId)
+        {
+            if (majorId <= 0 || userId <= 0)
+                return BadRequest(new BaseResponse<IEnumerable<RubricTemplateResponse>>(
+                    "MajorId and UserId must be greater than 0",
+                    StatusCodeEnum.BadRequest_400,
+                    null));
+
+            var result = await _rubricTemplateService.GetRubricTemplatesByUserAndMajorAsync(userId, majorId);
+            return result.StatusCode switch
+            {
+                StatusCodeEnum.OK_200 => Ok(result),
+                StatusCodeEnum.NotFound_404 => NotFound(result),
+                _ => StatusCode(500, result)
+            };
+        }
     }
 }

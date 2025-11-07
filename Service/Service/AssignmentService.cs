@@ -114,6 +114,22 @@ namespace Service.Service
                     }
                 }
 
+                // ✅ Validate timeline dates
+                var dateValidation = ValidateAssignmentDates(
+                    request.StartDate,
+                    request.Deadline,
+                    request.ReviewDeadline,
+                    request.FinalDeadline
+                );
+                if (dateValidation != null)
+                {
+                    return new BaseResponse<AssignmentResponse>(
+                        dateValidation,
+                        StatusCodeEnum.BadRequest_400,
+                        null
+                    );
+                }
+
                 // Validate weights sum to 100
                 if (request.InstructorWeight + request.PeerWeight != 100)
                 {
@@ -262,6 +278,7 @@ namespace Service.Service
                         null);
                 }
 
+                // 🧩 Validate file upload
                 if (request.File != null)
                 {
                     var uploadResult = await _fileStorageService.UploadFileAsync(
@@ -282,19 +299,24 @@ namespace Service.Service
                     assignment.FileName = uploadResult.FileName;
                 }
 
-                // Update fields if provided
-                if (request.RubricTemplateId.HasValue)
+                // ✅ Validate date logic
+                var dateValidation = ValidateAssignmentDates(
+                    request.StartDate ?? assignment.StartDate,
+                    request.Deadline ?? assignment.Deadline,
+                    request.ReviewDeadline ?? assignment.ReviewDeadline,
+                    request.FinalDeadline ?? assignment.FinalDeadline
+                );
+
+                if (dateValidation != null)
                 {
-                    var rubricTemplate = await _rubricTemplateRepository.GetByIdAsync(request.RubricTemplateId.Value);
-                    if (rubricTemplate == null)
-                    {
-                        return new BaseResponse<AssignmentResponse>(
-                            "Rubric template not found",
-                            StatusCodeEnum.NotFound_404,
-                            null);
-                    }
+                    return new BaseResponse<AssignmentResponse>(
+                        dateValidation,
+                        StatusCodeEnum.BadRequest_400,
+                        null
+                    );
                 }
 
+                // 🧩 Update các field cơ bản
                 if (!string.IsNullOrEmpty(request.Title))
                     assignment.Title = request.Title;
 
@@ -319,13 +341,23 @@ namespace Service.Service
                 if (request.NumPeerReviewsRequired.HasValue)
                     assignment.NumPeerReviewsRequired = request.NumPeerReviewsRequired.Value;
 
-                if(request.PassThreshold.HasValue)
+                if (request.PassThreshold.HasValue)
                     assignment.PassThreshold = request.PassThreshold.Value;
+
                 if (request.AllowCrossClass.HasValue)
                     assignment.AllowCrossClass = request.AllowCrossClass.Value;
 
                 if (request.IsBlindReview.HasValue)
                     assignment.IsBlindReview = request.IsBlindReview.Value;
+
+                if (request.GradingScale != null)
+                    assignment.GradingScale = request.GradingScale;
+
+                if (request.IncludeAIScore.HasValue)
+                    assignment.IncludeAIScore = request.IncludeAIScore.Value;
+
+                if (request.MissingReviewPenalty.HasValue)
+                    await SaveAssignmentConfigs(assignment.AssignmentId, "MissingReviewPenalty", request.MissingReviewPenalty.Value.ToString());
 
                 if (request.InstructorWeight.HasValue && request.PeerWeight.HasValue)
                 {
@@ -339,28 +371,46 @@ namespace Service.Service
                     assignment.InstructorWeight = request.InstructorWeight.Value;
                     assignment.PeerWeight = request.PeerWeight.Value;
                 }
-                if (request.GradingScale != null)
-                    assignment.GradingScale = request.GradingScale;
 
-                if (request.MissingReviewPenalty.HasValue)
-                    await SaveAssignmentConfigs(assignment.AssignmentId, "MissingReviewPenalty", request.MissingReviewPenalty.Value.ToString());
-
-                if (request.IncludeAIScore.HasValue)
-                    assignment.IncludeAIScore = request.IncludeAIScore.Value;
-
-                // Nếu có thay đổi RubricTemplateId → clone rubric mới từ template
+                // 🧩 Nếu đổi RubricTemplate → tạo rubric mới
                 if (request.RubricTemplateId.HasValue &&
-            (!assignment.RubricTemplateId.HasValue ||
-             assignment.RubricTemplateId.Value != request.RubricTemplateId.Value))
+                    (!assignment.RubricTemplateId.HasValue ||
+                     assignment.RubricTemplateId.Value != request.RubricTemplateId.Value))
                 {
-                    var rubricResult = await _rubricService.CreateRubricFromTemplateAsync(
-                        request.RubricTemplateId.Value,
-                        assignment.AssignmentId);
-
-                    if (rubricResult.StatusCode == StatusCodeEnum.Created_201 && rubricResult.Data != null)
+                    if (assignment.Status != "Draft" && assignment.Status != "Upcoming")
                     {
+                        return new BaseResponse<AssignmentResponse>(
+                            "Cannot change rubric template unless assignment is in 'Draft' or 'Upcoming' status",
+                            StatusCodeEnum.BadRequest_400,
+                            null);
+                    }
+
+                    var rubricTemplate = await _rubricTemplateRepository.GetByIdAsync(request.RubricTemplateId.Value);
+                    if (rubricTemplate == null)
+                    {
+                        return new BaseResponse<AssignmentResponse>(
+                            "Rubric template not found",
+                            StatusCodeEnum.NotFound_404,
+                            null);
+                    }
+
+                    // ✅ Gán templateId mới
+                    assignment.RubricTemplateId = request.RubricTemplateId.Value;
+
+                    // ✅ Tạo rubric hoàn toàn mới (KHÔNG đụng rubric cũ)
+                    var newRubricResult = await _rubricService.CreateRubricFromTemplateAsync(
+     request.RubricTemplateId.Value,
+     assignment.AssignmentId
+ );
+
+                    if (newRubricResult.StatusCode == StatusCodeEnum.Created_201 && newRubricResult.Data != null)
+                    {
+                        // ✅ Gán rubricId mới
+                        assignment.RubricId = newRubricResult.Data.RubricId;
                         assignment.RubricTemplateId = request.RubricTemplateId.Value;
-                        assignment.RubricId = rubricResult.Data.RubricId;
+
+                        _context.Assignments.Update(assignment);
+                        await _context.SaveChangesAsync();
                     }
                     else
                     {
@@ -369,6 +419,7 @@ namespace Service.Service
                             StatusCodeEnum.PartialContent_206,
                             await MapToResponse(assignment));
                     }
+
                 }
 
                 await _assignmentRepository.UpdateAsync(assignment);
@@ -387,6 +438,7 @@ namespace Service.Service
                     null);
             }
         }
+
 
         public async Task<BaseResponse<bool>> DeleteAssignmentAsync(int assignmentId)
         {
@@ -999,6 +1051,7 @@ namespace Service.Service
             {
                 AssignmentId = assignment.AssignmentId,
                 CourseInstanceId = assignment.CourseInstanceId,
+                RubricTemplateId = assignment.RubricTemplateId,
                 RubricId = assignment.RubricId,
                 Title = assignment.Title,
                 Description = assignment.Description,
@@ -1551,6 +1604,37 @@ namespace Service.Service
                 await _context.SaveChangesAsync();
             }
         }
+
+        private string ValidateAssignmentDates(DateTime? startDate, DateTime deadline, DateTime? reviewDeadline, DateTime? finalDeadline)
+        {
+            var now = DateTime.UtcNow;
+
+            // Phải là ngày hiện tại hoặc tương lai
+            if (startDate.HasValue && startDate.Value.Date < now.Date)
+                return "Start date must be today or in the future";
+
+            if (deadline.Date < now.Date)
+                return "Deadline must be today or in the future";
+
+            if (reviewDeadline.HasValue && reviewDeadline.Value.Date < now.Date)
+                return "Review deadline must be today or in the future";
+
+            if (finalDeadline.HasValue && finalDeadline.Value.Date < now.Date)
+                return "Final deadline must be today or in the future";
+
+            // Logic thứ tự thời gian
+            if (startDate.HasValue && startDate.Value >= deadline)
+                return "Start date must be before deadline";
+
+            if (reviewDeadline.HasValue && deadline >= reviewDeadline.Value)
+                return "Deadline must be before review deadline";
+
+            if (finalDeadline.HasValue && reviewDeadline.HasValue && reviewDeadline.Value >= finalDeadline.Value)
+                return "Review deadline must be before final deadline";
+
+            return null; 
+        }
+
 
 
     }

@@ -143,6 +143,22 @@ namespace Service.Service
                     return new BaseResponse<RubricResponse>("Rubric not found", StatusCodeEnum.NotFound_404, null);
                 }
 
+                // 🧩 Kiểm tra trạng thái assignment nếu rubric thuộc assignment
+                if (existingRubric.AssignmentId.HasValue)
+                {
+                    var assignment = await _context.Assignments.FirstOrDefaultAsync(a => a.AssignmentId == existingRubric.AssignmentId);
+                    if (assignment != null)
+                    {
+                        if (assignment.Status != "Upcoming" && assignment.Status != "Draft")
+                        {
+                            return new BaseResponse<RubricResponse>(
+                                "Rubric can only be edited when the related assignment is in 'Draft' or 'Upcoming' status",
+                                StatusCodeEnum.BadRequest_400,
+                                null);
+                        }
+                    }
+                }
+
                 // Validate template if provided
                 if (request.TemplateId.HasValue && request.TemplateId > 0 && request.TemplateId != existingRubric.TemplateId)
                 {
@@ -325,20 +341,30 @@ namespace Service.Service
         {
             try
             {
-                // 🔹 Load template kèm criteria templates
+                // 🔹 Load template + criteria templates
                 var template = await _context.RubricTemplates
                     .Include(t => t.CriteriaTemplates)
                     .FirstOrDefaultAsync(t => t.TemplateId == templateId);
 
                 if (template == null)
                     return new BaseResponse<RubricResponse>(
-                        "Rubric template not found", StatusCodeEnum.NotFound_404, null);
+                        "Rubric template not found",
+                        StatusCodeEnum.NotFound_404,
+                        null);
 
                 // 🔹 Validate assignment nếu có
-                if (assignmentId.HasValue &&
-                    !await _context.Assignments.AnyAsync(a => a.AssignmentId == assignmentId))
-                    return new BaseResponse<RubricResponse>(
-                        "Assignment not found", StatusCodeEnum.NotFound_404, null);
+                Assignment? assignment = null;
+                if (assignmentId.HasValue)
+                {
+                    assignment = await _context.Assignments
+                        .FirstOrDefaultAsync(a => a.AssignmentId == assignmentId.Value);
+
+                    if (assignment == null)
+                        return new BaseResponse<RubricResponse>(
+                            "Assignment not found",
+                            StatusCodeEnum.NotFound_404,
+                            null);
+                }
 
                 // 🔹 Tạo rubric mới
                 var rubric = new Rubric
@@ -346,42 +372,40 @@ namespace Service.Service
                     TemplateId = templateId,
                     AssignmentId = assignmentId,
                     Title = template.Title ?? "Untitled Rubric",
-                    IsModified = false,
-                    //CreatedAt = DateTime.UtcNow
+                    IsModified = false
                 };
 
-                _context.Rubrics.Add(rubric);
-                await _context.SaveChangesAsync();             // ✅ có rubricId thật
+                await _context.Rubrics.AddAsync(rubric);
+                await _context.SaveChangesAsync(); // ✅ Tạo RubricId thật
 
-                // 🔹 Clone criteria
+                // 🔹 Clone toàn bộ criteria từ template
                 if (template.CriteriaTemplates?.Any() == true)
                 {
-                    foreach (var ct in template.CriteriaTemplates)
+                    var criteriaToAdd = template.CriteriaTemplates.Select(ct => new Criteria
                     {
-                        _context.Criteria.Add(new Criteria
-                        {
-                            RubricId = rubric.RubricId,
-                            CriteriaTemplateId = ct.CriteriaTemplateId,
-                            Title = ct.Title,
-                            Description = ct.Description,
-                            MaxScore = ct.MaxScore,
-                            Weight = ct.Weight,
-                            ScoringType = ct.ScoringType ?? "Scale",   
-                            ScoreLabel = ct.ScoreLabel ?? "Points",
-                            IsModified = false
-                        });
-                    }
+                        RubricId = rubric.RubricId,
+                        CriteriaTemplateId = ct.CriteriaTemplateId,
+                        Title = ct.Title,
+                        Description = ct.Description,
+                        MaxScore = ct.MaxScore,
+                        Weight = ct.Weight,
+                        ScoringType = ct.ScoringType ?? "Scale",
+                        ScoreLabel = ct.ScoreLabel ?? "Points",
+                        IsModified = false
+                    }).ToList();
+
+                    await _context.Criteria.AddRangeAsync(criteriaToAdd);
                     await _context.SaveChangesAsync();
                 }
-                // 🔹 Gán rubric vào assignment (nếu có)
-                if (assignmentId.HasValue)
+
+                // 🔹 Cập nhật assignment (nếu có) để gán rubric mới
+                if (assignment != null)
                 {
-                    var assignment = await _context.Assignments.FirstOrDefaultAsync(a => a.AssignmentId == assignmentId);
-                    if (assignment != null)
-                    {
-                        assignment.RubricId = rubric.RubricId;
-                        await _context.SaveChangesAsync(); // ✅ cập nhật rubricId cho assignment
-                    }
+                    assignment.RubricId = rubric.RubricId;
+                    assignment.RubricTemplateId = templateId;
+
+                    _context.Assignments.Update(assignment);
+                    await _context.SaveChangesAsync(); // ✅ Gán rubric mới cho assignment
                 }
 
                 // 🔹 Load rubric đầy đủ để trả về
@@ -393,6 +417,7 @@ namespace Service.Service
                     .FirstOrDefaultAsync(r => r.RubricId == rubric.RubricId);
 
                 var response = _mapper.Map<RubricResponse>(rubricWithDetails);
+
                 return new BaseResponse<RubricResponse>(
                     "Rubric created from template successfully",
                     StatusCodeEnum.Created_201,
@@ -400,7 +425,6 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
-                // 🔹 Log inner exception cụ thể
                 var msg = ex.InnerException?.Message ?? ex.Message;
                 return new BaseResponse<RubricResponse>(
                     $"Error creating rubric from template: {msg}",
@@ -408,6 +432,7 @@ namespace Service.Service
                     null);
             }
         }
+
 
 
         //public async Task<BaseResponse<IEnumerable<RubricResponse>>> GetPublicRubricsAsync()
