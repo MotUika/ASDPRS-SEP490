@@ -1439,22 +1439,22 @@ namespace Service.Service
 
         private string GenerateScoreNote(decimal myScore, decimal classAverage, decimal classMax)
         {
-            var note = new StringBuilder("Thống kê lớp: ");
+            var note = new StringBuilder("Class statistics: ");
 
             if (myScore > classMax)
             {
-                note.Append("Điểm của bạn cao nhất lớp! Tuyệt vời, hãy khoe với bạn bè đi. ");
+                note.Append("Your score is the highest in the class! Great, show off to your friends. ");
             }
             else if (myScore >= classAverage)
             {
-                note.Append("Điểm của bạn ổn, trên mức trung bình lớp. Tiếp tục cố gắng nhé! ");
+                note.Append("Your score is fine, above average. Keep up the good work! ");
             }
             else
             {
-                note.Append("Điểm của bạn dưới trung bình lớp. Hãy xem lại và cải thiện ở bài sau. ");
+                note.Append("Your score is below class average. Please review and improve next time. ");
             }
 
-            note.Append($"Trung bình lớp: {classAverage:F1}, Cao nhất: {classMax:F1}");
+            note.Append($"Class average: {classAverage:F1}, Highest: {classMax:F1}");
 
             return note.ToString();
         }
