@@ -19,8 +19,10 @@ namespace Service.Mapping
 
             // Entity to Response
             CreateMap<User, UserResponse>()
-                .ForMember(dest => dest.CampusName, opt => opt.MapFrom(src => src.Campus != null ? src.Campus.CampusName : string.Empty))
-                .ForMember(dest => dest.Roles, opt => opt.MapFrom(src => src.UserRoles.Select(ur => ur.Role.RoleName).ToList()));
+                .ForMember(dest => dest.CampusName,
+                    opt => opt.MapFrom(src => src.Campus != null ? src.Campus.CampusName : null))
+                .ForMember(dest => dest.MajorName,
+                    opt => opt.MapFrom(src => src.Major != null ? src.Major.MajorName : null));
         }
     }
 }

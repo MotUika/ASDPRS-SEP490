@@ -7,11 +7,13 @@ using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Enums;
 using Service.RequestAndResponse.Request.AISummary;
 using Service.RequestAndResponse.Request.CourseStudent;
+using Service.RequestAndResponse.Request.RegradeRequest;
 using Service.RequestAndResponse.Request.Review;
 using Service.RequestAndResponse.Request.Submission;
 using Service.RequestAndResponse.Response.AISummary;
 using Service.RequestAndResponse.Response.Assignment;
 using Service.RequestAndResponse.Response.CourseInstance;
+using Service.RequestAndResponse.Response.RegradeRequest;
 using Service.RequestAndResponse.Response.Review;
 using Service.RequestAndResponse.Response.ReviewAssignment;
 using Service.RequestAndResponse.Response.Rubric;
@@ -32,13 +34,14 @@ public class StudentReviewController : ControllerBase
     private readonly IAssignmentRepository _assignmentRepository;
     private readonly ISubmissionRepository _submissionRepository;
     private readonly IAISummaryService _aISummaryService;
+    private readonly IRegradeRequestService _regradeRequestService;
 
     public StudentReviewController(
         ICourseStudentService courseStudentService,
         IReviewAssignmentService reviewAssignmentService,
         IReviewService reviewService,
         IAssignmentService assignmentService,
-        ISubmissionService submissionService, IAssignmentRepository assignmentRepository, IAISummaryService aISummaryService)
+        ISubmissionService submissionService, IAssignmentRepository assignmentRepository, IAISummaryService aISummaryService, IRegradeRequestService regradeRequestService)
     {
         _courseStudentService = courseStudentService;
         _reviewAssignmentService = reviewAssignmentService;
@@ -47,9 +50,10 @@ public class StudentReviewController : ControllerBase
         _submissionService = submissionService;
         _assignmentRepository = assignmentRepository;
         _aISummaryService = aISummaryService;
+        _regradeRequestService = regradeRequestService;
     }
 
-    
+
     [HttpGet("courses/{studentId}")]
     [SwaggerOperation(
             Summary = "Lấy danh sách lớp học của sinh viên",
@@ -396,19 +400,19 @@ public class StudentReviewController : ControllerBase
 )]
     [SwaggerResponse(201, "Tạo review thành công", typeof(BaseResponse<AISummaryGenerationResponse>))]
     [SwaggerResponse(404, "Không tìm thấy bài nộp")]
-    public async Task<IActionResult> GenerateUniversalReview(int submissionId)
+    public async Task<IActionResult> GenerateEnhancedReview(int submissionId, [FromBody] bool replaceExisting = false)
     {
         try
         {
             var studentId = GetCurrentStudentId();
 
-            // Kiểm tra quyền review bài này
+            // Kiểm tra quyền
             var reviewAssignments = await _reviewAssignmentService.GetReviewAssignmentsBySubmissionIdAsync(submissionId);
             var canReview = reviewAssignments.Data?.Any(ra => ra.ReviewerUserId == studentId) ?? false;
 
             if (!canReview)
             {
-                return StatusCode(403, new BaseResponse<AISummaryGenerationResponse>(
+                return StatusCode(403, new BaseResponse<EnhancedReviewResponse>(
                     "Access denied: You are not assigned to review this submission",
                     StatusCodeEnum.Forbidden_403,
                     null
@@ -418,7 +422,7 @@ public class StudentReviewController : ControllerBase
             var aiSummaryService = HttpContext.RequestServices.GetService<IAISummaryService>();
             if (aiSummaryService == null)
             {
-                return StatusCode(500, new BaseResponse<AISummaryGenerationResponse>(
+                return StatusCode(500, new BaseResponse<EnhancedReviewResponse>(
                     "AI Summary service not available",
                     StatusCodeEnum.InternalServerError_500,
                     null
@@ -428,22 +432,21 @@ public class StudentReviewController : ControllerBase
             var request = new GenerateReviewRequest
             {
                 SubmissionId = submissionId,
-                ReplaceExisting = true
+                ReplaceExisting = replaceExisting
             };
 
-            var result = await aiSummaryService.GenerateReviewAsync(request);
+            var result = await aiSummaryService.GenerateEnhancedReviewAsync(request);
             return StatusCode((int)result.StatusCode, result);
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new BaseResponse<AISummaryGenerationResponse>(
-                $"Error generating universal AI review: {ex.Message}",
+            return StatusCode(500, new BaseResponse<EnhancedReviewResponse>(
+                $"Error generating enhanced AI review: {ex.Message}",
                 StatusCodeEnum.InternalServerError_500,
                 null
             ));
         }
     }
-
     [HttpGet("submission/{submissionId}/Total-AI-review")]
     [SwaggerOperation(
         Summary = "Lấy AI Review tổng quát của bài nộp",
@@ -488,6 +491,89 @@ public class StudentReviewController : ControllerBase
         {
             return StatusCode(500, new BaseResponse<AISummaryResponse>(
                 $"Error retrieving universal AI review: {ex.Message}",
+                StatusCodeEnum.InternalServerError_500,
+                null
+            ));
+        }
+    }
+    [HttpPost("submission/{submissionId}/ai-overall-summary")]
+    [SwaggerOperation(
+        Summary = "Generate or load AI Overall Summary for submission",
+        Description = "Nếu chưa tồn tại, generate tóm tắt tổng quát ~100 từ và lưu DB; nếu có, load từ DB."
+    )]
+    [SwaggerResponse(200, "Thành công (load hoặc generate)", typeof(BaseResponse<AIOverallResponse>))]
+    [SwaggerResponse(403, "Access denied")]
+    [SwaggerResponse(404, "Không tìm thấy submission")]
+    [SwaggerResponse(500, "Lỗi server")]
+    public async Task<IActionResult> GenerateAIOverallSummary(int submissionId)
+    {
+        try
+        {
+            var studentId = GetCurrentStudentId();
+
+            // Kiểm tra quyền (tương tự existing)
+            var reviewAssignments = await _reviewAssignmentService.GetReviewAssignmentsBySubmissionIdAsync(submissionId);
+            var canReview = reviewAssignments.Data?.Any(ra => ra.ReviewerUserId == studentId) ?? false;
+
+            if (!canReview)
+            {
+                return StatusCode(403, new BaseResponse<AIOverallResponse>(
+                    "Access denied: You are not assigned to review this submission",
+                    StatusCodeEnum.Forbidden_403,
+                    null
+                ));
+            }
+
+            var request = new GenerateAIOverallRequest { SubmissionId = submissionId };
+            var result = await _aISummaryService.GenerateOverallSummaryAsync(request);  // Method đã modify để lưu
+            return StatusCode((int)result.StatusCode, result);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new BaseResponse<AIOverallResponse>(
+                $"Error generating/loading AI overall summary: {ex.Message}",
+                StatusCodeEnum.InternalServerError_500,
+                null
+            ));
+        }
+    }
+
+    [HttpPost("submission/{submissionId}/ai-criteria-feedback")]
+    [SwaggerOperation(
+        Summary = "Generate or load AI Criteria Feedback for submission",
+        Description = "Nếu chưa tồn tại, generate feedback theo từng criteria và lưu DB; nếu có, load từ DB."
+    )]
+    [SwaggerResponse(200, "Thành công (load hoặc generate)", typeof(BaseResponse<AICriteriaResponse>))]
+    [SwaggerResponse(403, "Access denied")]
+    [SwaggerResponse(404, "Không tìm thấy submission hoặc rubric")]
+    [SwaggerResponse(500, "Lỗi server")]
+    public async Task<IActionResult> GenerateAICriteriaFeedback(int submissionId)
+    {
+        try
+        {
+            var studentId = GetCurrentStudentId();
+
+            // Kiểm tra quyền (tương tự)
+            var reviewAssignments = await _reviewAssignmentService.GetReviewAssignmentsBySubmissionIdAsync(submissionId);
+            var canReview = reviewAssignments.Data?.Any(ra => ra.ReviewerUserId == studentId) ?? false;
+
+            if (!canReview)
+            {
+                return StatusCode(403, new BaseResponse<AICriteriaResponse>(
+                    "Access denied: You are not assigned to review this submission",
+                    StatusCodeEnum.Forbidden_403,
+                    null
+                ));
+            }
+
+            var request = new GenerateAICriteriaRequest { SubmissionId = submissionId };
+            var result = await _aISummaryService.GenerateCriteriaFeedbackAsync(request);  // Method đã modify để lưu
+            return StatusCode((int)result.StatusCode, result);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new BaseResponse<AICriteriaResponse>(
+                $"Error generating/loading AI criteria feedback: {ex.Message}",
                 StatusCodeEnum.InternalServerError_500,
                 null
             ));
@@ -565,5 +651,93 @@ public class StudentReviewController : ControllerBase
                 null
             ));
         }
+    }
+
+    [HttpGet("assignment/{assignmentId}/my-score")]
+    [SwaggerOperation(
+        Summary = "Lấy điểm final score của sinh viên cho assignment",
+        Description = "Trả về final score của assignment cho sinh viên hiện tại, chỉ khi assignment đã publish grades"
+    )]
+    [SwaggerResponse(200, "Thành công", typeof(BaseResponse<decimal?>))]
+    [SwaggerResponse(403, "Access denied hoặc chưa publish")]
+    [SwaggerResponse(404, "Không tìm thấy submission")]
+    public async Task<IActionResult> GetMyScore(int assignmentId)
+    {
+        var studentId = GetCurrentStudentId();
+        var result = await _submissionService.GetMyScoreAsync(assignmentId, studentId);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpGet("assignment/{assignmentId}/my-score-details")]
+    [SwaggerOperation(
+        Summary = "Lấy chi tiết điểm của sinh viên cho assignment",
+        Description = "Trả về instructor score, peer average, final score, feedback, và info khiếu nại cho assignment của sinh viên hiện tại"
+    )]
+    [SwaggerResponse(200, "Thành công", typeof(BaseResponse<MyScoreDetailsResponse>))]
+    [SwaggerResponse(403, "Access denied hoặc chưa publish")]
+    [SwaggerResponse(404, "Không tìm thấy submission")]
+    public async Task<IActionResult> GetMyScoreDetails(int assignmentId)
+    {
+        var studentId = GetCurrentStudentId();
+        var result = await _submissionService.GetMyScoreDetailsAsync(assignmentId, studentId);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpGet("my-regrade-history")]
+    [SwaggerOperation(
+        Summary = "Lấy lịch sử khiếu nại toàn bộ của sinh viên",
+        Description = "Trả về danh sách tất cả regrade requests của sinh viên hiện tại"
+    )]
+    [SwaggerResponse(200, "Thành công", typeof(BaseResponse<RegradeRequestListResponse>))]
+    [SwaggerResponse(404, "Không tìm thấy")]
+    [SwaggerResponse(500, "Lỗi server")]
+    public async Task<IActionResult> GetMyRegradeHistory([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20)
+    {
+        var studentId = GetCurrentStudentId();
+        var result = await _regradeRequestService.GetRegradeRequestsByStudentIdAsync(studentId, pageNumber, pageSize);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpGet("assignment/{assignmentId}/my-regrade-history")]
+    [SwaggerOperation(
+        Summary = "Lấy lịch sử khiếu nại của sinh viên trong assignment cụ thể",
+        Description = "Trả về danh sách regrade requests của sinh viên hiện tại cho assignment cụ thể"
+    )]
+    [SwaggerResponse(200, "Thành công", typeof(BaseResponse<RegradeRequestListResponse>))]
+    [SwaggerResponse(404, "Không tìm thấy")]
+    [SwaggerResponse(500, "Lỗi server")]
+    public async Task<IActionResult> GetMyRegradeHistoryByAssignment(int assignmentId, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20)
+    {
+        var studentId = GetCurrentStudentId();
+        var filterRequest = new GetRegradeRequestsByFilterRequest
+        {
+            AssignmentId = assignmentId,
+            StudentId = studentId,
+            PageNumber = pageNumber,
+            PageSize = pageSize
+        };
+        var result = await _regradeRequestService.GetRegradeRequestsByFilterAsync(filterRequest);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpPost("assignment/{assignmentId}/check-plagiarism")]
+    [SwaggerOperation(
+        Summary = "Kiểm tra tỷ lệ trùng lặp bài nộp (chủ động)",
+        Description = "Sinh viên upload file để check tỷ lệ similarity với các bài khác trong assignment, không lưu file."
+    )]
+    [SwaggerResponse(200, "Thành công", typeof(BaseResponse<PlagiarismCheckResponse>))]
+    [SwaggerResponse(403, "Access denied")]
+    [SwaggerResponse(404, "Không tìm thấy assignment")]
+    [SwaggerResponse(500, "Lỗi server")]
+    public async Task<IActionResult> CheckPlagiarism(int assignmentId, IFormFile file)
+    {
+        if (file == null || file.Length == 0)
+        {
+            return BadRequest(new BaseResponse<PlagiarismCheckResponse>("No file uploaded", StatusCodeEnum.BadRequest_400, null));
+        }
+
+        var studentId = GetCurrentStudentId();
+        var result = await _submissionService.CheckPlagiarismActiveAsync(assignmentId, file, studentId);
+        return StatusCode((int)result.StatusCode, result);
     }
 }

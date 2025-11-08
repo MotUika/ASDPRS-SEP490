@@ -53,6 +53,13 @@ namespace Service.Service
                         null);
                 }
 
+                var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
+                if (assignment == null || assignment.Status != "GradesPublished")
+                {
+                    return new BaseResponse<RegradeRequestResponse>(
+                        "Cannot request regrade before grades are published", StatusCodeEnum.BadRequest_400, null);
+                }
+
                 // Check if student exists and is the owner of the submission
                 if (submission.UserId != request.RequestedByUserId)
                 {
@@ -165,6 +172,12 @@ namespace Service.Service
                         .OrderByDescending(r => r.RequestedAt)
                         .Skip((request.PageNumber - 1) * request.PageSize)
                         .Take(request.PageSize);
+                }
+
+                // Nếu có cả StudentId và AssignmentId, filter thêm
+                if (request.StudentId.HasValue && request.AssignmentId.HasValue)
+                {
+                    requests = requests.Where(r => r.Submission.AssignmentId == request.AssignmentId.Value && r.Submission.UserId == request.StudentId.Value);
                 }
 
                 var requestList = requests.ToList();
@@ -360,18 +373,18 @@ namespace Service.Service
 
                 if (regradeRequest.Submission.User != null)
                 {
-                    response.RequestedByStudent = _mapper.Map<UserInfoResponse>(regradeRequest.Submission.User);
+                    response.RequestedByStudent = _mapper.Map<UserInfoRegradeResponse>(regradeRequest.Submission.User);
                 }
 
                 if (regradeRequest.Submission.Assignment != null)
                 {
-                    response.Assignment = _mapper.Map<AssignmentInfoResponse>(regradeRequest.Submission.Assignment);
+                    response.Assignment = _mapper.Map<AssignmentInfoRegradeResponse>(regradeRequest.Submission.Assignment);
                 }
             }
 
             if (regradeRequest.ReviewedByInstructor != null)
             {
-                response.ReviewedByInstructor = _mapper.Map<UserInfoResponse>(regradeRequest.ReviewedByInstructor);
+                response.ReviewedByInstructor = _mapper.Map<UserInfoRegradeResponse>(regradeRequest.ReviewedByInstructor);
             }
 
             return response;

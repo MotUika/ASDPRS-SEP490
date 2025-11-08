@@ -51,7 +51,10 @@ namespace Service.Service
         {
             try
             {
-                var user = await _userRepository.GetByIdAsync(id);
+                var user = await _context.Users
+                    .Include(u => u.Campus)
+                    .Include(u => u.Major)
+                    .FirstOrDefaultAsync(u => u.Id == id);
                 if (user == null)
                 {
                     return new BaseResponse<UserResponse>("User not found", StatusCodeEnum.NotFound_404, null);
@@ -72,7 +75,11 @@ namespace Service.Service
         {
             try
             {
-                var users = await _userRepository.GetAllAsync();
+                var users = await _context.Users
+                    .Include(u => u.Campus)
+                    .Include(u => u.Major)
+                    .ToListAsync();
+
                 var responses = new List<UserResponse>();
 
                 foreach (var user in users)
@@ -89,7 +96,6 @@ namespace Service.Service
                 return new BaseResponse<IEnumerable<UserResponse>>($"Error retrieving users: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
-
         public async Task<BaseResponse<UserResponse>> UpdateUserAsync(UpdateUserRequest request)
         {
             try
@@ -163,7 +169,11 @@ namespace Service.Service
         {
             try
             {
-                var user = await _userManager.FindByEmailAsync(email);
+                var user = await _context.Users
+                    .Include(u => u.Campus)
+                    .Include(u => u.Major)
+                    .FirstOrDefaultAsync(u => u.Email == email);
+
                 if (user == null)
                 {
                     return new BaseResponse<UserResponse>("User not found", StatusCodeEnum.NotFound_404, null);
@@ -184,7 +194,11 @@ namespace Service.Service
         {
             try
             {
-                var user = await _userManager.FindByNameAsync(username);
+                var user = await _context.Users
+                    .Include(u => u.Campus)
+                    .Include(u => u.Major)
+                    .FirstOrDefaultAsync(u => u.UserName == username);
+
                 if (user == null)
                 {
                     return new BaseResponse<UserResponse>("User not found", StatusCodeEnum.NotFound_404, null);
@@ -200,26 +214,41 @@ namespace Service.Service
                 return new BaseResponse<UserResponse>($"Error retrieving user: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
-
         public async Task<BaseResponse<IEnumerable<UserResponse>>> GetUsersByRoleAsync(string roleName)
         {
             try
             {
                 var usersInRole = await _userManager.GetUsersInRoleAsync(roleName);
-                var response = _mapper.Map<IEnumerable<UserResponse>>(usersInRole);
-                return new BaseResponse<IEnumerable<UserResponse>>("Users retrieved successfully", StatusCodeEnum.OK_200, response);
+                var userIds = usersInRole.Select(u => u.Id).ToList();
+
+                var users = await _context.Users
+                    .Include(u => u.Campus)
+                    .Include(u => u.Major)
+                    .Where(u => userIds.Contains(u.Id))
+                    .ToListAsync();
+
+                var responses = new List<UserResponse>();
+                foreach (var user in users)
+                {
+                    var mapped = _mapper.Map<UserResponse>(user);
+                    mapped.Roles = (await _userManager.GetRolesAsync(user)).ToList();
+                    responses.Add(mapped);
+                }
+
+                return new BaseResponse<IEnumerable<UserResponse>>("Users retrieved successfully", StatusCodeEnum.OK_200, responses);
             }
             catch (Exception ex)
             {
                 return new BaseResponse<IEnumerable<UserResponse>>($"Error retrieving users: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
-
         public async Task<BaseResponse<IEnumerable<UserResponse>>> GetUsersByCampusAsync(int campusId)
         {
             try
             {
                 var users = await _context.Users
+                    .Include(u => u.Campus)
+                    .Include(u => u.Major)
                     .Where(u => u.CampusId == campusId)
                     .ToListAsync();
 

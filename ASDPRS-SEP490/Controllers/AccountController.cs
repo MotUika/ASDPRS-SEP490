@@ -198,7 +198,7 @@ namespace ASDPRS_SEP490.Controllers
                 Response.Cookies.Append("ASDPRS_Access", tokenResponse.AccessToken, cookieOptions);
                 Response.Cookies.Append("ASDPRS_Refresh", tokenResponse.RefreshToken, cookieOptions);
 
-                // ✅ Redirect to FE with token query params
+                // Redirect to FE with token query params
                 var redirectUrl = $"{returnUrl}?accessToken={Uri.EscapeDataString(tokenResponse.AccessToken)}&refreshToken={Uri.EscapeDataString(tokenResponse.RefreshToken)}";
                 return Redirect(redirectUrl);
             }
@@ -229,18 +229,24 @@ namespace ASDPRS_SEP490.Controllers
                 ));
             }
 
-            // Lấy thông tin user
+            // Lấy thông tin user từ UserService
             var result = await _userService.GetUserByIdAsync(userId);
             if (!result.StatusCode.ToString().StartsWith("2"))
                 return StatusCode((int)result.StatusCode, result);
 
-            // Lấy roles của user
-            var user = await _context.Users
-                .Include(u => u.UserRoles)
-                .ThenInclude(ur => ur.Role)
-                .FirstOrDefaultAsync(u => u.Id == userId);
+            // Lấy đối tượng User từ UserManager để lấy roles
+            var user = await _userManager.FindByIdAsync(userId.ToString());
+            if (user == null)
+            {
+                return StatusCode(401, new BaseResponse<UserResponse>(
+                    "User not found",
+                    StatusCodeEnum.Unauthorized_401,
+                    null
+                ));
+            }
 
-            var roles = user.UserRoles.Select(ur => ur.Role.RoleName).ToList();
+            // Sử dụng UserManager để lấy roles thay vì UserRoles navigation property
+            var roles = await _userManager.GetRolesAsync(user);
 
             // Lấy token từ cookie (nếu đang test bằng Google Login flow)
             var accessToken = Request.Cookies["ASDPRS_Access"];

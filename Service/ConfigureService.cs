@@ -35,6 +35,7 @@ namespace Service
             services.AddAutoMapper(typeof(CriteriaMappingProfile));
             services.AddAutoMapper(typeof(CriteriaFeedbackMappingProfile));
             services.AddAutoMapper(typeof(MajorMappingProfile));
+            services.AddAutoMapper(typeof(RegradeRequestProfile));
 
 
 
