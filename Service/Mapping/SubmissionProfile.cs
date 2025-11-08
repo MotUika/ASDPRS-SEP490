@@ -14,7 +14,7 @@ namespace Service.Mapping
             CreateMap<User, UserInfoResponse>();
             CreateMap<ReviewAssignment, SubmissionReviewAssignmentResponse>();
             CreateMap<AISummary, AISummaryResponse>();
-            CreateMap<RegradeRequest, RegradeRequestSubmissionResponse>();
+            CreateMap<RegradeRequest, RegradeRequestResponse>();
         }
     }
 }
