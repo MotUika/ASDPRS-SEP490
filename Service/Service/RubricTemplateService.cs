@@ -243,13 +243,73 @@ namespace Service.Service
         {
             try
             {
-                // 🧩 Lấy tất cả rubric templates của user
-                var rubricTemplates = await _rubricTemplateRepository.GetByUserIdWithDetailsAsync(userId);
+                // 🧩 Bước 1: Lấy user + toàn bộ thông tin major
+                var user = await _context.Users
+                    .Include(u => u.CourseInstructors)
+                        .ThenInclude(ci => ci.CourseInstance)
+                            .ThenInclude(ci => ci.Course)
+                                .ThenInclude(c => c.Curriculum)
+                                    .ThenInclude(cur => cur.Major)
+                    .FirstOrDefaultAsync(u => u.Id == userId);
 
-                // 🧠 Map sang response
+                if (user == null)
+                {
+                    return new BaseResponse<IEnumerable<RubricTemplateResponse>>(
+                        $"UserId {userId} not found.",
+                        StatusCodeEnum.NotFound_404,
+                        null);
+                }
+
+                // 🧠 Bước 2: Xác định tất cả các major mà user liên quan
+                var userMajorIds = new List<int>();
+
+                // major trực tiếp của user (nếu có)
+                if (user.MajorId.HasValue)
+                    userMajorIds.Add(user.MajorId.Value);
+
+                // major từ các khóa học user dạy
+                var courseMajors = user.CourseInstructors
+                    .Where(ci => ci.CourseInstance?.Course?.Curriculum?.Major != null)
+                    .Select(ci => ci.CourseInstance.Course.Curriculum.Major.MajorId)
+                    .Distinct()
+                    .ToList();
+
+                userMajorIds.AddRange(courseMajors);
+                userMajorIds = userMajorIds.Distinct().ToList();
+
+                if (!userMajorIds.Any())
+                {
+                    return new BaseResponse<IEnumerable<RubricTemplateResponse>>(
+                        $"UserId {userId} has no associated major.",
+                        StatusCodeEnum.Forbidden_403,
+                        null);
+                }
+
+                // 🧩 Bước 3: Lấy các RubricTemplate có Major phù hợp
+                var rubricTemplates = await _context.RubricTemplates
+                 .Include(rt => rt.CreatedByUser)
+                 .Include(rt => rt.Rubrics)
+                 .Include(rt => rt.CriteriaTemplates)
+                 .Include(rt => rt.Major) // ✅ thêm dòng này
+                 .Where(rt =>
+                     (rt.CreatedByUserId == userId &&
+                      (rt.MajorId == null || (rt.MajorId.HasValue && userMajorIds.Contains(rt.MajorId.Value))))
+                     || (rt.IsPublic && rt.MajorId.HasValue && userMajorIds.Contains(rt.MajorId.Value))
+                 )
+                 .ToListAsync();
+
+                if (!rubricTemplates.Any())
+                {
+                    return new BaseResponse<IEnumerable<RubricTemplateResponse>>(
+                        $"No rubric templates found for UserId {userId} with their major(s).",
+                        StatusCodeEnum.NotFound_404,
+                        null);
+                }
+
+                // 🧠 Bước 4: Map sang response
                 var response = _mapper.Map<IEnumerable<RubricTemplateResponse>>(rubricTemplates);
 
-                // 📝 Lấy assignments cho từng rubric template
+                // 🧩 Bước 5: Gán danh sách assignment có CourseName và ClassName
                 foreach (var template in response)
                 {
                     var assignments = await _rubricTemplateRepository.GetAssignmentsUsingTemplateAsync(template.TemplateId);
@@ -268,7 +328,7 @@ namespace Service.Service
                 }
 
                 return new BaseResponse<IEnumerable<RubricTemplateResponse>>(
-                    "Rubric templates retrieved successfully",
+                    $"Found {response.Count()} rubric template(s) accessible to UserId {userId}.",
                     StatusCodeEnum.OK_200,
                     response);
             }
@@ -280,6 +340,7 @@ namespace Service.Service
                     null);
             }
         }
+
 
 
         public async Task<BaseResponse<IEnumerable<RubricTemplateResponse>>> GetPublicRubricTemplatesAsync()

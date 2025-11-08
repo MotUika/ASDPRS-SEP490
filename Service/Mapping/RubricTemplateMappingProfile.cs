@@ -21,7 +21,10 @@ namespace Service.Mapping
                     $"{src.CreatedByUser.FirstName} {src.CreatedByUser.LastName}" :
                     string.Empty))
                 .ForMember(dest => dest.RubricCount, opt => opt.MapFrom(src => src.Rubrics.Count))
-                .ForMember(dest => dest.CriteriaTemplateCount, opt => opt.MapFrom(src => src.CriteriaTemplates.Count));
+                .ForMember(dest => dest.CriteriaTemplateCount, opt => opt.MapFrom(src => src.CriteriaTemplates.Count))
+                .ForMember(dest => dest.MajorId, opt => opt.MapFrom(src => src.MajorId))
+                .ForMember(dest => dest.MajorName, opt => opt.MapFrom(src => src.Major != null ? src.Major.MajorName : null));
+
         }
     }
 }
