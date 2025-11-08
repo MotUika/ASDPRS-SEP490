@@ -762,7 +762,7 @@ namespace Service.Service
                             User = userInfo,
                             ReviewAssignments = new List<SubmissionReviewAssignmentResponse>(),
                             AISummaries = new List<AISummaryResponse>(),
-                            RegradeRequests = new List<RegradeRequestResponse>()
+                            RegradeRequests = new List<RegradeRequestSubmissionResponse>()
                         });
                     }
                 }
@@ -1494,7 +1494,15 @@ namespace Service.Service
             norm2 = Math.Sqrt(norm2);
 
             if (norm1 == 0 || norm2 == 0) return 0;
-
+            return dot / (norm1 * norm2);
+        }
+        private Dictionary<string, int> TextToVector(string text)
+        {
+            return text.ToLower()
+                .Split(new[] { ' ', '\t', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
+                .GroupBy(word => word)
+                .ToDictionary(g => g.Key, g => g.Count());
+        }
 
         public async Task<BaseResponse<PublishGradesResponse>> PublishGradesAsync(PublishGradesRequest request)
         {

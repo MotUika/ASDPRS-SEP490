@@ -36,7 +36,7 @@ namespace Service.RequestAndResponse.Response.Submission
         public UserInfoResponse User { get; set; }
         public List<SubmissionReviewAssignmentResponse> ReviewAssignments { get; set; }
         public List<AISummaryResponse> AISummaries { get; set; }
-        public List<RegradeRequestResponse> RegradeRequests { get; set; }
+        public List<RegradeRequestSubmissionResponse> RegradeRequests { get; set; }
     }
 
     public class AssignmentInfoResponse
@@ -66,7 +66,7 @@ namespace Service.RequestAndResponse.Response.Submission
     }
 
 
-    public class RegradeRequestResponse
+    public class RegradeRequestSubmissionResponse
     {
         public int RequestId { get; set; }
         public string Reason { get; set; }

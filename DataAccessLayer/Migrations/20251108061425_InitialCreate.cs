@@ -315,7 +315,8 @@ namespace DataAccessLayer.Migrations
                     Title = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     IsPublic = table.Column<bool>(type: "bit", nullable: false),
                     CreatedByUserId = table.Column<int>(type: "int", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    MajorId = table.Column<int>(type: "int", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -326,6 +327,11 @@ namespace DataAccessLayer.Migrations
                         principalTable: "AspNetUsers",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RubricTemplates_Majors_MajorId",
+                        column: x => x.MajorId,
+                        principalTable: "Majors",
+                        principalColumn: "MajorId");
                 });
 
             migrationBuilder.CreateTable(
@@ -688,7 +694,7 @@ namespace DataAccessLayer.Migrations
                     RequestedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
                     ReviewedByUserId = table.Column<int>(type: "int", nullable: true),
                     ReviewedByInstructorId = table.Column<int>(type: "int", nullable: true),
-                    ResolutionNotes = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    ResolutionNotes = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     CourseInstructorId = table.Column<int>(type: "int", nullable: true)
                 },
                 constraints: table =>
@@ -921,7 +927,7 @@ namespace DataAccessLayer.Migrations
             migrationBuilder.InsertData(
                 table: "AspNetUsers",
                 columns: new[] { "Id", "AccessFailedCount", "AvatarUrl", "CampusId", "ConcurrencyStamp", "CreatedAt", "Email", "EmailConfirmed", "FirstName", "IsActive", "LastName", "LockoutEnabled", "LockoutEnd", "MajorId", "NormalizedEmail", "NormalizedUserName", "PasswordHash", "PhoneNumber", "PhoneNumberConfirmed", "SecurityStamp", "StudentCode", "TwoFactorEnabled", "UserName" },
-                values: new object[] { 1, 0, null, 1, "2a54ac74-5a34-4fd0-9185-452797b3213b", new DateTime(2025, 10, 29, 14, 3, 35, 499, DateTimeKind.Utc).AddTicks(6695), "admin@example.com", true, "Admin", true, "User", true, null, null, "ADMIN@EXAMPLE.COM", "ADMIN", "AQAAAAIAAYagAAAAEK95SlxvEPzqxJyTxIof0ufhmHVKdEGcuw7MxCBj92JUehpXlaMI0F4RrX3mzLDNzA==", null, false, "8e560281-1c9d-4e6b-8a3c-132ec399bb7d", "ADMIN001", false, "admin" });
+                values: new object[] { 1, 0, null, 1, "b08f01d0-1295-40ee-b213-bcca2303e346", new DateTime(2025, 11, 8, 6, 14, 23, 943, DateTimeKind.Utc).AddTicks(7909), "admin@example.com", true, "Admin", true, "User", true, null, null, "ADMIN@EXAMPLE.COM", "ADMIN", "AQAAAAIAAYagAAAAEK95SlxvEPzqxJyTxIof0ufhmHVKdEGcuw7MxCBj92JUehpXlaMI0F4RrX3mzLDNzA==", null, false, "632ab1ae-cec2-4967-b0d3-8ed10fa132c7", "ADMIN001", false, "admin" });
 
             migrationBuilder.InsertData(
                 table: "AspNetUserRoles",
@@ -933,10 +939,11 @@ namespace DataAccessLayer.Migrations
                 columns: new[] { "ConfigId", "ConfigKey", "ConfigValue", "Description", "UpdatedAt", "UpdatedByUserId" },
                 values: new object[,]
                 {
-                    { 100, "ScorePrecision", "0.5", "Độ chính xác điểm số (0.25, 0.5, 1.0)", new DateTime(2025, 10, 29, 14, 3, 35, 499, DateTimeKind.Utc).AddTicks(6759), 1 },
-                    { 101, "AISummaryMaxTokens", "1000", "Số token tối đa cho AI summary", new DateTime(2025, 10, 29, 14, 3, 35, 499, DateTimeKind.Utc).AddTicks(6760), 1 },
-                    { 102, "AISummaryMaxWords", "200", "Số từ tối đa cho AI summary", new DateTime(2025, 10, 29, 14, 3, 35, 499, DateTimeKind.Utc).AddTicks(6761), 1 },
-                    { 103, "DefaultPassThreshold", "50", "Ngưỡng điểm mặc định để Pass", new DateTime(2025, 10, 29, 14, 3, 35, 499, DateTimeKind.Utc).AddTicks(6762), 1 }
+                    { 100, "ScorePrecision", "0.5", "Number accuracy (0.25, 0.5, 1.0)", new DateTime(2025, 11, 8, 6, 14, 23, 943, DateTimeKind.Utc).AddTicks(7966), 1 },
+                    { 101, "AISummaryMaxTokens", "1000", "Maximum number of tokens for AI summary", new DateTime(2025, 11, 8, 6, 14, 23, 943, DateTimeKind.Utc).AddTicks(7968), 1 },
+                    { 102, "AISummaryMaxWords", "200", "Maximum word count for AI summary", new DateTime(2025, 11, 8, 6, 14, 23, 943, DateTimeKind.Utc).AddTicks(7969), 1 },
+                    { 103, "DefaultPassThreshold", "50", "Ngưỡng điểm mặc định để Pass", new DateTime(2025, 11, 8, 6, 14, 23, 943, DateTimeKind.Utc).AddTicks(7970), 1 },
+                    { 104, "PlagiarismThreshold", "80", "Maximum allowed plagiarism percentage before blocking submission (0-100)", new DateTime(2025, 11, 8, 6, 14, 23, 943, DateTimeKind.Utc).AddTicks(7971), 1 }
                 });
 
             migrationBuilder.CreateIndex(
@@ -1205,6 +1212,11 @@ namespace DataAccessLayer.Migrations
                 name: "IX_RubricTemplates_CreatedByUserId",
                 table: "RubricTemplates",
                 column: "CreatedByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RubricTemplates_MajorId",
+                table: "RubricTemplates",
+                column: "MajorId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Semesters_AcademicYearId",
