@@ -106,8 +106,11 @@ namespace Repository.Repository
 
         public async Task AddRangeAsync(IEnumerable<Submission> submissions)
         {
+            if (submissions == null || !submissions.Any())
+                return;
+
             await _context.Submissions.AddRangeAsync(submissions);
-            await _context.SaveChangesAsync();
+            // KHÔNG SaveChanges ở đây
         }
     }
 }

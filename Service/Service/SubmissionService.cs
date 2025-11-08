@@ -1,10 +1,12 @@
 ﻿using AutoMapper;
 using BussinessObject.Models;
 using DataAccessLayer;
+using DocumentFormat.OpenXml.Spreadsheet;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Repository.IRepository;
+using Repository.Repository;
 using Service.Interface;
 using Service.IService;
 using Service.RequestAndResponse.BaseResponse;
@@ -1870,39 +1872,52 @@ namespace Service.Service
             }
         }
 
+
+
         public async Task<BaseResponse<AutoGradeZeroResponse>> AutoGradeZeroForNonSubmittersAsync(AutoGradeZeroRequest request)
         {
             try
             {
-                // 1. Validate
+                // 1. Xác nhận confirm
                 if (!request.ConfirmZeroGrade)
                     return new BaseResponse<AutoGradeZeroResponse>(
                         "Bạn phải xác nhận (ConfirmZeroGrade = true) để chấm 0 điểm.",
                         StatusCodeEnum.BadRequest_400, null);
 
+                // 2. Lấy assignment
                 var assignment = await _assignmentRepository.GetByIdAsync(request.AssignmentId);
                 if (assignment == null)
                     return new BaseResponse<AutoGradeZeroResponse>("Assignment not found", StatusCodeEnum.NotFound_404, null);
 
-                var now = DateTime.UtcNow;
-                var finalDeadline = assignment.FinalDeadline ?? assignment.Deadline;
-                if (now <= finalDeadline)
+                // 3. Chỉ cho phép khi status Closed hoặc Cancelled
+                if (assignment.Status != AssignmentStatusEnum.Closed.ToString() &&
+                    assignment.Status != AssignmentStatusEnum.Cancelled.ToString())
+                {
                     return new BaseResponse<AutoGradeZeroResponse>(
-                        $"Chưa đến hạn cuối ({finalDeadline:yyyy-MM-dd HH:mm}). Không thể chấm 0.",
+                        $"Assignment status là {assignment.Status}, không thể chấm 0 điểm.",
                         StatusCodeEnum.BadRequest_400, null);
+                }
 
-                // 2. Lấy danh sách sinh viên trong lớp
-                var courseInstanceId = assignment.CourseInstanceId;
+                // 4. Chỉ chấm sau ReviewDeadline
+                var now = DateTime.UtcNow;
+                if (assignment.ReviewDeadline.HasValue && now <= assignment.ReviewDeadline.Value)
+                {
+                    return new BaseResponse<AutoGradeZeroResponse>(
+                        $"Chưa đến ReviewDeadline ({assignment.ReviewDeadline:yyyy-MM-dd HH:mm}). Không thể chấm 0.",
+                        StatusCodeEnum.BadRequest_400, null);
+                }
+
+                // 5. Lấy danh sách sinh viên trong lớp
                 var enrolledStudentIds = await _context.CourseStudents
-                    .Where(cs => cs.CourseInstanceId == courseInstanceId)
+                    .Where(cs => cs.CourseInstanceId == assignment.CourseInstanceId)
                     .Select(cs => cs.UserId)
                     .ToListAsync();
 
-                // 3. Lấy submissions hiện có
+                // 6. Lấy các submission hiện có
                 var submissions = await _submissionRepository.GetByAssignmentIdAsync(request.AssignmentId);
                 var submittedUserIds = submissions.Select(s => s.UserId).ToHashSet();
 
-                // 4. Tìm sinh viên chưa nộp
+                // 7. Sinh viên chưa nộp
                 var nonSubmitters = enrolledStudentIds.Except(submittedUserIds).ToList();
                 if (!nonSubmitters.Any())
                     return new BaseResponse<AutoGradeZeroResponse>(
@@ -1910,41 +1925,66 @@ namespace Service.Service
                         StatusCodeEnum.OK_200,
                         new AutoGradeZeroResponse { Success = true, NonSubmittedCount = 0 });
 
-                // 5. Lấy thông tin sinh viên
+                // 8. Lấy thông tin sinh viên (TRƯỚC foreach)
                 var users = await _context.Users
                     .Where(u => nonSubmitters.Contains(u.Id))
                     .Select(u => new { u.Id, u.StudentCode })
                     .ToListAsync();
 
-                // 6. Tạo submission chấm 0
+                // 9. Tạo submission chấm 0
                 var newSubmissions = new List<Submission>();
                 var studentCodes = new List<string>();
 
                 foreach (var userId in nonSubmitters)
                 {
                     var user = users.First(u => u.Id == userId);
+
+                    // SỬ DỤNG FinalDeadline nếu có, nếu không thì Deadline (cả hai đều DateTime/DateTime?)
+                    var submittedAt = assignment.FinalDeadline.HasValue
+                        ? assignment.FinalDeadline.Value
+                        : assignment.Deadline;
+
                     var submission = new Submission
                     {
                         AssignmentId = request.AssignmentId,
                         UserId = userId,
-                        FileUrl = null,
-                        FileName = null,
-                        OriginalFileName = null,
-                        Keywords = null,
-                        SubmittedAt = DateTime.MinValue,
+                        FileUrl = "Không nộp",           // KHÔNG NULL
+                        FileName = "Không nộp",          // KHÔNG NULL
+                        OriginalFileName = "Không nộp bài",
+                        Keywords = " ",
+                        SubmittedAt = submittedAt,
                         Status = "Graded",
                         FinalScore = 0,
                         Feedback = "Không nộp bài, tự động chấm 0 điểm.",
                         GradedAt = now,
                         IsPublic = true
                     };
+
                     newSubmissions.Add(submission);
                     studentCodes.Add(user.StudentCode ?? $"User_{userId}");
                 }
 
-                await _submissionRepository.AddRangeAsync(newSubmissions);
+                // 10. Lưu với transaction
+                using var transaction = await _context.Database.BeginTransactionAsync();
+                try
+                {
+                    await _submissionRepository.AddRangeAsync(newSubmissions);
+                    await _context.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    _logger.LogError(ex,
+                        "AutoGradeZero ROLLBACK | AssignmentId: {AssignmentId} | NonSubmitters: {Count} | Error: {Message}",
+                        request.AssignmentId, nonSubmitters.Count, ex.Message);
 
-                // 7. Response
+                    return new BaseResponse<AutoGradeZeroResponse>(
+                        $"Lỗi hệ thống khi lưu dữ liệu: {ex.Message}",
+                        StatusCodeEnum.InternalServerError_500, null);
+                }
+
+                // 11. Tạo response
                 var response = new AutoGradeZeroResponse
                 {
                     AssignmentId = request.AssignmentId,
@@ -1953,10 +1993,13 @@ namespace Service.Service
                     GradedZeroCount = newSubmissions.Count,
                     StudentCodes = studentCodes,
                     Success = true,
-                    Message = $"Đã chấm 0 điểm cho {newSubmissions.Count} sinh viên chưa nộp bài."
+                    Message = $"Đã chấm 0 điểm cho {newSubmissions.Count} sinh viên chưa nộp bài.",
+                    ProcessedAt = now
                 };
 
-                _logger.LogInformation($"Auto graded 0 for {response.GradedZeroCount} students in assignment {request.AssignmentId}");
+                _logger.LogInformation(
+                    "AutoGradeZero SUCCESS | Assignment {AssignmentId} | Chấm 0 cho {Count} sinh viên",
+                    request.AssignmentId, newSubmissions.Count);
 
                 return new BaseResponse<AutoGradeZeroResponse>(
                     response.Message,
@@ -1965,12 +2008,15 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error in AutoGradeZeroForNonSubmittersAsync");
+                _logger.LogError(ex,
+                    "AutoGradeZero FAILED | AssignmentId: {AssignmentId} | StackTrace: {StackTrace}",
+                    request.AssignmentId, ex.StackTrace);
+
                 return new BaseResponse<AutoGradeZeroResponse>(
-                    "Lỗi hệ thống khi chấm 0 điểm tự động",
-                    StatusCodeEnum.InternalServerError_500,
-                    null);
+                    $"Lỗi hệ thống: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500, null);
             }
         }
+
     }
 }

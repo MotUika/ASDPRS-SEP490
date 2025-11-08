@@ -87,6 +87,23 @@ namespace Service.Service
         {
             try
             {
+                // 🧩 Kiểm tra trạng thái Assignment nếu Rubric đã gán
+                var rubric = await _context.Rubrics
+                    .Include(r => r.Assignment)
+                    .FirstOrDefaultAsync(r => r.RubricId == request.RubricId);
+
+                if (rubric?.Assignment != null)
+                {
+                    var status = rubric.Assignment.Status;
+                    if (status != "Draft" && status != "Upcoming")
+                    {
+                        return new BaseResponse<CriteriaResponse>(
+                            "Criteria can only be created when the related assignment is in 'Draft' or 'Upcoming' status",
+                            StatusCodeEnum.BadRequest_400,
+                            null
+                        );
+                    }
+                }
                 // 🟩 Kiểm tra tổng trọng số hiện tại
                 var totalWeight = await _context.Criteria
                     .Where(c => c.RubricId == request.RubricId)
@@ -97,6 +114,21 @@ namespace Service.Service
                 {
                     return new BaseResponse<CriteriaResponse>(
                         $"❌ Cannot add criteria. Total weight would exceed 100%. Current total: {totalWeight}%",
+                        StatusCodeEnum.BadRequest_400,
+                        null
+                    );
+                }
+
+                // 🟩 Kiểm tra hệ số MaxScore
+                var existingMaxScore = await _context.Criteria
+                    .Where(c => c.RubricId == request.RubricId)
+                    .Select(c => c.MaxScore)
+                    .FirstOrDefaultAsync();
+
+                if (existingMaxScore != 0 && existingMaxScore != request.MaxScore)
+                {
+                    return new BaseResponse<CriteriaResponse>(
+                        $"❌ MaxScore must be consistent with existing criteria. Current MaxScore: {existingMaxScore}",
                         StatusCodeEnum.BadRequest_400,
                         null
                     );
@@ -128,6 +160,27 @@ namespace Service.Service
                     return new BaseResponse<CriteriaResponse>("Criteria not found", StatusCodeEnum.NotFound_404, null);
                 }
 
+                // 🧩 Kiểm tra trạng thái Assignment nếu Criteria thuộc Rubric
+                if (existingCriteria.RubricId != 0)
+                {
+                    var rubric = await _context.Rubrics
+                        .Include(r => r.Assignment)
+                        .FirstOrDefaultAsync(r => r.RubricId == existingCriteria.RubricId);
+
+                    if (rubric?.Assignment != null)
+                    {
+                        var status = rubric.Assignment.Status;
+                        if (status != "Draft" && status != "Upcoming")
+                        {
+                            return new BaseResponse<CriteriaResponse>(
+                                "Criteria can only be edited when the related assignment is in 'Draft' or 'Upcoming' status",
+                                StatusCodeEnum.BadRequest_400,
+                                null
+                            );
+                        }
+                    }
+                }
+
                 // 🟩 Tính tổng weight hiện tại (loại trừ chính criteria đang update)
                 var currentTotalWeight = await _context.Criteria
                     .Where(c => c.RubricId == existingCriteria.RubricId && c.CriteriaId != existingCriteria.CriteriaId)
@@ -138,6 +191,20 @@ namespace Service.Service
                 {
                     return new BaseResponse<CriteriaResponse>(
                         $"❌ Cannot update criteria. Total weight would exceed 100%. Current total (excluding this one): {currentTotalWeight}%",
+                        StatusCodeEnum.BadRequest_400,
+                        null
+                    );
+                }
+                // 🟩 Kiểm tra hệ số MaxScore
+                var existingMaxScore = await _context.Criteria
+                    .Where(c => c.RubricId == request.RubricId)
+                    .Select(c => c.MaxScore)
+                    .FirstOrDefaultAsync();
+
+                if (existingMaxScore != 0 && existingMaxScore != request.MaxScore)
+                {
+                    return new BaseResponse<CriteriaResponse>(
+                        $"❌ MaxScore must be consistent with existing criteria. Current MaxScore: {existingMaxScore}",
                         StatusCodeEnum.BadRequest_400,
                         null
                     );
@@ -170,7 +237,23 @@ namespace Service.Service
                 {
                     return new BaseResponse<bool>("Criteria not found", StatusCodeEnum.NotFound_404, false);
                 }
+                // 🧩 Kiểm tra trạng thái Assignment nếu Criteria thuộc Rubric đã gán Assignment
+                var rubric = await _context.Rubrics
+                    .Include(r => r.Assignment)
+                    .FirstOrDefaultAsync(r => r.RubricId == criteria.RubricId);
 
+                if (rubric?.Assignment != null)
+                {
+                    var status = rubric.Assignment.Status;
+                    if (status != "Draft" && status != "Upcoming")
+                    {
+                        return new BaseResponse<bool>(
+                            "Criteria can only be deleted when the related assignment is in 'Draft' or 'Upcoming' status",
+                            StatusCodeEnum.BadRequest_400,
+                            false
+                        );
+                    }
+                }
                 await _criteriaRepository.DeleteAsync(criteria);
                 return new BaseResponse<bool>("Criteria deleted successfully", StatusCodeEnum.OK_200, true);
             }
