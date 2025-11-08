@@ -65,6 +65,7 @@ namespace Service.RequestAndResponse.Response.Submission
         public UserInfoResponse Reviewer { get; set; }
     }
 
+
     public class RegradeRequestResponse
     {
         public int RequestId { get; set; }
