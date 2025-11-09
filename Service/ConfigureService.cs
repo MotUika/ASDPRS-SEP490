@@ -69,6 +69,7 @@ namespace Service
             services.AddScoped<IGenAIService, GeminiAiService>();
             services.AddSingleton<IDocumentTextExtractor, DocumentTextExtractor>();
             services.AddScoped<ISystemConfigService, SystemConfigService>();
+            services.AddScoped<IKeywordSearchService, KeywordSearchService>();
 
 
 
