@@ -877,15 +877,55 @@ namespace Service.Service
 
         public async Task<BaseResponse<SubmissionResponse>> GetSubmissionWithDetailsAsync(int submissionId)
         {
-            var request = new GetSubmissionByIdRequest
+            try
             {
-                SubmissionId = submissionId,
-                IncludeReviews = true,
-                IncludeAISummaries = true
-            };
+                // 🟩 Gọi hàm có sẵn để lấy thông tin submission chi tiết
+                var request = new GetSubmissionByIdRequest
+                {
+                    SubmissionId = submissionId,
+                    IncludeReviews = true,
+                    IncludeAISummaries = true
+                };
 
-            return await GetSubmissionByIdAsync(request);
+                var baseResponse = await GetSubmissionByIdAsync(request);
+
+                // Nếu không tìm thấy submission thì trả về luôn
+                if (baseResponse?.Data == null)
+                    return baseResponse;
+
+                var response = baseResponse.Data;
+
+                // 🟩 Truy vấn Criteria Feedbacks theo submissionId
+                var feedbacks = await _context.CriteriaFeedbacks
+                    .Where(cf => cf.Review.ReviewAssignment.SubmissionId == submissionId)
+                    .Select(cf => new SubmissionCriteriaFeedbackResponse
+                    {
+                        CriteriaId = cf.CriteriaId,
+                        ScoreAwarded = cf.ScoreAwarded,
+                        Feedback = cf.Feedback
+                    })
+                    .ToListAsync();
+
+                // 🟩 Gán dữ liệu vào response
+                response.CriteriaFeedbacks = feedbacks;
+
+                // 🟩 Trả về response hoàn chỉnh
+                return new BaseResponse<SubmissionResponse>(
+                    "Submission with detailed feedback retrieved successfully",
+                    StatusCodeEnum.OK_200,
+                    response
+                );
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<SubmissionResponse>(
+                    $"Error retrieving submission details: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null
+                );
+            }
         }
+
 
         private IEnumerable<Submission> ApplyFilters(IEnumerable<Submission> submissions, GetSubmissionsByFilterRequest request)
         {

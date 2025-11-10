@@ -17,5 +17,6 @@
         public int CriteriaFeedbackCount { get; set; }
         public string CourseName { get; set; }
         public string ClassName { get; set; }
+        public string AssignmentStatus { get; set; }
     }
 }

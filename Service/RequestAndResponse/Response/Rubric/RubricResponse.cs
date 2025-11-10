@@ -15,6 +15,7 @@ namespace Service.RequestAndResponse.Response.Rubric
         public bool IsModified { get; set; }
         public int CriteriaCount { get; set; }
         public string GradingScale { get; set; }
+        public string AssignmentStatus { get; set; }
 
         public List<CriteriaResponse> Criteria { get; set; } = new List<CriteriaResponse>();
 
