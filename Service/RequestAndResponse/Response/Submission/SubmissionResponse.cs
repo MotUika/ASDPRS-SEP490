@@ -32,11 +32,19 @@ namespace Service.RequestAndResponse.Response.Submission
 
 
         // Navigation properties
+        public List<SubmissionCriteriaFeedbackResponse> CriteriaFeedbacks { get; set; } = new();
         public AssignmentInfoResponse Assignment { get; set; }
         public UserInfoResponse User { get; set; }
         public List<SubmissionReviewAssignmentResponse> ReviewAssignments { get; set; }
         public List<AISummaryResponse> AISummaries { get; set; }
         public List<RegradeRequestSubmissionResponse> RegradeRequests { get; set; }
+    }
+
+    public class SubmissionCriteriaFeedbackResponse
+    {
+        public int CriteriaId { get; set; }
+        public decimal? ScoreAwarded { get; set; }
+        public string Feedback { get; set; }
     }
 
     public class AssignmentInfoResponse

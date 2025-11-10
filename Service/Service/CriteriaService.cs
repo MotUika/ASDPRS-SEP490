@@ -287,7 +287,8 @@ namespace Service.Service
 
                     // 🟩 Thêm 2 dòng này:
                     CourseName = c.Rubric?.Assignment?.CourseInstance?.Course?.CourseName,
-                    ClassName = c.Rubric?.Assignment?.CourseInstance?.SectionCode
+                    ClassName = c.Rubric?.Assignment?.CourseInstance?.SectionCode,
+                    AssignmentStatus = c.Rubric?.Assignment?.Status
                 });
 
                 return new BaseResponse<IEnumerable<CriteriaResponse>>(
