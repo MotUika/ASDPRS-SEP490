@@ -1705,6 +1705,9 @@ namespace Service.Service
                     RegradeStatus = hasPendingRegrade ? "Pending" : (regradeRequests.Any() ? regradeRequests.First().Status : null),
                     ClassAverageScore = classAverage,
                     ClassMaxScore = classMax,
+                    FileUrl = submission.FileUrl,
+                    FileName = submission.FileName,
+                    KeyWords = submission.Keywords,
                     Note = GenerateScoreNote(submission.FinalScore ?? 0, classAverage, classMax)
                 };
 
