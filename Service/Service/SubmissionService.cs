@@ -1553,7 +1553,20 @@ namespace Service.Service
                 var assignment = await _assignmentRepository.GetByIdAsync(request.AssignmentId);
                 if (assignment == null)
                     return new BaseResponse<PublishGradesResponse>("Assignment not found", StatusCodeEnum.NotFound_404, null);
-
+                // 🔒 Nếu đã publish rồi => không cho publish lại
+                if (assignment.Status == AssignmentStatusEnum.GradesPublished.ToString())
+                {
+                    return new BaseResponse<PublishGradesResponse>(
+                        "Grades have already been published for this assignment.",
+                        StatusCodeEnum.BadRequest_400,
+                        new PublishGradesResponse
+                        {
+                            AssignmentId = assignment.AssignmentId,
+                            AssignmentTitle = assignment.Title ?? "Unknown",
+                            IsPublished = true,
+                            Note = "Assignment is already in 'GradesPublished' status."
+                        });
+                }
                 var now = DateTime.UtcNow;
                 var finalDeadline = assignment.FinalDeadline ?? assignment.Deadline;
                 var isPastDeadline = now > finalDeadline;
@@ -1581,6 +1594,7 @@ namespace Service.Service
                 {
                     AssignmentId = assignment.AssignmentId,
                     AssignmentTitle = assignment.Title ?? "Unknown",
+                    AssignmentStatus = assignment.Status,
                     TotalStudents = totalStudents,
                     SubmittedCount = submittedCount,
                     NotSubmittedCount = notSubmittedCount,
@@ -1645,7 +1659,12 @@ namespace Service.Service
                 response.PublishedAt = now;
                 response.Note = request.ForcePublish ? "Công bố bắt buộc." : "Công bố thành công.";
 
-                _logger.LogInformation($"Grades published for assignment {request.AssignmentId}");
+                // 🟢 Cập nhật trạng thái assignment sang GradesPublished
+                assignment.Status = AssignmentStatusEnum.GradesPublished.ToString();
+                await _assignmentRepository.UpdateAsync(assignment);
+                response.AssignmentStatus = AssignmentStatusEnum.GradesPublished.ToString();
+
+                _logger.LogInformation($"✅ Grades published for assignment {request.AssignmentId}, status set to GradesPublished.");
 
                 return new BaseResponse<PublishGradesResponse>(
                     response.Note,

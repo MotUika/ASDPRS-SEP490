@@ -8,6 +8,7 @@ namespace Service.RequestAndResponse.Response.Submission
     {
         public int AssignmentId { get; set; }
         public string AssignmentTitle { get; set; } = string.Empty;
+        public string AssignmentStatus { get; set; } = string.Empty;
         public bool IsPublished { get; set; }
 
         // Thống kê
