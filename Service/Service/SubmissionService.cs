@@ -1657,7 +1657,7 @@ namespace Service.Service
         }
 
         // Thêm method để lấy chi tiết điểm
-        public async Task<BaseResponse<MyScoreDetailsResponse>> GetMyScoreDetailsAsync(int assignmentId, int studentId)
+public async Task<BaseResponse<MyScoreDetailsResponse>> GetMyScoreDetailsAsync(int assignmentId, int studentId)
         {
             try
             {
@@ -1666,7 +1666,6 @@ namespace Service.Service
                 {
                     return new BaseResponse<MyScoreDetailsResponse>("Assignment not found", StatusCodeEnum.NotFound_404, null);
                 }
-
                 if (assignment.Status != "GradesPublished")
                 {
                     return new BaseResponse<MyScoreDetailsResponse>("Grades not yet published", StatusCodeEnum.Forbidden_403, null);
@@ -1685,12 +1684,11 @@ namespace Service.Service
 
                 // Lấy regrade requests nếu có
                 var regradeRequests = await _regradeRequestRepository.GetBySubmissionIdAsync(submission.SubmissionId);
+                var latestRegrade = regradeRequests.OrderByDescending(r => r.RequestedAt).FirstOrDefault();
                 var hasPendingRegrade = regradeRequests.Any(r => r.Status == "Pending");
-
                 // Tính điểm trung bình và cao nhất lớp
                 var classSubmissions = await _submissionRepository.GetByAssignmentIdAsync(assignmentId);
                 var gradedScores = classSubmissions.Where(s => s.Status == "Graded" && s.FinalScore.HasValue).Select(s => s.FinalScore.Value).ToList();
-
                 decimal classAverage = gradedScores.Any() ? gradedScores.Average() : 0;
                 decimal classMax = gradedScores.Any() ? gradedScores.Max() : 0;
 
@@ -1702,7 +1700,8 @@ namespace Service.Service
                     FinalScore = submission.FinalScore ?? 0,
                     Feedback = submission.Feedback,
                     GradedAt = submission.GradedAt,
-                    RegradeStatus = hasPendingRegrade ? "Pending" : (regradeRequests.Any() ? regradeRequests.First().Status : null),
+                    RegradeRequestId = latestRegrade?.RequestId,
+                    RegradeStatus = hasPendingRegrade ? "Pending" : (regradeRequests.Any() ? latestRegrade.Status : null),
                     ClassAverageScore = classAverage,
                     ClassMaxScore = classMax,
                     FileUrl = submission.FileUrl,
