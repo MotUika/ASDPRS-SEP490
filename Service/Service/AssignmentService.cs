@@ -857,6 +857,7 @@ namespace Service.Service
                 var studentId = GetCurrentStudentId();
 
                 var assignments = await _assignmentRepository.GetByCourseInstanceIdAsync(courseInstanceId);
+                assignments = assignments.Where(a => a.Status != "Draft").ToList();
                 var responses = new List<AssignmentBasicResponse>();
 
                 foreach (var assignment in assignments)
@@ -900,10 +901,8 @@ namespace Service.Service
             var pendingCount = 0;
             var completedCount = 0;
 
-            // Tối ưu: Chỉ lấy review assignments của student này trong assignment này
             var studentReviewAssignments = await _reviewAssignmentRepository.GetByReviewerIdAsync(studentId);
 
-            // Lọc theo assignment
             foreach (var reviewAssignment in studentReviewAssignments)
             {
                 var submission = await _submissionRepository.GetByIdAsync(reviewAssignment.SubmissionId);

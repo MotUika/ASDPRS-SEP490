@@ -733,19 +733,29 @@ namespace Service.Service
                     null);
             }
         }
-        public async Task<BaseResponse<List<CourseInstanceResponse>>> GetStudentCoursesAsync(int studentId)
+        public async Task<BaseResponse<List<MyCourseResponse>>> GetStudentCoursesAsync(int studentId)
         {
             try
             {
                 var courseStudents = await _courseStudentRepository.GetByUserIdAsync(studentId);
-                var responses = new List<CourseInstanceResponse>();
+                var responses = new List<MyCourseResponse>();
 
                 foreach (var cs in courseStudents.Where(cs => cs.Status == "Enrolled"))
                 {
+
                     var courseInstance = await _courseInstanceRepository.GetByIdAsync(cs.CourseInstanceId);
+
+                    var instructors = await _context.CourseInstructors
+                        .Where(ci => ci.CourseInstanceId == courseInstance.CourseInstanceId)
+                        .Include(ci => ci.User)
+                        .Select(ci => $"{ci.User.FirstName} {ci.User.LastName}".Trim())
+                        .ToListAsync();
+
+                    var studentCount = await _context.CourseStudents
+                        .CountAsync(cst => cst.CourseInstanceId == courseInstance.CourseInstanceId && cst.Status == "Enrolled");
                     if (courseInstance != null)
                     {
-                        var response = new CourseInstanceResponse
+                        var response = new MyCourseResponse
                         {
                             CourseInstanceId = courseInstance.CourseInstanceId,
                             CourseId = courseInstance.CourseId,
@@ -754,20 +764,22 @@ namespace Service.Service
                             CourseCode = courseInstance.Course?.CourseCode ?? string.Empty,
                             SemesterName = courseInstance.Semester?.Name ?? string.Empty,
                             CampusName = courseInstance.Campus?.CampusName ?? string.Empty,
-                            EnrollmentPassword = courseInstance.EnrollmentPassword
+                            EnrollmentPassword = courseInstance.EnrollmentPassword,
+                            InstructorNames = instructors,
+                            StudentCount = studentCount
                         };
                         responses.Add(response);
                     }
                 }
 
-                return new BaseResponse<List<CourseInstanceResponse>>(
+                return new BaseResponse<List<MyCourseResponse>>(
                     "Success",
                     StatusCodeEnum.OK_200,
                     responses);
             }
             catch (Exception ex)
             {
-                return new BaseResponse<List<CourseInstanceResponse>>(
+                return new BaseResponse<List<MyCourseResponse>>(
                     $"Error retrieving student courses: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
                     null);

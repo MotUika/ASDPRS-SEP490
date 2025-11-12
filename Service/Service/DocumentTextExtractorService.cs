@@ -18,6 +18,7 @@ namespace Service.Service
     {
         public async Task<string> ExtractTextAsync(Stream fileStream, string fileName)
         {
+
             if (!fileStream.CanSeek)
             {
                 var ms = new MemoryStream();
@@ -28,6 +29,11 @@ namespace Service.Service
             fileStream.Position = 0;
 
             var ext = Path.GetExtension(fileName ?? string.Empty).ToLowerInvariant();
+            var supportedExtensions = new HashSet<string> { ".pdf", ".docx", ".xlsx", ".xls"};
+            if (!supportedExtensions.Contains(ext))
+            {
+                throw new NotSupportedException($"File format {ext} not supported for AI processing");
+            }
             try
             {
                 return ext switch

@@ -13,6 +13,7 @@ using Service.RequestAndResponse.Request.Submission;
 using Service.RequestAndResponse.Response.AISummary;
 using Service.RequestAndResponse.Response.Assignment;
 using Service.RequestAndResponse.Response.CourseInstance;
+using Service.RequestAndResponse.Response.CourseStudent;
 using Service.RequestAndResponse.Response.RegradeRequest;
 using Service.RequestAndResponse.Response.Review;
 using Service.RequestAndResponse.Response.ReviewAssignment;
@@ -59,7 +60,7 @@ public class StudentReviewController : ControllerBase
             Summary = "Lấy danh sách lớp học của sinh viên",
             Description = "Trả về danh sách các lớp học mà sinh viên đã đăng ký và được active"
         )]
-    [SwaggerResponse(200, "Thành công", typeof(BaseResponse<List<CourseInstanceResponse>>))]
+    [SwaggerResponse(200, "Thành công", typeof(BaseResponse<List<MyCourseResponse>>))]
     [SwaggerResponse(404, "Không tìm thấy sinh viên")]
     [SwaggerResponse(500, "Lỗi server")]
     public async Task<IActionResult> GetStudentCourses(int studentId)
