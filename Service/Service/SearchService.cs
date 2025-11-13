@@ -57,8 +57,7 @@ namespace Service.Service
                     searchTerms.Any(term =>
                         EF.Functions.Like(a.Title, $"%{term}%") ||
                         EF.Functions.Like(a.Description, $"%{term}%") ||
-                        EF.Functions.Like(a.CourseInstance.Course.CourseName, $"%{term}%") ||
-                        EF.Functions.Like(a.Keywords, $"%{term}%")
+                        EF.Functions.Like(a.CourseInstance.Course.CourseName, $"%{term}%")
                     ));
 
                 results.Assignments = await assignmentQuery
