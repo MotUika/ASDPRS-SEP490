@@ -9,5 +9,7 @@ namespace Service.RequestAndResponse.Response.AISummary
     public class AIOverallResponse
     {
         public string Summary { get; set; }
+        public bool IsRelevant { get; set; } = true;
+        public string ErrorMessage { get; set; }
     }
 }

@@ -265,18 +265,54 @@ namespace Service.Service
 
             return await SummarizeAsync(prompt, maxOutputTokens: 300);
         }
+        public async Task<string> CheckSubmissionRelevanceAsync(string documentText, string context, string assignmentTitle)
+        {
+            var prompt = $@"**SUBMISSION RELEVANCE CHECK**
 
+ASSIGNMENT: {assignmentTitle}
+CONTEXT: {context}
+
+DOCUMENT CONTENT TO CHECK:
+{documentText}
+
+REQUIREMENTS: 
+Analyze if this submission is relevant to the assignment. Check for:
+1. Content match with assignment topic
+2. Appropriate file type and content
+3. Meaningful content (not garbage/random text)
+
+RESPONSE FORMAT:
+- If relevant: Return 'RELEVANT: [brief reason]'
+- If NOT relevant: Return 'NOT_RELEVANT: [brief reason]'
+
+Examples of NOT relevant:
+- Assignment is about Java code but submission contains unrelated text/marketing content
+- Submission contains only random characters or meaningless content
+- Completely different topic from assignment requirements
+
+Be strict but fair in evaluation.";
+
+            return await SummarizeAsync(prompt, maxOutputTokens: 300);
+        }
         public async Task<string> GenerateOverallSummaryAsync(string documentText, string context)
         {
             var prompt = $@"**AI OVERALL SUMMARY**
 
-CONTEXT: {context}
+ASSIGNMENT CONTEXT: {context}
 
 DOCUMENT: {documentText}
 
-REQUIREMENTS: Provide a balanced overall summary of the submission (~100 words, max 200). Focus on structure, content, strengths/weaknesses without scores. Keep response in a single paragraph without line breaks.";
+REQUIREMENTS: Provide a balanced overall summary of the submission (~100 words, max 200). 
+Focus on:
+- Structure and organization
+- Content quality and relevance to assignment
+- Key strengths and weaknesses
+- Overall impression
 
-            return await SummarizeAsync(prompt, maxOutputTokens: 400);  // Adjust tokens for ~200 words
+Keep response in a single paragraph without line breaks.
+Do not include scores or grading in the summary.";
+
+            return await SummarizeAsync(prompt, maxOutputTokens: 400);
         }
 
         public async Task<string> GenerateCriteriaSummaryAsync(string documentText, Criteria criteria, string context)
