@@ -922,26 +922,13 @@ namespace Service.Service
                     return new BaseResponse<AIOverallResponse>("Submission not found", StatusCodeEnum.NotFound_404, null);
                 }
 
-                var summaryType = "OverallSummary";
-
-                // Check if exists
-                var existing = await _aiSummaryRepository.GetBySubmissionAndTypeAsync(request.SubmissionId, summaryType);
-                var existingSummary = existing.FirstOrDefault();
-                if (existingSummary != null)
-                {
-                    return new BaseResponse<AIOverallResponse>(
-                        "Existing overall summary loaded",
-                        StatusCodeEnum.OK_200,
-                        new AIOverallResponse { Summary = existingSummary.Content });
-                }
-
                 var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
                 if (assignment == null)
                 {
                     return new BaseResponse<AIOverallResponse>("Assignment not found", StatusCodeEnum.NotFound_404, null);
                 }
 
-                // Extract text (reuse)
+                // Extract text từ file submission
                 using var fileStream = await _fileStorageService.GetFileStreamAsync(submission.FileUrl);
                 if (fileStream == null)
                 {
@@ -956,14 +943,47 @@ namespace Service.Service
                     return new BaseResponse<AIOverallResponse>("No text extracted", StatusCodeEnum.BadRequest_400, null);
                 }
 
+                // KIỂM TRA UNHAPPY CASE - Nếu submission không phù hợp với assignment
+                if (!await CheckSubmissionRelevanceAsync(submission, assignment, extractedText))
+                {
+                    var errorSummary = "This submission does not match with the assignment requirements.";
+
+                    // Lưu summary thông báo lỗi
+                    var aiSummary = new AISummary
+                    {
+                        SubmissionId = request.SubmissionId,
+                        Content = errorSummary,
+                        SummaryType = "OverallSummary_Error",
+                        GeneratedAt = DateTime.UtcNow
+                    };
+                    await _aiSummaryRepository.AddAsync(aiSummary);
+
+                    var response = new AIOverallResponse { Summary = errorSummary, IsRelevant = false };
+                    return new BaseResponse<AIOverallResponse>("Submission not relevant to assignment", StatusCodeEnum.OK_200, response);
+                }
+
+                // Happy case - tiếp tục xử lý bình thường
+                var summaryType = "OverallSummary";
+
+                // Check if exists
+                var existing = await _aiSummaryRepository.GetBySubmissionAndTypeAsync(request.SubmissionId, summaryType);
+                var existingSummary = existing.FirstOrDefault();
+                if (existingSummary != null)
+                {
+                    return new BaseResponse<AIOverallResponse>(
+                        "Existing overall summary loaded",
+                        StatusCodeEnum.OK_200,
+                        new AIOverallResponse { Summary = existingSummary.Content, IsRelevant = true });
+                }
+
                 if (extractedText.Length > 12000) extractedText = extractedText.Substring(0, 12000) + "...";
 
                 // Get max words from config
                 var maxWordsConfig = await _systemConfigService.GetSystemConfigAsync("AISummaryMaxWords");
                 int maxWords = int.Parse(maxWordsConfig ?? "200");
 
-                // Build context (reuse)
-                var context = BuildEnhancedContext(assignment, null, null);  // No rubric for overall
+                // Build context với URL assignment
+                var context = BuildEnhancedContextWithUrl(assignment, null, null, submission.FileUrl);
 
                 // Call AI
                 var summary = await _genAIService.GenerateOverallSummaryAsync(extractedText, context);
@@ -978,17 +998,17 @@ namespace Service.Service
                 if (summary.Length > 2000) summary = summary.Substring(0, 2000);
 
                 // Lưu vào DB
-                var aiSummary = new AISummary
+                var newAiSummary = new AISummary
                 {
                     SubmissionId = request.SubmissionId,
                     Content = summary,
                     SummaryType = summaryType,
                     GeneratedAt = DateTime.UtcNow
                 };
-                await _aiSummaryRepository.AddAsync(aiSummary);
+                await _aiSummaryRepository.AddAsync(newAiSummary);
 
-                var response = new AIOverallResponse { Summary = summary };
-                return new BaseResponse<AIOverallResponse>("AI overall summary generated and saved", StatusCodeEnum.Created_201, response);
+                var successResponse = new AIOverallResponse { Summary = summary, IsRelevant = true };
+                return new BaseResponse<AIOverallResponse>("AI overall summary generated and saved", StatusCodeEnum.Created_201, successResponse);
             }
             catch (Exception ex)
             {
@@ -1096,7 +1116,18 @@ namespace Service.Service
                 }
 
                 if (extractedText.Length > 12000) extractedText = extractedText.Substring(0, 12000) + "...";
+                // KIỂM TRA UNHAPPY CASE
+                if (!await CheckSubmissionRelevanceAsync(submission, assignment, extractedText))
+                {
+                    var errorFeedback = new AICriteriaResponse
+                    {
+                        Feedbacks = new List<AICriteriaFeedbackItem>(),
+                        IsRelevant = false,
+                        ErrorMessage = "This submission does not match with the assignment requirements."
+                    };
 
+                    return new BaseResponse<AICriteriaResponse>("Submission not relevant to assignment", StatusCodeEnum.OK_200, errorFeedback);
+                }
                 // Build context
                 var context = BuildEnhancedContext(assignment, rubric, criteria);
 
@@ -1169,6 +1200,74 @@ namespace Service.Service
         public async Task<BaseResponse<AICriteriaResponse>> GenerateInstructorCriteriaFeedbackAsync(GenerateAICriteriaRequest request)
         {
             return await GenerateCriteriaFeedbackAsync(request);
+        }
+
+        private async Task<bool> CheckSubmissionRelevanceAsync(Submission submission, Assignment assignment, string extractedText)
+        {
+            try
+            {
+                // Build context với thông tin assignment
+                var context = BuildEnhancedContext(assignment, null, null);
+
+                // Gọi AI để kiểm tra relevance
+                var relevanceCheck = await _genAIService.CheckSubmissionRelevanceAsync(extractedText, context, assignment.Title);
+
+                // Nếu AI trả về kết quả không phù hợp
+                if (relevanceCheck.Contains("NOT_RELEVANT") || relevanceCheck.Contains("not match") || relevanceCheck.Contains("unrelated"))
+                {
+                    _logger.LogWarning($"Submission {submission.SubmissionId} is not relevant to assignment {assignment.Title}");
+                    return false;
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error checking submission relevance");
+                // Mặc định cho là phù hợp nếu có lỗi
+                return true;
+            }
+        }
+
+        // Thêm method mới để build context với URL
+        private string BuildEnhancedContextWithUrl(Assignment assignment, Rubric rubric, List<Criteria> criteria, string submissionFileUrl)
+        {
+            var contextBuilder = new StringBuilder();
+
+            // Thêm thông tin assignment và URL
+            contextBuilder.AppendLine($"Assignment: {assignment.Title}");
+            contextBuilder.AppendLine($"Assignment URL: [Assignment details available]");
+            contextBuilder.AppendLine($"Submission File URL: {submissionFileUrl}");
+
+            if (!string.IsNullOrEmpty(assignment.Description))
+            {
+                var shortDesc = assignment.Description.Length > 80 ?
+                    assignment.Description.Substring(0, 80) + "..." : assignment.Description;
+                contextBuilder.AppendLine($"Description: {shortDesc}");
+            }
+
+            // Thông tin grading scale
+            contextBuilder.AppendLine($"Grading Scale: {assignment.GradingScale}");
+            if (assignment.PassThreshold.HasValue)
+            {
+                contextBuilder.AppendLine($"Pass Threshold: {assignment.PassThreshold}%");
+            }
+
+            // Tiêu chí đánh giá chi tiết
+            if (criteria != null && criteria.Any())
+            {
+                contextBuilder.AppendLine("Evaluation Criteria:");
+                foreach (var criterion in criteria)
+                {
+                    contextBuilder.AppendLine($"- {criterion.Title} (Weight: {criterion.Weight}%, Max Score: {criterion.MaxScore})");
+                    if (!string.IsNullOrEmpty(criterion.Description))
+                    {
+                        contextBuilder.AppendLine($"  Description: {criterion.Description}");
+                    }
+                }
+            }
+
+            return contextBuilder.ToString();
         }
     }
 }

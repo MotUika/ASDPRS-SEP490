@@ -16,6 +16,7 @@ namespace Service.IService
         Task<string> GenerateCriteriaReviewAsync(string documentText, Criteria criteria, string context);
         Task<string> GenerateOverallSummaryAsync(string documentText, string context);
         Task<string> GenerateCriteriaSummaryAsync(string documentText, Criteria criteria, string context);
+        Task<string> CheckSubmissionRelevanceAsync(string documentText, string context, string assignmentTitle);
     }
 
 }
