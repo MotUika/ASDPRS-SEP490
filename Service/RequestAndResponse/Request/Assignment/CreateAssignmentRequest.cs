@@ -39,13 +39,16 @@ namespace Service.RequestAndResponse.Request.Assignment
 
         public decimal? PassThreshold { get; set; } = 50;
 
+        [Range(0, 10)]
         public decimal? MissingReviewPenalty { get; set; } = 0;
 
         [Required]
         public bool AllowCrossClass { get; set; } = false;
 
-        [Required]
-        public bool IsBlindReview { get; set; } = false;
+        //public bool IsBlindReview { get; set; } = true;
+
+        //public bool IncludeAIScore { get; set; } = false;
+
 
         [Required]
         [Range(0, 100)]
@@ -56,7 +59,5 @@ namespace Service.RequestAndResponse.Request.Assignment
         public decimal PeerWeight { get; set; } = 0;
         public string GradingScale { get; set; } = "Scale10";
 
-        [Required]
-        public bool IncludeAIScore { get; set; } = false;
     }
 }

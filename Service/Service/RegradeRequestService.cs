@@ -311,6 +311,11 @@ namespace Service.Service
                 {
                     existingRequest.ReviewedByInstructorId = request.ReviewedByInstructorId.Value;
                 }
+                if (request.ReviewedByUserId.HasValue)
+                {
+                    existingRequest.ReviewedByUserId = request.ReviewedByUserId.Value;
+                }
+
 
                 var updatedRequest = await _regradeRequestRepository.UpdateAsync(existingRequest);
                 var response = await MapToRegradeRequestResponse(updatedRequest);
@@ -349,7 +354,8 @@ namespace Service.Service
                     request.RequestId,
                     request.Status,
                     request.ResolutionNotes,
-                    request.ReviewedByInstructorId);
+                    request.ReviewedByInstructorId,
+                    request.ReviewedByUserId);
 
                 var response = await MapToRegradeRequestResponse(updatedRequest);
 
@@ -414,17 +420,17 @@ namespace Service.Service
             return await GetRegradeRequestsByFilterAsync(filterRequest);
         }
 
-        public async Task<BaseResponse<RegradeRequestListResponse>> GetRegradeRequestsByInstructorIdAsync(int instructorId, int pageNumber = 1, int pageSize = 20)
+        public async Task<BaseResponse<RegradeRequestListResponse>> GetRegradeRequestsByInstructorIdAsync(int userId)
         {
             var filterRequest = new GetRegradeRequestsByFilterRequest
             {
-                InstructorId = instructorId,
-                PageNumber = pageNumber,
-                PageSize = pageSize
+                InstructorId = userId,
+
             };
 
             return await GetRegradeRequestsByFilterAsync(filterRequest);
         }
+
 
         private async Task<RegradeRequestResponse> MapToRegradeRequestResponse(RegradeRequest regradeRequest)
         {
@@ -459,6 +465,181 @@ namespace Service.Service
             var allRequests = await _regradeRequestRepository.GetAllAsync();
             return allRequests.Count();
         }
+
+        public async Task<BaseResponse<RegradeRequestResponse>> ReviewRegradeRequestAsync(UpdateRegradeRequestStatusByUserRequest request)
+        {
+            try
+            {
+                var existingRequest = await _regradeRequestRepository.GetByIdAsync(request.RequestId);
+                if (existingRequest == null)
+                {
+                    _logger.LogWarning($"Regrade request not found. RequestId: {request.RequestId}");
+                    return new BaseResponse<RegradeRequestResponse>(
+                        "Regrade request not found",
+                        StatusCodeEnum.NotFound_404,
+                        null
+                    );
+                }
+
+                // Chỉ cho phép status "Accepted" hoặc "Rejected"
+                if (request.Status != "Accepted" && request.Status != "Rejected")
+                {
+                    _logger.LogWarning($"Invalid status for review. RequestId: {request.RequestId}, Status: {request.Status}");
+                    return new BaseResponse<RegradeRequestResponse>(
+                        "Invalid status for review",
+                        StatusCodeEnum.BadRequest_400,
+                        null
+                    );
+                }
+
+                int instructorId;
+                if (request.ReviewedByUserId.HasValue)
+                {
+                    instructorId = request.ReviewedByUserId.Value;
+                }
+                else
+                {
+                    var courseInstructors = existingRequest.Submission?.Assignment?.CourseInstance?.CourseInstructors;
+
+                    if (courseInstructors == null)
+                    {
+                        _logger.LogError($"CourseInstructors is null for RequestId: {request.RequestId}, SubmissionId: {existingRequest.SubmissionId}");
+                        return new BaseResponse<RegradeRequestResponse>(
+                            "Cannot determine instructor for this request",
+                            StatusCodeEnum.BadRequest_400,
+                            null
+                        );
+                    }
+
+                    if (!courseInstructors.Any())
+                    {
+                        _logger.LogError($"No instructors found for CourseInstanceId: {existingRequest.Submission?.Assignment?.CourseInstanceId}, RequestId: {request.RequestId}");
+                        return new BaseResponse<RegradeRequestResponse>(
+                            "Cannot determine instructor for this request",
+                            StatusCodeEnum.BadRequest_400,
+                            null
+                        );
+                    }
+
+                    if (courseInstructors.Count > 1)
+                    {
+                        var ids = string.Join(",", courseInstructors.Select(c => c.UserId));
+                        _logger.LogError($"Multiple instructors found ({ids}) for CourseInstanceId: {existingRequest.Submission?.Assignment?.CourseInstanceId}, RequestId: {request.RequestId}");
+                        return new BaseResponse<RegradeRequestResponse>(
+                            "Multiple instructors found, cannot determine which instructor reviewed",
+                            StatusCodeEnum.BadRequest_400,
+                            null
+                        );
+                    }
+
+                    instructorId = courseInstructors.First().UserId;
+                    _logger.LogInformation($"InstructorId {instructorId} inferred for RequestId: {request.RequestId}");
+                }
+
+                var updatedRequest = await _regradeRequestRepository.UpdateRequestStatusAsync(
+                    request.RequestId,
+                    request.Status,
+                    request.ResolutionNotes,
+                    instructorId,
+                    request.ReviewedByUserId
+                );
+
+                var fullRequest = await _regradeRequestRepository.GetByIdWithInstructorAsync(request.RequestId);
+                var response = await MapToRegradeRequestResponse(fullRequest);
+
+                _logger.LogInformation($"Regrade request reviewed. RequestId: {updatedRequest.RequestId}, Status: {request.Status}, InstructorId: {instructorId}");
+
+                return new BaseResponse<RegradeRequestResponse>(
+                    "Regrade request reviewed successfully",
+                    StatusCodeEnum.OK_200,
+                    response
+                );
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error reviewing regrade request ID: {request.RequestId}");
+                return new BaseResponse<RegradeRequestResponse>(
+                    "Error reviewing regrade request",
+                    StatusCodeEnum.InternalServerError_500,
+                    null
+                );
+            }
+        }
+
+
+
+        public async Task<BaseResponse<RegradeRequestResponse>> CompleteRegradeRequestAsync(UpdateRegradeRequestStatusByUserRequest request)
+        {
+            try
+            {
+                var existingRequest = await _regradeRequestRepository.GetByIdAsync(request.RequestId);
+                if (existingRequest == null)
+                {
+                    return new BaseResponse<RegradeRequestResponse>(
+                        "Regrade request not found",
+                        StatusCodeEnum.NotFound_404,
+                        null
+                    );
+                }
+
+                // Suy ra ReviewedByUserId nếu không truyền
+                int instructorId;
+                if (request.ReviewedByUserId.HasValue)
+                {
+                    instructorId = request.ReviewedByUserId.Value;
+                }
+                else
+                {
+                    var courseInstructors = existingRequest.Submission?.Assignment?.CourseInstance?.CourseInstructors;
+                    if (courseInstructors == null || !courseInstructors.Any())
+                    {
+                        return new BaseResponse<RegradeRequestResponse>(
+                            "Cannot determine instructor for this request",
+                            StatusCodeEnum.BadRequest_400,
+                            null
+                        );
+                    }
+                    if (courseInstructors.Count > 1)
+                    {
+                        return new BaseResponse<RegradeRequestResponse>(
+                            "Multiple instructors found, cannot determine which instructor completed the request",
+                            StatusCodeEnum.BadRequest_400,
+                            null
+                        );
+                    }
+                    instructorId = courseInstructors.First().UserId;
+                }
+
+                var updatedRequest = await _regradeRequestRepository.UpdateRequestStatusAsync(
+                    request.RequestId,
+                    "Completed",
+                    request.ResolutionNotes,
+                    instructorId,
+                    request.ReviewedByUserId
+                );
+
+                var fullRequest = await _regradeRequestRepository.GetByIdWithInstructorAsync(request.RequestId);
+                var response = await MapToRegradeRequestResponse(fullRequest);
+
+                _logger.LogInformation($"Regrade request completed. RequestId: {updatedRequest.RequestId}");
+
+                return new BaseResponse<RegradeRequestResponse>(
+                    "Regrade request completed successfully",
+                    StatusCodeEnum.OK_200,
+                    response
+                );
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error completing regrade request ID: {request.RequestId}");
+                return new BaseResponse<RegradeRequestResponse>(
+                    "Error completing regrade request",
+                    StatusCodeEnum.InternalServerError_500,
+                    null
+                );
+            }
+        }
+
 
         private async Task SendRegradeNotificationToInstructors(RegradeRequest regradeRequest, Submission submission, Assignment assignment)
         {

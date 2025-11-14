@@ -1,6 +1,7 @@
 ﻿using AutoMapper;
 using BussinessObject.Models;
 using Service.RequestAndResponse.Response.RegradeRequest;
+using System.Linq;
 
 namespace Service.Mapping
 {
@@ -14,8 +15,19 @@ namespace Service.Mapping
                 .ForMember(dest => dest.ReviewedByInstructor, opt => opt.MapFrom(src => src.ReviewedByInstructor));
 
             CreateMap<Submission, SubmissionInfoResponse>();
-            CreateMap<User, UserInfoRegradeResponse>();
-            CreateMap<Assignment, AssignmentInfoRegradeResponse>();
+
+            CreateMap<User, UserInfoRegradeResponse>()
+                .ForMember(dest => dest.FullName, opt => opt.MapFrom(src => $"{src.FirstName} {src.LastName}".Trim()));
+
+            CreateMap<Assignment, AssignmentInfoRegradeResponse>()
+                .ForMember(
+                    dest => dest.CourseName,
+                    opt => opt.MapFrom(src => src.CourseInstance != null 
+                                               && src.CourseInstance.Course != null
+                                               ? src.CourseInstance.Course.CourseName 
+                                               : null)
+                      );
+
         }
     }
 }

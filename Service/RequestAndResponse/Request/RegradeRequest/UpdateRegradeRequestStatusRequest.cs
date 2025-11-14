@@ -15,5 +15,8 @@ namespace Service.RequestAndResponse.Request.RegradeRequest
 
         [Required(ErrorMessage = "ReviewedByInstructorId is required")]
         public int ReviewedByInstructorId { get; set; }
+
+        [Required(ErrorMessage = "ReviewedByUserId is required")]
+        public int ReviewedByUserId { get; set; }
     }
 }

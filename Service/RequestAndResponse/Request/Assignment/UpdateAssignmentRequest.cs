@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Http;
 using System;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace Service.RequestAndResponse.Request.Assignment
 {
@@ -36,7 +37,10 @@ namespace Service.RequestAndResponse.Request.Assignment
 
         public bool? AllowCrossClass { get; set; }
 
-        public bool? IsBlindReview { get; set; }
+        //[JsonIgnore]
+        //public bool IsBlindReview { get; set; } = true;
+        //[JsonIgnore]
+        //public bool IncludeAIScore { get; set; } = false;
 
         [Range(0, 100)]
         public decimal? InstructorWeight { get; set; }
@@ -44,7 +48,8 @@ namespace Service.RequestAndResponse.Request.Assignment
         [Range(0, 100)]
         public decimal? PeerWeight { get; set; }
         public string? GradingScale { get; set; }
-        public decimal? MissingReviewPenalty { get; set; }
-        public bool? IncludeAIScore { get; set; }
+
+        [Range(0, 10)]
+        public decimal? MissingReviewPenalty { get; set; } = 0;
     }
 }
