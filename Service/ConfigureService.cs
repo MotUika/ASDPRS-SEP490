@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Repository;
 using Repository.IRepository;
 using Repository.Repository;
+using Service.BackgroundJobs;
 using Service.Interface;
 using Service.IService;
 using Service.Mapping;
@@ -77,6 +78,8 @@ namespace Service
             services.AddScoped<IUserService, UserService>();
             services.AddScoped<IEmailService, EmailService>();
             services.AddScoped<ITokenService, TokenService>();
+            services.AddHostedService<DeadlineReminderBackgroundService>();
+
 
             return services;
 
