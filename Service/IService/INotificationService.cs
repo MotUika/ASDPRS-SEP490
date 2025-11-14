@@ -20,5 +20,8 @@ namespace Service.IService
         Task SendDeadlineReminderAsync(int assignmentId);
         Task SendMissingSubmissionNotificationAsync(int assignmentId, int instructorId);
         Task SendMissingReviewNotificationAsync(int reviewAssignmentId);
+        Task<BaseResponse<bool>> SendAnnouncementToAllAsync(SendAnnouncementRequest request);
+        Task<BaseResponse<bool>> SendAnnouncementToUsersAsync(SendAnnouncementRequest request, List<int> userIds);
+        Task<BaseResponse<bool>> SendAnnouncementToCourseAsync(SendAnnouncementRequest request, int courseInstanceId);
     }
 }

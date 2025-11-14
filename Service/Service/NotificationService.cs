@@ -25,6 +25,7 @@ namespace Service.Service
         private readonly ICourseInstructorRepository _courseInstructorRepository;
         private readonly IUserRepository _userRepository;
         private readonly ISubmissionRepository _submissionRepository;
+        private readonly IEmailService _emailService;
 
         public NotificationService(
             INotificationRepository notificationRepository,
@@ -34,7 +35,8 @@ namespace Service.Service
             IReviewAssignmentRepository reviewAssignmentRepository,
             ICourseInstructorRepository courseInstructorRepository,
             IUserRepository userRepository,
-            ISubmissionRepository submissionRepository)
+            ISubmissionRepository submissionRepository,
+            IEmailService emailService)
         {
             _notificationRepository = notificationRepository;
             _mapper = mapper;
@@ -44,6 +46,7 @@ namespace Service.Service
             _courseInstructorRepository = courseInstructorRepository;
             _userRepository = userRepository;
             _submissionRepository = submissionRepository;
+            _emailService = emailService;
         }
 
         public async Task<BaseResponse<NotificationResponse>> CreateNotificationAsync(CreateNotificationRequest request)
@@ -53,9 +56,11 @@ namespace Service.Service
                 var notification = _mapper.Map<Notification>(request);
                 notification.CreatedAt = DateTime.UtcNow;
                 notification.IsRead = false;
-
                 var created = await _notificationRepository.AddAsync(notification);
                 var response = _mapper.Map<NotificationResponse>(created);
+
+                // Gửi email thông báo
+                await SendNotificationEmail(created);
 
                 return new BaseResponse<NotificationResponse>("Notification created successfully", StatusCodeEnum.Created_201, response);
             }
@@ -65,6 +70,29 @@ namespace Service.Service
             }
         }
 
+        private async Task SendNotificationEmail(Notification notification)
+        {
+            try
+            {
+                var user = await _userRepository.GetByIdAsync(notification.UserId);
+                if (user == null || string.IsNullOrEmpty(user.Email)) return;
+
+                var emailSubject = notification.Title;
+                var emailBody = $@"
+                <h1>{notification.Title}</h1>
+                <p>{notification.Message}</p>
+                <p>Sent at: {notification.CreatedAt:yyyy-MM-dd HH:mm}</p>
+                <p>Please check the system for more details.</p>
+            ";
+
+                await _emailService.SendEmail(user.Email, emailSubject, emailBody);
+            }
+            catch (Exception ex)
+            {
+                // Log lỗi nhưng không làm fail việc tạo notification
+                Console.WriteLine($"Error sending notification email: {ex.Message}");
+            }
+        }
         public async Task<BaseResponse<IEnumerable<NotificationResponse>>> GetNotificationsByUserAsync(int userId, bool unreadOnly = false)
         {
             try
@@ -230,6 +258,87 @@ namespace Service.Service
                 };
                 await CreateNotificationAsync(request);
             }
+        }
+
+        public async Task<BaseResponse<bool>> SendAnnouncementToAllAsync(SendAnnouncementRequest request)
+        {
+            try
+            {
+                var allUsers = await _userRepository.GetAllAsync();
+                var userIds = allUsers.Select(u => u.Id).ToList();
+
+                return await SendBulkNotifications(userIds, request);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<bool>($"Error sending announcement to all users: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500, false);
+            }
+        }
+
+        public async Task<BaseResponse<bool>> SendAnnouncementToUsersAsync(SendAnnouncementRequest request, List<int> userIds)
+        {
+            return await SendBulkNotifications(userIds, request);
+        }
+
+        public async Task<BaseResponse<bool>> SendAnnouncementToCourseAsync(SendAnnouncementRequest request, int courseInstanceId)
+        {
+            try
+            {
+                // Lấy tất cả students trong course
+                var students = await _courseStudentRepository.GetByCourseInstanceIdAsync(courseInstanceId);
+                var studentIds = students.Select(s => s.UserId).ToList();
+
+                // Lấy tất cả instructors trong course
+                var instructors = await _courseInstructorRepository.GetByCourseInstanceIdAsync(courseInstanceId);
+                var instructorIds = instructors.Select(i => i.UserId).ToList();
+
+                var allUserIds = studentIds.Union(instructorIds).ToList();
+
+                return await SendBulkNotifications(allUserIds, request);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<bool>($"Error sending announcement to course: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500, false);
+            }
+        }
+
+        private async Task<BaseResponse<bool>> SendBulkNotifications(List<int> userIds, SendAnnouncementRequest request)
+        {
+            var successCount = 0;
+            var errorCount = 0;
+
+            foreach (var userId in userIds)
+            {
+                try
+                {
+                    var notificationRequest = new CreateNotificationRequest
+                    {
+                        UserId = userId,
+                        Title = request.Title,
+                        Message = request.Message,
+                        Type = "Announcement",
+                        SenderUserId = request.SenderUserId
+                    };
+
+                    var result = await CreateNotificationAsync(notificationRequest);
+                    if (result.StatusCode == StatusCodeEnum.Created_201)
+                        successCount++;
+                    else
+                        errorCount++;
+                }
+                catch (Exception)
+                {
+                    errorCount++;
+                }
+            }
+
+            var message = $"Announcement sent successfully to {successCount} users.";
+            if (errorCount > 0)
+                message += $" Failed for {errorCount} users.";
+
+            return new BaseResponse<bool>(message, StatusCodeEnum.OK_200, true);
         }
     }
 }
