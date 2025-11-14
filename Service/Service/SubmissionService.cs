@@ -1319,13 +1319,17 @@ namespace Service.Service
                     peerWeight = (peerWeight / total) * 100;
                 }
 
+                decimal instructorScoreNormalized = instructorScore;
+                decimal peerScoreNormalized = peerAvg / 10;
+
                 // 6️⃣ Tính điểm cuối cùng
                 var finalScore = Math.Round(
-                    (instructorScore * instructorWeight / 100) + (peerAvg * peerWeight / 100), 2);
+            (instructorScoreNormalized * instructorWeight / 100) +
+            (peerScoreNormalized * peerWeight / 100), 2 );
 
                 // 7️⃣ Cập nhật submission
                 submission.InstructorScore = instructorScore;
-                submission.PeerAverageScore = peerAvg;
+                submission.PeerAverageScore = peerScoreNormalized;
                 submission.FinalScore = finalScore;
                 submission.Feedback = request.Feedback ?? submission.Feedback;
                 submission.GradedAt = DateTime.UtcNow;

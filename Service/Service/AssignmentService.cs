@@ -155,7 +155,28 @@ namespace Service.Service
                     var defaultPassThreshold = await _systemConfigService.GetSystemConfigAsync("DefaultPassThreshold");
                     request.PassThreshold = decimal.Parse(defaultPassThreshold ?? "50");
                 }
+                // Validate MissingReviewPenalty
+                if (request.MissingReviewPenalty.HasValue)
+                {
+                    if (request.MissingReviewPenalty < 0)
+                        return new BaseResponse<AssignmentResponse>("MissingReviewPenalty cannot be negative", StatusCodeEnum.BadRequest_400, null);
 
+                    if (request.MissingReviewPenalty > 10)
+                        return new BaseResponse<AssignmentResponse>("MissingReviewPenalty cannot exceed 10", StatusCodeEnum.BadRequest_400, null);
+                }
+
+                // Validate NumPeerReviewsRequired
+                if (request.NumPeerReviewsRequired < 0 || request.NumPeerReviewsRequired > 10)
+                {
+                    return new BaseResponse<AssignmentResponse>(
+                        "NumPeerReviewsRequired must be between 0 and 10",
+                        StatusCodeEnum.BadRequest_400,
+                        null
+                    );
+                }
+
+                bool isBlindReviewFinal = true;     
+                bool includeAIScoreFinal = false;
                 var assignment = new Assignment
                 {
                     CourseInstanceId = request.CourseInstanceId,
@@ -171,13 +192,13 @@ namespace Service.Service
                     ReviewDeadline = request.ReviewDeadline,
                     NumPeerReviewsRequired = request.NumPeerReviewsRequired,
                     AllowCrossClass = request.AllowCrossClass,
-                    IsBlindReview = request.IsBlindReview,
                     InstructorWeight = request.InstructorWeight,
                     PeerWeight = request.PeerWeight,
                     GradingScale = request.GradingScale,
                     PassThreshold = request.PassThreshold,
                     MissingReviewPenalty = request.MissingReviewPenalty,
-                    IncludeAIScore = request.IncludeAIScore,
+                    IsBlindReview = isBlindReviewFinal,
+                    IncludeAIScore = includeAIScoreFinal,
                     Status = AssignmentStatusEnum.Draft.ToString()
                 };
 
@@ -278,6 +299,29 @@ namespace Service.Service
                         null);
                 }
 
+                // Validate MissingReviewPenalty
+                if (request.MissingReviewPenalty.HasValue)
+                {
+                    if (request.MissingReviewPenalty < 0)
+                        return new BaseResponse<AssignmentResponse>("MissingReviewPenalty cannot be negative", StatusCodeEnum.BadRequest_400, null);
+
+                    if (request.MissingReviewPenalty > 100)
+                        return new BaseResponse<AssignmentResponse>("MissingReviewPenalty cannot exceed 100", StatusCodeEnum.BadRequest_400, null);
+
+                    await SaveAssignmentConfigs(assignment.AssignmentId, "MissingReviewPenalty", request.MissingReviewPenalty.Value.ToString());
+                }
+
+                // Validate NumPeerReviewsRequired
+                if (request.NumPeerReviewsRequired.HasValue &&
+                    (request.NumPeerReviewsRequired < 0 || request.NumPeerReviewsRequired > 10))
+                {
+                    return new BaseResponse<AssignmentResponse>(
+                        "NumPeerReviewsRequired must be between 0 and 10",
+                        StatusCodeEnum.BadRequest_400,
+                        null
+                    );
+                }
+
                 // 🧩 Validate file upload
                 if (request.File != null)
                 {
@@ -347,14 +391,12 @@ namespace Service.Service
                 if (request.AllowCrossClass.HasValue)
                     assignment.AllowCrossClass = request.AllowCrossClass.Value;
 
-                if (request.IsBlindReview.HasValue)
-                    assignment.IsBlindReview = request.IsBlindReview.Value;
+                assignment.IsBlindReview = true;
+                assignment.IncludeAIScore = false;
 
                 if (request.GradingScale != null)
                     assignment.GradingScale = request.GradingScale;
 
-                if (request.IncludeAIScore.HasValue)
-                    assignment.IncludeAIScore = request.IncludeAIScore.Value;
 
                 if (request.MissingReviewPenalty.HasValue)
                     await SaveAssignmentConfigs(assignment.AssignmentId, "MissingReviewPenalty", request.MissingReviewPenalty.Value.ToString());

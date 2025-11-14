@@ -173,7 +173,7 @@ namespace ASDPRS_SEP490.Controllers
             [FromQuery] int pageNumber = 1,
             [FromQuery] int pageSize = 20)
         {
-            var result = await _regradeRequestService.GetRegradeRequestsByInstructorIdAsync(instructorId, pageNumber, pageSize);
+            var result = await _regradeRequestService.GetRegradeRequestsByInstructorIdAsync(instructorId);
             return StatusCode((int)result.StatusCode, result);
         }
     }

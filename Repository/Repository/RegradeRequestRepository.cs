@@ -51,16 +51,23 @@ namespace Repository.Repository
                 .ToListAsync();
         }
 
-        public async Task<IEnumerable<RegradeRequest>> GetByInstructorIdAsync(int instructorId)
+        public async Task<IEnumerable<RegradeRequest>> GetByInstructorIdAsync(int userId)
         {
             return await _regradeRequestDAO.GetAll()
-                .Where(r => r.ReviewedByInstructorId == instructorId)
                 .Include(r => r.Submission)
                     .ThenInclude(s => s.Assignment)
+                        .ThenInclude(a => a.CourseInstance)
+                            .ThenInclude(ci => ci.CourseInstructors)
                 .Include(r => r.Submission.User)
+                .Include(r => r.ReviewedByInstructor)
+                .Where(r =>
+                    r.Submission.Assignment.CourseInstance.CourseInstructors
+                        .Any(ci => ci.UserId == userId)   // SAME LOGIC
+                )
                 .OrderByDescending(r => r.RequestedAt)
                 .ToListAsync();
         }
+
 
         public async Task<IEnumerable<RegradeRequest>> GetPendingRequestsAsync()
         {
@@ -78,7 +85,7 @@ namespace Repository.Repository
                 .ToListAsync();
         }
 
-        public async Task<RegradeRequest> UpdateRequestStatusAsync(int requestId, string status, string resolutionNotes, int? reviewedByInstructorId)
+        public async Task<RegradeRequest> UpdateRequestStatusAsync(int requestId, string status, string resolutionNotes, int? reviewedByInstructorId, int? reviewedByUserId)
         {
             var request = await _regradeRequestDAO.GetByIdAsync(requestId);
             if (request == null)
@@ -87,6 +94,7 @@ namespace Repository.Repository
             request.Status = status;
             request.ResolutionNotes = resolutionNotes;
             request.ReviewedByInstructorId = reviewedByInstructorId;
+            request.ReviewedByUserId = reviewedByUserId;
 
             return await _regradeRequestDAO.UpdateAsync(request);
         }
@@ -96,5 +104,31 @@ namespace Repository.Repository
             return await _regradeRequestDAO.GetAll()
                 .AnyAsync(r => r.SubmissionId == submissionId && r.Status == "Pending");
         }
+
+        public async Task<RegradeRequest> GetByIdAsync(int requestId)
+        {
+            return await _regradeRequestDAO.GetAll()
+                .Include(r => r.Submission)
+                    .ThenInclude(s => s.User)                     // RequestedByStudent
+                .Include(r => r.Submission)
+                    .ThenInclude(s => s.Assignment)
+                        .ThenInclude(a => a.CourseInstance)
+                            .ThenInclude(ci => ci.Course)       // CourseName
+                .Include(r => r.ReviewedByInstructor)           // ReviewedByInstructor
+                .FirstOrDefaultAsync(r => r.RequestId == requestId);
+        }
+
+        public async Task<RegradeRequest> GetByIdWithInstructorAsync(int requestId)
+        {
+            return await _regradeRequestDAO.GetAll()
+                .Include(r => r.ReviewedByInstructor)
+                .Include(r => r.Submission)
+                    .ThenInclude(s => s.User)
+                .Include(r => r.Submission.Assignment)
+                    .ThenInclude(a => a.CourseInstance)
+                .FirstOrDefaultAsync(r => r.RequestId == requestId);
+        }
+
+
     }
 }

@@ -15,6 +15,9 @@ namespace Service.Interface
         Task<BaseResponse<bool>> CheckPendingRequestExistsAsync(int submissionId);
         Task<BaseResponse<RegradeRequestListResponse>> GetPendingRegradeRequestsAsync(int pageNumber = 1, int pageSize = 20);
         Task<BaseResponse<RegradeRequestListResponse>> GetRegradeRequestsByStudentIdAsync(int studentId, int pageNumber = 1, int pageSize = 20);
-        Task<BaseResponse<RegradeRequestListResponse>> GetRegradeRequestsByInstructorIdAsync(int instructorId, int pageNumber = 1, int pageSize = 20);
+        Task<BaseResponse<RegradeRequestListResponse>> GetRegradeRequestsByInstructorIdAsync(int userID);
+        Task<BaseResponse<RegradeRequestResponse>> ReviewRegradeRequestAsync(UpdateRegradeRequestStatusByUserRequest request);
+        Task<BaseResponse<RegradeRequestResponse>> CompleteRegradeRequestAsync(UpdateRegradeRequestStatusByUserRequest request);
+
     }
 }

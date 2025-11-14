@@ -26,11 +26,12 @@ namespace Service.RequestAndResponse.Response.Assignment
         public decimal? PassThreshold { get; set; } = 50;
         public decimal? MissingReviewPenalty { get; set; } = 0;
         public bool AllowCrossClass { get; set; }
-        public bool IsBlindReview { get; set; }
         public decimal InstructorWeight { get; set; }
         public decimal PeerWeight { get; set; }
-        public bool IncludeAIScore { get; set; }
-        public decimal Weight { get; set; }
+        public bool IsBlindReview { get; set; } = true;
+
+        public bool IncludeAIScore { get; set; } = false;
+        //public decimal Weight { get; set; }
         public string GradingScale { get; set; }
 
 
