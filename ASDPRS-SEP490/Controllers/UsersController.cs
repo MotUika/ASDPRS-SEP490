@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Service.IService;
 using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Enums;
+using Service.RequestAndResponse.Request.Notification;
 using Service.RequestAndResponse.Request.User;
 using Service.RequestAndResponse.Response.User;
 using Service.RequestAndResponse.Response.User.Service.RequestAndResponse.Response.User;
@@ -22,6 +23,7 @@ namespace ASDPRS_SEP490.Controllers
     {
         private readonly IUserService _userService;
         private readonly UserManager<User> _userManager;
+        private readonly INotificationService _announcementService;
 
         public UsersController(IUserService userService, UserManager<User> userManager)
         {
@@ -298,6 +300,89 @@ namespace ASDPRS_SEP490.Controllers
         {
             var result = await _userService.GetUserRolesAsync(id);
             return StatusCode((int)result.StatusCode, result);
+        }
+
+        [HttpPost("send-to-all")]
+        [SwaggerOperation(
+           Summary = "Gửi thông báo đến tất cả người dùng",
+           Description = "Gửi thông báo đến tất cả người dùng trong hệ thống"
+       )]
+        [SwaggerResponse(200, "Thành công", typeof(BaseResponse<bool>))]
+        [SwaggerResponse(400, "Dữ liệu không hợp lệ")]
+        [SwaggerResponse(401, "Unauthorized - Token không hợp lệ")]
+        [SwaggerResponse(403, "Forbidden - Không có quyền truy cập")]
+        [SwaggerResponse(500, "Lỗi server")]
+        public async Task<IActionResult> SendToAll([FromBody] SendAnnouncementRequest request)
+        {
+            try
+            {
+                var result = await _announcementService.SendAnnouncementToAllAsync(request);
+                return StatusCode((int)result.StatusCode, result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new BaseResponse<bool>(
+                    $"Lỗi server: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    false
+                ));
+            }
+        }
+
+        [HttpPost("send-to-course/{courseInstanceId}")]
+        [SwaggerOperation(
+            Summary = "Gửi thông báo đến khóa học cụ thể",
+            Description = "Gửi thông báo đến tất cả sinh viên và giảng viên trong một khóa học cụ thể"
+        )]
+        [SwaggerResponse(200, "Thành công", typeof(BaseResponse<bool>))]
+        [SwaggerResponse(400, "Dữ liệu không hợp lệ")]
+        [SwaggerResponse(401, "Unauthorized - Token không hợp lệ")]
+        [SwaggerResponse(403, "Forbidden - Không có quyền truy cập")]
+        [SwaggerResponse(404, "Không tìm thấy khóa học")]
+        [SwaggerResponse(500, "Lỗi server")]
+        public async Task<IActionResult> SendToCourse(int courseInstanceId, [FromBody] SendAnnouncementRequest request)
+        {
+            try
+            {
+                var result = await _announcementService.SendAnnouncementToCourseAsync(request, courseInstanceId);
+                return StatusCode((int)result.StatusCode, result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new BaseResponse<bool>(
+                    $"Lỗi server: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    false
+                ));
+            }
+        }
+
+        [HttpPost("send-to-users")]
+        [SwaggerOperation(
+            Summary = "Gửi thông báo đến danh sách người dùng",
+            Description = "Gửi thông báo đến danh sách người dùng cụ thể theo ID"
+        )]
+        [SwaggerResponse(200, "Thành công", typeof(BaseResponse<bool>))]
+        [SwaggerResponse(400, "Dữ liệu không hợp lệ")]
+        [SwaggerResponse(401, "Unauthorized - Token không hợp lệ")]
+        [SwaggerResponse(403, "Forbidden - Không có quyền truy cập")]
+        [SwaggerResponse(404, "Không tìm thấy người dùng")]
+        [SwaggerResponse(500, "Lỗi server")]
+        public async Task<IActionResult> SendToUsers([FromBody] SendAnnouncementToUsersRequest request)
+        {
+            try
+            {
+                var result = await _announcementService.SendAnnouncementToUsersAsync(request.AnnouncementRequest, request.UserIds);
+                return StatusCode((int)result.StatusCode, result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new BaseResponse<bool>(
+                    $"Lỗi server: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    false
+                ));
+            }
         }
     }
 }

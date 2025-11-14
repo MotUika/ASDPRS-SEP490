@@ -1,16 +1,19 @@
 ﻿using AutoMapper;
 using BussinessObject.Models;
+using Microsoft.Extensions.Logging;
 using Repository.IRepository;
+using Repository.Repository;
 using Service.Interface;
-using Service.RequestAndResponse.Request.RegradeRequest;
-using Service.RequestAndResponse.Response.RegradeRequest;
+using Service.IService;
 using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Enums;
+using Service.RequestAndResponse.Request.Notification;
+using Service.RequestAndResponse.Request.RegradeRequest;
+using Service.RequestAndResponse.Response.RegradeRequest;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
 
 namespace Service.Service
 {
@@ -22,6 +25,9 @@ namespace Service.Service
         private readonly IAssignmentRepository _assignmentRepository;
         private readonly IMapper _mapper;
         private readonly ILogger<RegradeRequestService> _logger;
+        private readonly INotificationService _notificationService;
+        private readonly ICourseInstructorRepository _courseInstructorRepository;
+
 
         public RegradeRequestService(
             IRegradeRequestRepository regradeRequestRepository,
@@ -29,7 +35,7 @@ namespace Service.Service
             IUserRepository userRepository,
             IAssignmentRepository assignmentRepository,
             IMapper mapper,
-            ILogger<RegradeRequestService> logger)
+            ILogger<RegradeRequestService> logger, INotificationService notificationService, ICourseInstructorRepository courseInstructorRepository)
         {
             _regradeRequestRepository = regradeRequestRepository;
             _submissionRepository = submissionRepository;
@@ -37,6 +43,8 @@ namespace Service.Service
             _assignmentRepository = assignmentRepository;
             _mapper = mapper;
             _logger = logger;
+            _notificationService = notificationService;
+            _courseInstructorRepository = courseInstructorRepository;
         }
 
         public async Task<BaseResponse<RegradeRequestResponse>> CreateRegradeRequestAsync(CreateRegradeRequestRequest request)
@@ -92,6 +100,8 @@ namespace Service.Service
                 var response = await MapToRegradeRequestResponse(createdRequest);
 
                 _logger.LogInformation($"Regrade request created successfully. RequestId: {createdRequest.RequestId}");
+                await SendRegradeNotificationToInstructors(createdRequest, submission, assignment);
+
 
                 return new BaseResponse<RegradeRequestResponse>(
                     "Regrade request created successfully",
@@ -107,7 +117,61 @@ namespace Service.Service
                     null);
             }
         }
+        private async Task SendRegradeStatusNotificationToStudent(RegradeRequest regradeRequest)
+        {
+            try
+            {
+                var submission = await _submissionRepository.GetByIdAsync(regradeRequest.SubmissionId);
+                if (submission == null) return;
 
+                var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
+                if (assignment == null) return;
+
+                string message = "";
+                switch (regradeRequest.Status.ToLower())
+                {
+                    case "approved":
+                        message = $"Your regrade request for assignment '{assignment.Title}' has been approved.";
+                        if (!string.IsNullOrEmpty(regradeRequest.ResolutionNotes))
+                        {
+                            message += $" Notes: {regradeRequest.ResolutionNotes}";
+                        }
+                        break;
+                    case "rejected":
+                        message = $"Your regrade request for assignment '{assignment.Title}' has been rejected.";
+                        if (!string.IsNullOrEmpty(regradeRequest.ResolutionNotes))
+                        {
+                            message += $" Reason: {regradeRequest.ResolutionNotes}";
+                        }
+                        break;
+                    case "inreview":
+                        message = $"Your regrade request for assignment '{assignment.Title}' is now under review.";
+                        break;
+                    default:
+                        message = $"Your regrade request for assignment '{assignment.Title}' has been updated to: {regradeRequest.Status}";
+                        break;
+                }
+
+                var notificationRequest = new CreateNotificationRequest
+                {
+                    UserId = submission.UserId, // Gửi cho student
+                    Title = "Regrade Request Status Updated",
+                    Message = message,
+                    Type = "RegradeStatusUpdate",
+                    AssignmentId = assignment.AssignmentId,
+                    SubmissionId = submission.SubmissionId
+                };
+
+                await _notificationService.CreateNotificationAsync(notificationRequest);
+
+                _logger.LogInformation($"Sent regrade status notification to student {submission.UserId} for request {regradeRequest.RequestId}");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error sending regrade status notification to student");
+                // Không throw exception để không ảnh hưởng đến flow chính
+            }
+        }
         public async Task<BaseResponse<RegradeRequestResponse>> GetRegradeRequestByIdAsync(GetRegradeRequestByIdRequest request)
         {
             try
@@ -394,6 +458,42 @@ namespace Service.Service
         {
             var allRequests = await _regradeRequestRepository.GetAllAsync();
             return allRequests.Count();
+        }
+
+        private async Task SendRegradeNotificationToInstructors(RegradeRequest regradeRequest, Submission submission, Assignment assignment)
+        {
+            try
+            {
+                // Lấy danh sách instructors của course
+                var instructors = await _courseInstructorRepository.GetByCourseInstanceIdAsync(assignment.CourseInstanceId);
+
+                // Lấy thông tin student
+                var student = await _userRepository.GetByIdAsync(submission.UserId);
+                var studentName = student != null ? $"{student.FirstName} {student.LastName}" : "Unknown Student";
+
+                foreach (var instructor in instructors)
+                {
+                    var notificationRequest = new CreateNotificationRequest
+                    {
+                        UserId = instructor.UserId,
+                        Title = "New Regrade Request Submitted",
+                        Message = $"Student {studentName} has submitted a regrade request for assignment '{assignment.Title}'. Reason: {regradeRequest.Reason}",
+                        Type = "RegradeRequest",
+                        AssignmentId = assignment.AssignmentId,
+                        SubmissionId = submission.SubmissionId,
+                        SenderUserId = submission.UserId // Student là người gửi
+                    };
+
+                    await _notificationService.CreateNotificationAsync(notificationRequest);
+                }
+
+                _logger.LogInformation($"Sent regrade notifications to {instructors.Count()} instructors for request {regradeRequest.RequestId}");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error sending regrade notifications to instructors");
+                // Không throw exception để không ảnh hưởng đến flow chính
+            }
         }
     }
 }
