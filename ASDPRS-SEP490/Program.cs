@@ -15,6 +15,7 @@ using Repository.BaseRepository;
 using Repository.IBaseRepository;
 using Service;
 using Service.BackgroundJobs;
+using Service.Hubs;
 using Service.Interface;
 using Service.IService;
 using Service.Service;
@@ -131,6 +132,7 @@ builder.Services.AddHttpClient<IGenAIService, GeminiAiService>();
 builder.Services.ConfigureServiceService(builder.Configuration);
 builder.Services.AddHostedService<AssignmentStatusUpdater>(); // Background job to update assignment statuses
 builder.Services.AddScoped(typeof(IBaseRepository<>), typeof(BaseRepository<>));
+builder.Services.AddSignalR();
 
 // Configure CORS
 builder.Services.AddCors(options =>
@@ -142,7 +144,7 @@ builder.Services.AddCors(options =>
 
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins("http://localhost:5173")   // <- FE origin (update if needed)
+        policy.WithOrigins("http://localhost:5173", "https://localhost:5173")
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
@@ -240,6 +242,7 @@ builder.Services.AddAuthorization();
 var app = builder.Build();
 
 app.UseMiddleware<EnrollmentCheckMiddleware>();
+app.MapHub<NotificationHub>("/notificationHub");
 
 
 // Configure the HTTP request pipeline
