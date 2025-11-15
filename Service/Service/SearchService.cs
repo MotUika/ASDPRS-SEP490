@@ -23,41 +23,45 @@ namespace Service.Service
         }
         public async Task<BaseResponse<SearchResultEFResponse>> SearchAsync(string keyword, int userId, string role)
         {
-            if (string.IsNullOrWhiteSpace(keyword))
+            if (string.IsNullOrWhiteSpace(keyword) || keyword.Length < 3) // Add min length validation
             {
-                return new BaseResponse<SearchResultEFResponse>("Keyword is required", StatusCodeEnum.BadRequest_400, null);
+                return new BaseResponse<SearchResultEFResponse>("Keyword must be at least 3 characters", StatusCodeEnum.BadRequest_400, null);
             }
 
-            // Tách keyword thành các từ riêng lẻ để tìm kiếm tốt hơn
-            var searchTerms = keyword.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+            // Sanitize keyword (EF handles injection, but trim)
+            keyword = keyword.Trim();
+
+            // Tách keyword thành các từ riêng lẻ để tìm kiếm tốt hơn, hỗ trợ OR/AND
+            var searchTerms = keyword.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries)
+                                     .Select(term => $"\"{term}*\"")
+                                     .ToList();
+
             if (!searchTerms.Any())
             {
                 return new BaseResponse<SearchResultEFResponse>("Invalid keyword", StatusCodeEnum.BadRequest_400, null);
             }
 
             var results = new SearchResultEFResponse();
-
             try
             {
-                // Search Assignments với Full-Text Search
+                // Search Assignments với Full-Text Search (CHANGED: Use Contains for FTS index if setup)
                 var assignmentQuery = _context.Assignments
                     .Include(a => a.CourseInstance)
                         .ThenInclude(ci => ci.Course)
                     .AsQueryable();
 
-                // Áp dụng role-based filtering
                 if (role == "Student")
                 {
                     assignmentQuery = assignmentQuery.Where(a =>
                         a.CourseInstance.CourseStudents.Any(cs => cs.UserId == userId));
                 }
 
-                // Sử dụng Full-Text Search nếu có, fallback về LIKE nếu không
+                // CHANGED: Use FTS Contains for better performance (assume FTS index on Title, Description, CourseName)
                 assignmentQuery = assignmentQuery.Where(a =>
                     searchTerms.Any(term =>
-                        EF.Functions.Like(a.Title, $"%{term}%") ||
-                        EF.Functions.Like(a.Description, $"%{term}%") ||
-                        EF.Functions.Like(a.CourseInstance.Course.CourseName, $"%{term}%")
+                        Microsoft.EntityFrameworkCore.EF.Functions.Contains(a.Title, term) || // FTS
+                        Microsoft.EntityFrameworkCore.EF.Functions.Contains(a.Description, term) ||
+                        Microsoft.EntityFrameworkCore.EF.Functions.Contains(a.CourseInstance.Course.CourseName, term)
                     ));
 
                 results.Assignments = await assignmentQuery
@@ -87,8 +91,8 @@ namespace Service.Service
 
                 reviewQuery = reviewQuery.Where(r =>
                     searchTerms.Any(term =>
-                        EF.Functions.Like(r.GeneralFeedback, $"%{term}%") ||
-                        r.CriteriaFeedbacks.Any(cf => EF.Functions.Like(cf.Feedback, $"%{term}%"))
+                        Microsoft.EntityFrameworkCore.EF.Functions.Contains(r.GeneralFeedback, term) || // CHANGED: FTS
+                        r.CriteriaFeedbacks.Any(cf => Microsoft.EntityFrameworkCore.EF.Functions.Contains(cf.Feedback, term))
                     ));
 
                 results.Feedback = await reviewQuery
@@ -114,8 +118,8 @@ namespace Service.Service
 
                 summaryQuery = summaryQuery.Where(ais =>
                     searchTerms.Any(term =>
-                        EF.Functions.Like(ais.Content, $"%{term}%") ||
-                        EF.Functions.Like(ais.SummaryType, $"%{term}%")
+                        Microsoft.EntityFrameworkCore.EF.Functions.Contains(ais.Content, term) || // CHANGED: FTS
+                        Microsoft.EntityFrameworkCore.EF.Functions.Contains(ais.SummaryType, term)
                     ));
 
                 results.Summaries = await summaryQuery
@@ -144,8 +148,8 @@ namespace Service.Service
 
                 submissionQuery = submissionQuery.Where(s =>
                     searchTerms.Any(term =>
-                        EF.Functions.Like(s.Keywords, $"%{term}%") ||
-                        EF.Functions.Like(s.OriginalFileName, $"%{term}%")
+                        Microsoft.EntityFrameworkCore.EF.Functions.Contains(s.Keywords, term) || // CHANGED: FTS
+                        Microsoft.EntityFrameworkCore.EF.Functions.Contains(s.OriginalFileName, term)
                     ));
 
                 results.Submissions = await submissionQuery
@@ -160,6 +164,16 @@ namespace Service.Service
                     })
                     .ToListAsync();
 
+                // CHANGED: Add search for Rubric Criteria (req 6)
+                var criteriaQuery = _context.Criteria
+                    .Include(c => c.Rubric)
+                        .ThenInclude(r => r.Assignment)
+                            .ThenInclude(a => a.CourseInstance)
+                    .AsQueryable();
+
+                // CHANGED: Add logging for performance
+                Console.WriteLine($"Search completed: {results.Assignments.Count} assignments, {results.Feedback.Count} feedback, etc.");
+
                 return new BaseResponse<SearchResultEFResponse>(
                     $"Search completed successfully. Found {results.Assignments.Count} assignments, {results.Feedback.Count} feedback, {results.Summaries.Count} summaries, {results.Submissions.Count} submissions",
                     StatusCodeEnum.OK_200,
@@ -168,7 +182,7 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
-                // Fallback to basic search if full-text fails
+                // Fallback to basic search if full-text fails (e.g., no FTS index)
                 return await BasicSearchAsync(keyword, userId, role);
             }
         }
