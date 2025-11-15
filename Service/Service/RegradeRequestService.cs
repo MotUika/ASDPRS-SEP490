@@ -434,31 +434,46 @@ namespace Service.Service
 
         private async Task<RegradeRequestResponse> MapToRegradeRequestResponse(RegradeRequest regradeRequest)
         {
+            // Map các field cơ bản bằng AutoMapper
             var response = _mapper.Map<RegradeRequestResponse>(regradeRequest);
 
-            // Load additional data if needed
+            // Map Submission info
             if (regradeRequest.Submission != null)
             {
                 response.Submission = _mapper.Map<SubmissionInfoResponse>(regradeRequest.Submission);
 
-                if (regradeRequest.Submission.User != null)
+                // Map RequestedByStudent
+                response.RequestedByStudent = new UserInfoRegradeResponse
                 {
-                    response.RequestedByStudent = _mapper.Map<UserInfoRegradeResponse>(regradeRequest.Submission.User);
-                }
+                    UserId = regradeRequest.Submission.UserId, // Nếu UserId là int?, tự động cast
+                    FullName = regradeRequest.Submission.User != null
+                               ? $"{regradeRequest.Submission.User.FirstName} {regradeRequest.Submission.User.LastName}".Trim()
+                               : null,
+                    Email = regradeRequest.Submission.User?.Email
+                    
+                };
 
+                // Map Assignment
                 if (regradeRequest.Submission.Assignment != null)
                 {
                     response.Assignment = _mapper.Map<AssignmentInfoRegradeResponse>(regradeRequest.Submission.Assignment);
                 }
             }
 
-            if (regradeRequest.ReviewedByInstructor != null)
+            // Map ReviewedByInstructor
+            response.ReviewedByInstructor = new UserInfoRegradeResponse
             {
-                response.ReviewedByInstructor = _mapper.Map<UserInfoRegradeResponse>(regradeRequest.ReviewedByInstructor);
-            }
+                UserId = regradeRequest.ReviewedByInstructorId ?? 0, // fix nullable int
+                FullName = regradeRequest.ReviewedByInstructor != null
+                           ? $"{regradeRequest.ReviewedByInstructor.FirstName} {regradeRequest.ReviewedByInstructor.LastName}".Trim()
+                           : null,
+                Email = regradeRequest.ReviewedByInstructor?.Email
+                
+            };
 
             return response;
         }
+
 
         private async Task<int> GetTotalCountByFilter(GetRegradeRequestsByFilterRequest request)
         {
@@ -481,8 +496,8 @@ namespace Service.Service
                     );
                 }
 
-                // Chỉ cho phép status "Accepted" hoặc "Rejected"
-                if (request.Status != "Accepted" && request.Status != "Rejected")
+                // Chỉ cho phép status "Approved" hoặc "Rejected"
+                if (request.Status != "Approved" && request.Status != "Rejected")
                 {
                     _logger.LogWarning($"Invalid status for review. RequestId: {request.RequestId}, Status: {request.Status}");
                     return new BaseResponse<RegradeRequestResponse>(
@@ -492,48 +507,56 @@ namespace Service.Service
                     );
                 }
 
+                int? courseInstanceId = existingRequest.Submission?.Assignment?.CourseInstanceId;
+                if (courseInstanceId == null)
+                {
+                    _logger.LogError($"Cannot determine CourseInstanceId for RequestId: {request.RequestId}");
+                    return new BaseResponse<RegradeRequestResponse>(
+                        "Cannot determine instructor for this request",
+                        StatusCodeEnum.BadRequest_400,
+                        null
+                    );
+                }
+
+                // Lấy danh sách instructor qua repository
+                var instructors = await _courseInstructorRepository.GetByCourseInstanceIdAsync(courseInstanceId.Value);
+                if (!instructors.Any())
+                {
+                    _logger.LogError($"No instructors found for CourseInstanceId: {courseInstanceId.Value}, RequestId: {request.RequestId}");
+                    return new BaseResponse<RegradeRequestResponse>(
+                        "Cannot determine instructor for this request",
+                        StatusCodeEnum.BadRequest_400,
+                        null
+                    );
+                }
+
                 int instructorId;
                 if (request.ReviewedByUserId.HasValue)
                 {
+                    if (!instructors.Any(i => i.UserId == request.ReviewedByUserId.Value))
+                    {
+                        _logger.LogError($"ReviewedByUserId {request.ReviewedByUserId.Value} is not an instructor of CourseInstanceId: {courseInstanceId.Value}");
+                        return new BaseResponse<RegradeRequestResponse>(
+                            "ReviewedByUserId is not an instructor of this course",
+                            StatusCodeEnum.Forbidden_403,
+                            null
+                        );
+                    }
                     instructorId = request.ReviewedByUserId.Value;
                 }
                 else
                 {
-                    var courseInstructors = existingRequest.Submission?.Assignment?.CourseInstance?.CourseInstructors;
-
-                    if (courseInstructors == null)
+                    if (instructors.Count() > 1)
                     {
-                        _logger.LogError($"CourseInstructors is null for RequestId: {request.RequestId}, SubmissionId: {existingRequest.SubmissionId}");
-                        return new BaseResponse<RegradeRequestResponse>(
-                            "Cannot determine instructor for this request",
-                            StatusCodeEnum.BadRequest_400,
-                            null
-                        );
-                    }
-
-                    if (!courseInstructors.Any())
-                    {
-                        _logger.LogError($"No instructors found for CourseInstanceId: {existingRequest.Submission?.Assignment?.CourseInstanceId}, RequestId: {request.RequestId}");
-                        return new BaseResponse<RegradeRequestResponse>(
-                            "Cannot determine instructor for this request",
-                            StatusCodeEnum.BadRequest_400,
-                            null
-                        );
-                    }
-
-                    if (courseInstructors.Count > 1)
-                    {
-                        var ids = string.Join(",", courseInstructors.Select(c => c.UserId));
-                        _logger.LogError($"Multiple instructors found ({ids}) for CourseInstanceId: {existingRequest.Submission?.Assignment?.CourseInstanceId}, RequestId: {request.RequestId}");
+                        var ids = string.Join(",", instructors.Select(c => c.UserId));
+                        _logger.LogError($"Multiple instructors found ({ids}) for CourseInstanceId: {courseInstanceId.Value}, RequestId: {request.RequestId}");
                         return new BaseResponse<RegradeRequestResponse>(
                             "Multiple instructors found, cannot determine which instructor reviewed",
                             StatusCodeEnum.BadRequest_400,
                             null
                         );
                     }
-
-                    instructorId = courseInstructors.First().UserId;
-                    _logger.LogInformation($"InstructorId {instructorId} inferred for RequestId: {request.RequestId}");
+                    instructorId = instructors.First().UserId;
                 }
 
                 var updatedRequest = await _regradeRequestRepository.UpdateRequestStatusAsync(
@@ -568,10 +591,21 @@ namespace Service.Service
 
 
 
+
         public async Task<BaseResponse<RegradeRequestResponse>> CompleteRegradeRequestAsync(UpdateRegradeRequestStatusByUserRequest request)
         {
             try
             {
+                // ❌ Validate status từ client: chỉ chấp nhận Completed hoặc null
+                if (request.Status != "Completed")
+                {
+                    return new BaseResponse<RegradeRequestResponse>(
+                        "Invalid status. Only 'Completed' is allowed for this operation",
+                        StatusCodeEnum.BadRequest_400,
+                        null
+                    );
+                }
+
                 var existingRequest = await _regradeRequestRepository.GetByIdAsync(request.RequestId);
                 if (existingRequest == null)
                 {
@@ -582,24 +616,60 @@ namespace Service.Service
                     );
                 }
 
-                // Suy ra ReviewedByUserId nếu không truyền
+                // Chỉ cho phép hoàn thành khi status là Approved
+                if (!string.Equals(existingRequest.Status, "Approved", StringComparison.OrdinalIgnoreCase))
+                {
+                    return new BaseResponse<RegradeRequestResponse>(
+                        "Regrade request must be in 'Approved' status before completing",
+                        StatusCodeEnum.BadRequest_400,
+                        null
+                    );
+                }
+
+                
+
+                // Lấy CourseInstanceId
+                int? courseInstanceId = existingRequest.Submission?.Assignment?.CourseInstanceId;
+                if (courseInstanceId == null)
+                {
+                    return new BaseResponse<RegradeRequestResponse>(
+                        "Cannot determine course instance for this request",
+                        StatusCodeEnum.BadRequest_400,
+                        null
+                    );
+                }
+
+                // Lấy danh sách instructor của course
+                var instructors = await _courseInstructorRepository.GetByCourseInstanceIdAsync(courseInstanceId.Value);
+
                 int instructorId;
+
+                // Nếu client gửi ReviewedByUserId → check instructor
                 if (request.ReviewedByUserId.HasValue)
                 {
-                    instructorId = request.ReviewedByUserId.Value;
+                    int id = request.ReviewedByUserId.Value;
+                    if (!instructors.Any(i => i.UserId == id))
+                    {
+                        return new BaseResponse<RegradeRequestResponse>(
+                            "ReviewedByUserId is not an instructor of this course",
+                            StatusCodeEnum.Forbidden_403,
+                            null
+                        );
+                    }
+                    instructorId = id;
                 }
                 else
                 {
-                    var courseInstructors = existingRequest.Submission?.Assignment?.CourseInstance?.CourseInstructors;
-                    if (courseInstructors == null || !courseInstructors.Any())
+                    // Tự infer instructor duy nhất
+                    if (!instructors.Any())
                     {
                         return new BaseResponse<RegradeRequestResponse>(
-                            "Cannot determine instructor for this request",
+                            "No instructor found for this course instance",
                             StatusCodeEnum.BadRequest_400,
                             null
                         );
                     }
-                    if (courseInstructors.Count > 1)
+                    if (instructors.Count() > 1)
                     {
                         return new BaseResponse<RegradeRequestResponse>(
                             "Multiple instructors found, cannot determine which instructor completed the request",
@@ -607,9 +677,10 @@ namespace Service.Service
                             null
                         );
                     }
-                    instructorId = courseInstructors.First().UserId;
+                    instructorId = instructors.First().UserId;
                 }
 
+                // Update status luôn là "Completed"
                 var updatedRequest = await _regradeRequestRepository.UpdateRequestStatusAsync(
                     request.RequestId,
                     "Completed",
@@ -618,10 +689,9 @@ namespace Service.Service
                     request.ReviewedByUserId
                 );
 
+                // Load full request để map response
                 var fullRequest = await _regradeRequestRepository.GetByIdWithInstructorAsync(request.RequestId);
                 var response = await MapToRegradeRequestResponse(fullRequest);
-
-                _logger.LogInformation($"Regrade request completed. RequestId: {updatedRequest.RequestId}");
 
                 return new BaseResponse<RegradeRequestResponse>(
                     "Regrade request completed successfully",
@@ -639,6 +709,8 @@ namespace Service.Service
                 );
             }
         }
+
+
 
 
         private async Task SendRegradeNotificationToInstructors(RegradeRequest regradeRequest, Submission submission, Assignment assignment)
