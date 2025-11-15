@@ -1,5 +1,6 @@
 ﻿using AutoMapper;
 using BussinessObject.Models;
+using Microsoft.AspNetCore.SignalR;
 using Repository.IRepository;
 using Repository.Repository;
 using Service.IService;
@@ -12,6 +13,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+
+using Service.Hubs;
 
 namespace Service.Service
 {
@@ -26,6 +29,7 @@ namespace Service.Service
         private readonly IUserRepository _userRepository;
         private readonly ISubmissionRepository _submissionRepository;
         private readonly IEmailService _emailService;
+        private readonly IHubContext<NotificationHub> _hubContext;
 
         public NotificationService(
             INotificationRepository notificationRepository,
@@ -36,7 +40,8 @@ namespace Service.Service
             ICourseInstructorRepository courseInstructorRepository,
             IUserRepository userRepository,
             ISubmissionRepository submissionRepository,
-            IEmailService emailService)
+            IEmailService emailService,
+            IHubContext<NotificationHub> hubContext)
         {
             _notificationRepository = notificationRepository;
             _mapper = mapper;
@@ -47,6 +52,7 @@ namespace Service.Service
             _userRepository = userRepository;
             _submissionRepository = submissionRepository;
             _emailService = emailService;
+            _hubContext = hubContext;
         }
 
         public async Task<BaseResponse<NotificationResponse>> CreateNotificationAsync(CreateNotificationRequest request)
@@ -56,11 +62,18 @@ namespace Service.Service
                 var notification = _mapper.Map<Notification>(request);
                 notification.CreatedAt = DateTime.UtcNow;
                 notification.IsRead = false;
+
                 var created = await _notificationRepository.AddAsync(notification);
                 var response = _mapper.Map<NotificationResponse>(created);
 
-                // Gửi email thông báo
-                await SendNotificationEmail(created);
+                //LUÔN GỬI REAL-TIME NOTIFICATION
+                await SendRealTimeNotification(created);
+
+                //CHỈ GỬI EMAIL CHO CÁC TRƯỜNG HỢP QUAN TRỌNG
+                if (ShouldSendEmail(created))
+                {
+                    await SendNotificationEmail(created);
+                }
 
                 return new BaseResponse<NotificationResponse>("Notification created successfully", StatusCodeEnum.Created_201, response);
             }
@@ -69,7 +82,44 @@ namespace Service.Service
                 return new BaseResponse<NotificationResponse>($"Error creating notification: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
+        // PHƯƠNG THỨC XÁC ĐỊNH CÓ GỬI EMAIL HAY KHÔNG
+        private bool ShouldSendEmail(Notification notification)
+        {
+            return notification.Type switch
+            {
+                "DeadlineReminder" => true,           // Assignment sắp hết deadline
+                "GradesPublished" => true,            // Điểm đã được publish
+                "AssignmentActive" => true,           // Bài tập vừa active
+                "RegradeRequest" => true,             // Có yêu cầu chấm lại
+                "RegradeStatusUpdate" => true,        // Trạng thái regrade thay đổi
+                _ => false                           // Các loại khác chỉ gửi in-app
+            };
+        }
 
+        // GỬI REAL-TIME NOTIFICATION
+        private async Task SendRealTimeNotification(Notification notification)
+        {
+            try
+            {
+                await _hubContext.Clients.Group($"user_{notification.UserId}")
+                    .SendAsync("ReceiveNotification", new
+                    {
+                        notification.NotificationId,
+                        notification.Title,
+                        notification.Message,
+                        notification.Type,
+                        notification.CreatedAt,
+                        notification.IsRead,
+                        notification.AssignmentId,
+                        notification.SubmissionId
+                    });
+            }
+            catch (Exception ex)
+            {
+                // Log lỗi nhưng không làm fail operation chính
+                Console.WriteLine($"Error sending real-time notification: {ex.Message}");
+            }
+        }
         private async Task SendNotificationEmail(Notification notification)
         {
             try
@@ -77,19 +127,26 @@ namespace Service.Service
                 var user = await _userRepository.GetByIdAsync(notification.UserId);
                 if (user == null || string.IsNullOrEmpty(user.Email)) return;
 
-                var emailSubject = notification.Title;
+                var emailSubject = $"[ASDPRS] {notification.Title}";
                 var emailBody = $@"
-                <h1>{notification.Title}</h1>
-                <p>{notification.Message}</p>
-                <p>Sent at: {notification.CreatedAt:yyyy-MM-dd HH:mm}</p>
-                <p>Please check the system for more details.</p>
+                <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;'>
+                    <h2 style='color: #2563eb;'>{notification.Title}</h2>
+                    <div style='background: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0;'>
+                        {notification.Message}
+                    </div>
+                    <p style='color: #64748b; font-size: 14px;'>
+                        Sent: {notification.CreatedAt:dd/MM/yyyy HH:mm}
+                    </p>
+                    <p style='color: #64748b; font-size: 12px;'>
+                        This is an automated notification from FASM System.
+                    </p>
+                </div>
             ";
 
                 await _emailService.SendEmail(user.Email, emailSubject, emailBody);
             }
             catch (Exception ex)
             {
-                // Log lỗi nhưng không làm fail việc tạo notification
                 Console.WriteLine($"Error sending notification email: {ex.Message}");
             }
         }
