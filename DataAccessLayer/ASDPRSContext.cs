@@ -427,6 +427,16 @@ namespace DataAccessLayer
                 .WithMany(c => c.Curriculums)
                 .HasForeignKey(c => c.CampusId)
                 .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<Assignment>()
+                .HasIndex(a => a.Title); // Index for search
+            modelBuilder.Entity<Assignment>()
+                .HasIndex(a => a.Description);
+
+            modelBuilder.Entity<Review>()
+                .HasIndex(r => r.GeneralFeedback);
+
+            modelBuilder.Entity<AISummary>()
+                .HasIndex(ais => ais.Content);
 
             // Seed Majors
             modelBuilder.Entity<Major>().HasData(
