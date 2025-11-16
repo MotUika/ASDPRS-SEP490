@@ -17,6 +17,7 @@ namespace Service.IService
         Task<string> GenerateOverallSummaryAsync(string documentText, string context);
         Task<string> GenerateCriteriaSummaryAsync(string documentText, Criteria criteria, string context);
         Task<string> CheckSubmissionRelevanceAsync(string documentText, string context, string assignmentTitle);
+        Task<List<float>> EmbedContentAsync(string text, string model = "embedding-001");
     }
 
 }

@@ -329,5 +329,45 @@ REQUIREMENTS: Evaluate this criterion. Return format: Score: X | Summary: [conci
 
             return await SummarizeAsync(prompt, maxOutputTokens: 150);
         }
+
+        public async Task<List<float>> EmbedContentAsync(string text, string model = "embedding-001")
+        {
+            var requestBody = new
+            {
+                model = model,
+                content = new
+                {
+                    parts = new[]
+                    {
+                        new { text = text }
+                    }
+                }
+            };
+
+            var json = JsonSerializer.Serialize(requestBody);
+            var url = $"{_baseUrl}{model}:embedContent?key={_apiKey}";
+
+            var response = await _httpClient.PostAsync(
+                url,
+                new StringContent(json, Encoding.UTF8, "application/json"));
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                throw new Exception($"Gemini Embedding API error: {response.StatusCode} - {errorContent}");
+            }
+
+            var responseJson = await response.Content.ReadAsStringAsync();
+
+            // Parse embedding response (assume vector is List<float>)
+            using var doc = JsonDocument.Parse(responseJson);
+            if (doc.RootElement.TryGetProperty("embedding", out var embedding) &&
+                embedding.TryGetProperty("values", out var values))
+            {
+                return values.EnumerateArray().Select(v => v.GetSingle()).ToList();
+            }
+
+            throw new Exception("Failed to parse embedding from Gemini API");
+        }
     }
 }

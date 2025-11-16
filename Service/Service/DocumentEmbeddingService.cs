@@ -10,6 +10,8 @@ using Service.RequestAndResponse.Response.DocumentEmbedding;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace Service.Service
@@ -24,6 +26,7 @@ namespace Service.Service
         private readonly IUserRepository _userRepository;
         private readonly IReviewAssignmentRepository _reviewAssignmentRepository;
         private readonly ASDPRSContext _context;
+        private readonly IGenAIService _aiService;
 
         public DocumentEmbeddingService(
             IDocumentEmbeddingRepository documentEmbeddingRepository,
@@ -33,7 +36,8 @@ namespace Service.Service
             IAssignmentRepository assignmentRepository,
             IUserRepository userRepository,
             IReviewAssignmentRepository reviewAssignmentRepository,
-            ASDPRSContext context)
+            ASDPRSContext context,
+            IGenAIService aiService)
         {
             _documentEmbeddingRepository = documentEmbeddingRepository;
             _submissionRepository = submissionRepository;
@@ -43,6 +47,7 @@ namespace Service.Service
             _userRepository = userRepository;
             _reviewAssignmentRepository = reviewAssignmentRepository;
             _context = context;
+            _aiService = aiService;
         }
 
         public async Task<BaseResponse<DocumentEmbeddingResponse>> CreateDocumentEmbeddingAsync(CreateDocumentEmbeddingRequest request)
@@ -569,10 +574,20 @@ namespace Service.Service
 
         private byte[] GeneratePlaceholderVector(string content)
         {
-            // Simulate AI embedding (replace with actual AI service integration)
-            // For now, use a hash of the content as a placeholder
-            using var sha256 = System.Security.Cryptography.SHA256.Create();
-            return sha256.ComputeHash(System.Text.Encoding.UTF8.GetBytes(content));
+            // CHANGED: Thay placeholder bằng real embedding từ Gemini
+            try
+            {
+                var vector = _aiService.EmbedContentAsync(content).Result;
+                // Convert List<float> sang byte[] (ví dụ: serialize JSON hoặc binary)
+                return Encoding.UTF8.GetBytes(JsonSerializer.Serialize(vector)); 
+            }
+            catch (Exception ex)
+            {
+                // Fallback to placeholder nếu API fail
+                Console.WriteLine($"Gemini embedding failed: {ex.Message}. Using placeholder.");
+                using var sha256 = System.Security.Cryptography.SHA256.Create();
+                return sha256.ComputeHash(Encoding.UTF8.GetBytes(content));
+            }
         }
 
         private double CalculateCosineSimilarity(byte[] vectorA, byte[] vectorB)
