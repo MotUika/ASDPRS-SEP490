@@ -18,6 +18,9 @@ namespace Service.RequestAndResponse.Response.RegradeRequest
         public UserInfoRegradeResponse ReviewedByInstructor { get; set; }
         public AssignmentInfoRegradeResponse Assignment { get; set; }
         public GradeInfoResponse GradeInfo { get; set; }
+
+        public string CourseName { get; set; }
+        public string ClassName { get; set; }
     }
 
     public class SubmissionInfoResponse
@@ -47,6 +50,7 @@ namespace Service.RequestAndResponse.Response.RegradeRequest
         public int AssignmentId { get; set; }
         public string Title { get; set; }
         public string CourseName { get; set; }
+        public string ClassName { get; set; }
     }
 
     public class GradeInfoResponse
