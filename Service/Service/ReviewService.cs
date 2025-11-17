@@ -296,10 +296,14 @@ namespace Service.Service
         {
             try
             {
+                // Lấy tất cả review cho submission
                 var reviews = await _reviewRepository.GetBySubmissionIdAsync(submissionId);
-                var responses = new List<ReviewResponse>();
 
-                foreach (var review in reviews)
+                // Chỉ lấy Peer reviews
+                var peerReviews = reviews.Where(r => r.ReviewType == "Peer").ToList();
+
+                var responses = new List<ReviewResponse>();
+                foreach (var review in peerReviews)
                 {
                     responses.Add(await MapToResponseAsync(review));
                 }
@@ -317,6 +321,7 @@ namespace Service.Service
                     null);
             }
         }
+
 
         public async Task<BaseResponse<List<ReviewResponse>>> GetReviewsByReviewerIdAsync(int reviewerId)
         {

@@ -24,6 +24,10 @@ namespace Repository.Repository
             return await _regradeRequestDAO.GetAll()
                 .Where(r => r.SubmissionId == submissionId)
                 .Include(r => r.Submission)
+                .ThenInclude(s => s.Assignment)
+                .ThenInclude(a => a.CourseInstance)
+                    .ThenInclude(ci => ci.Course)
+                .Include(r => r.Submission)
                 .Include(r => r.ReviewedByInstructor)
                 .OrderByDescending(r => r.RequestedAt)
                 .ToListAsync();
@@ -57,16 +61,17 @@ namespace Repository.Repository
                 .Include(r => r.Submission)
                     .ThenInclude(s => s.Assignment)
                         .ThenInclude(a => a.CourseInstance)
-                            .ThenInclude(ci => ci.CourseInstructors)
+                            .ThenInclude(ci => ci.Course)           // <<< Thêm dòng này
                 .Include(r => r.Submission.User)
                 .Include(r => r.ReviewedByInstructor)
                 .Where(r =>
                     r.Submission.Assignment.CourseInstance.CourseInstructors
-                        .Any(ci => ci.UserId == userId)   // SAME LOGIC
+                        .Any(ci => ci.UserId == userId)
                 )
                 .OrderByDescending(r => r.RequestedAt)
                 .ToListAsync();
         }
+
 
 
         public async Task<IEnumerable<RegradeRequest>> GetPendingRequestsAsync()
@@ -126,6 +131,7 @@ namespace Repository.Repository
                     .ThenInclude(s => s.User)
                 .Include(r => r.Submission.Assignment)
                     .ThenInclude(a => a.CourseInstance)
+                    .ThenInclude(ci => ci.Course)
                 .FirstOrDefaultAsync(r => r.RequestId == requestId);
         }
 
