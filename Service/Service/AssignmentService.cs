@@ -906,6 +906,21 @@ namespace Service.Service
                 {
                     var tracking = await GetAssignmentReviewTrackingAsync(assignment.AssignmentId, studentId);
 
+                    var instructors = new List<InstructorInfoBasic>();
+                    if (assignment.CourseInstance?.CourseInstructors != null)
+                    {
+                        instructors = assignment.CourseInstance.CourseInstructors
+                            .Where(ci => ci.User != null)
+                            .Select(ci => new InstructorInfoBasic
+                            {
+                                UserId = ci.UserId,
+                                FullName = $"{ci.User.FirstName} {ci.User.LastName}".Trim(),
+                                Email = ci.User.Email,
+                                AvatarUrl = ci.User.AvatarUrl
+                            })
+                            .ToList();
+                    }
+
                     responses.Add(new AssignmentBasicResponse
                     {
                         AssignmentId = assignment.AssignmentId,
@@ -920,7 +935,10 @@ namespace Service.Service
                         Status = assignment.Status,
                         NumPeerReviewsRequired = assignment.NumPeerReviewsRequired,
                         PendingReviewsCount = tracking.PendingCount,
-                        CompletedReviewsCount = tracking.CompletedCount
+                        CompletedReviewsCount = tracking.CompletedCount,
+                        Instructors = instructors,
+                        CourseInstanceStartDate = assignment.CourseInstance?.StartDate ?? DateTime.MinValue,
+                        CourseInstanceEndDate = assignment.CourseInstance?.EndDate ?? DateTime.MinValue
                     });
                 }
 

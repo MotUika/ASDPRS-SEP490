@@ -23,6 +23,9 @@ namespace Service.RequestAndResponse.Response.RegradeRequest
         public string CourseName { get; set; }           // tên khóa học
         public string ClassName { get; set; }
         public GradeInfoResponse GradeInfo { get; set; }
+
+        public string CourseName { get; set; }
+        public string ClassName { get; set; }
     }
 
     public class SubmissionInfoResponse

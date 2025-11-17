@@ -21,5 +21,18 @@ namespace Service.RequestAndResponse.Response.Assignment
         public int NumPeerReviewsRequired { get; set; }
         public int PendingReviewsCount { get; set; }
         public int CompletedReviewsCount { get; set; }
+
+        public List<InstructorInfoBasic> Instructors { get; set; }
+
+        public DateTime CourseInstanceStartDate { get; set; }
+        public DateTime CourseInstanceEndDate { get; set; }
+    }
+
+    public class InstructorInfoBasic
+    {
+        public int UserId { get; set; }
+        public string FullName { get; set; }
+        public string Email { get; set; }
+        public string AvatarUrl { get; set; }
     }
 }

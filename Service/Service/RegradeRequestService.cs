@@ -439,6 +439,7 @@ namespace Service.Service
             // Load additional data if needed
             if (regradeRequest.Submission != null)
             {
+                var submission = regradeRequest.Submission;
                 response.Submission = _mapper.Map<SubmissionInfoResponse>(regradeRequest.Submission);
                 response.Submission.Score = regradeRequest.Submission.FinalScore;
 
@@ -472,7 +473,8 @@ namespace Service.Service
                     response.RequestedByStudent = _mapper.Map<UserInfoRegradeResponse>(regradeRequest.Submission.User);
                 }
 
-                if (regradeRequest.Submission.Assignment != null)
+                // Map Assignment
+                if (submission.Assignment != null)
                 {
                     var assignment = regradeRequest.Submission.Assignment;
 
@@ -499,7 +501,28 @@ namespace Service.Service
 
             }
 
-            if (regradeRequest.ReviewedByInstructor != null)
+                    var assignment = submission.Assignment;
+                    response.Assignment = _mapper.Map<AssignmentInfoRegradeResponse>(assignment);
+
+                    // Map courseName và className null-safe
+                    var courseName = assignment.CourseInstance?.Course?.CourseName ?? "Unknown Course";
+                    var className = assignment.CourseInstance?.SectionCode ?? "Unknown Section";
+
+                    response.CourseName = assignment.CourseInstance?.Course?.CourseName;
+                    response.ClassName = assignment.CourseInstance?.SectionCode;
+
+
+                    if (response.Assignment != null)
+                    {
+                        response.CourseName = assignment.CourseInstance?.Course?.CourseName;
+                        response.ClassName = assignment.CourseInstance?.SectionCode;
+
+                    }
+                }
+                }
+
+
+                if (regradeRequest.ReviewedByInstructor != null)
             {
                 response.ReviewedByInstructor = _mapper.Map<UserInfoRegradeResponse>(regradeRequest.ReviewedByInstructor);
             }
