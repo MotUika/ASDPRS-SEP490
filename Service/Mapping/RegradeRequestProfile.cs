@@ -40,6 +40,12 @@ namespace Service.Mapping
                                                ? src.CourseInstance.Course.CourseName
                                                : null)
                 );
+            CreateMap<Submission, SubmissionInfoResponse>()
+                .ForMember(dest => dest.InstructorScore, opt => opt.MapFrom(src => src.InstructorScore))
+                .ForMember(dest => dest.PeerAverageScore, opt => opt.MapFrom(src => src.PeerAverageScore))
+                .ForMember(dest => dest.FinalScore, opt => opt.MapFrom(src => src.FinalScore))
+                .ForMember(dest => dest.Feedback, opt => opt.MapFrom(src => src.Feedback))
+                .ForMember(dest => dest.GradedAt, opt => opt.MapFrom(src => src.GradedAt));
         }
     }
 }
