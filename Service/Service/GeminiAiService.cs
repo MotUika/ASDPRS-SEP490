@@ -267,32 +267,50 @@ namespace Service.Service
         }
         public async Task<string> CheckSubmissionRelevanceAsync(string documentText, string context, string assignmentTitle)
         {
-            var prompt = $@"**SUBMISSION RELEVANCE CHECK**
+            var prompt = $@"**STRICT SUBMISSION RELEVANCE CHECK**
 
-ASSIGNMENT: {assignmentTitle}
-CONTEXT: {context}
+ASSIGNMENT TITLE: {assignmentTitle}
 
-DOCUMENT CONTENT TO CHECK:
+ASSIGNMENT CONTEXT & REQUIREMENTS:
+{context}
+
+SUBMITTED DOCUMENT CONTENT:
 {documentText}
 
-REQUIREMENTS: 
-Analyze if this submission is relevant to the assignment. Check for:
-1. Content match with assignment topic
-2. Appropriate file type and content
-3. Meaningful content (not garbage/random text)
+**YOUR TASK:**
+Determine if this submission is RELEVANT to the assignment requirements.
 
-RESPONSE FORMAT:
-- If relevant: Return 'RELEVANT: [brief reason]'
-- If NOT relevant: Return 'NOT_RELEVANT: [brief reason]'
+**EVALUATION CRITERIA:**
+1. Topic Match: Does the content address the assignment topic?
+2. Content Type Match: Does it match expected format (e.g., code for programming assignments, essay for writing assignments)?
+3. Technical Requirements: Does it attempt to fulfill technical requirements mentioned?
+4. Relevance Level: Is this a genuine attempt at the assignment or completely unrelated content?
 
-Examples of NOT relevant:
-- Assignment is about Java code but submission contains unrelated text/marketing content
-- Submission contains only random characters or meaningless content
-- Completely different topic from assignment requirements
+**STRICT RULES:**
+- Programming assignments MUST contain actual code implementation
+- Analysis assignments MUST contain analysis, not just requirements/use cases
+- If submission is about a different topic entirely → NOT RELEVANT
+- If submission is just requirements/planning for a different system → NOT RELEVANT
+- Random text, lorem ipsum, or placeholder content → NOT RELEVANT
 
-Be strict but fair in evaluation.";
+**RESPONSE FORMAT (YOU MUST FOLLOW EXACTLY):**
+Return ONLY ONE of these two responses:
 
-            return await SummarizeAsync(prompt, maxOutputTokens: 300);
+RELEVANT|[Brief reason why it matches the assignment]
+
+OR
+
+NOT_RELEVANT|[Specific reason why it doesn't match - be clear about what's wrong]
+
+**EXAMPLES:**
+- Assignment about Java Banking System, submission contains Python web scraping code → NOT_RELEVANT|Wrong topic and wrong programming language
+- Assignment about OOP Banking System, submission contains use case diagrams only → NOT_RELEVANT|Missing code implementation, only contains requirements analysis
+- Assignment about Marketing Strategy, submission contains C++ code → NOT_RELEVANT|Completely different topic and content type
+- Assignment about Banking System OOP, submission contains Account class implementation → RELEVANT|Contains relevant OOP code for banking domain
+
+NOW EVALUATE THE SUBMISSION ABOVE:";
+
+            return await SummarizeAsync(prompt, maxOutputTokens: 400);
         }
         public async Task<string> GenerateOverallSummaryAsync(string documentText, string context)
         {
@@ -328,6 +346,46 @@ DOCUMENT: {documentText}
 REQUIREMENTS: Evaluate this criterion. Return format: Score: X | Summary: [concise summary max 30 words]. Keep without line breaks. Score from 0 to {criteria.MaxScore}.";
 
             return await SummarizeAsync(prompt, maxOutputTokens: 150);
+        }
+
+        public async Task<List<float>> EmbedContentAsync(string text, string model = "embedding-001")
+        {
+            var requestBody = new
+            {
+                model = model,
+                content = new
+                {
+                    parts = new[]
+                    {
+                        new { text = text }
+                    }
+                }
+            };
+
+            var json = JsonSerializer.Serialize(requestBody);
+            var url = $"{_baseUrl}{model}:embedContent?key={_apiKey}";
+
+            var response = await _httpClient.PostAsync(
+                url,
+                new StringContent(json, Encoding.UTF8, "application/json"));
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                throw new Exception($"Gemini Embedding API error: {response.StatusCode} - {errorContent}");
+            }
+
+            var responseJson = await response.Content.ReadAsStringAsync();
+
+            // Parse embedding response (assume vector is List<float>)
+            using var doc = JsonDocument.Parse(responseJson);
+            if (doc.RootElement.TryGetProperty("embedding", out var embedding) &&
+                embedding.TryGetProperty("values", out var values))
+            {
+                return values.EnumerateArray().Select(v => v.GetSingle()).ToList();
+            }
+
+            throw new Exception("Failed to parse embedding from Gemini API");
         }
     }
 }

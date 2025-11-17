@@ -549,6 +549,28 @@ namespace Service.Service
                 var courseStudents = await _courseStudentRepository.GetByUserIdAsync(studentId);
                 var responses = new List<CourseStudentResponse>();
 
+                // Lấy tất cả courseInstanceIds để query hiệu quả
+                var courseInstanceIds = courseStudents.Select(cs => cs.CourseInstanceId).Distinct().ToList();
+
+                // Lấy thông tin số lượng sinh viên cho mỗi lớp
+                var studentCounts = await _context.CourseStudents
+                    .Where(cs => courseInstanceIds.Contains(cs.CourseInstanceId) && cs.Status == "Enrolled")
+                    .GroupBy(cs => cs.CourseInstanceId)
+                    .Select(g => new { CourseInstanceId = g.Key, Count = g.Count() })
+                    .ToDictionaryAsync(x => x.CourseInstanceId, x => x.Count);
+
+                // Lấy thông tin instructor cho mỗi lớp
+                var instructors = await _context.CourseInstructors
+                    .Where(ci => courseInstanceIds.Contains(ci.CourseInstanceId))
+                    .Include(ci => ci.User)
+                    .GroupBy(ci => ci.CourseInstanceId)
+                    .Select(g => new
+                    {
+                        CourseInstanceId = g.Key,
+                        InstructorNames = g.Select(ci => $"{ci.User.FirstName} {ci.User.LastName}".Trim()).ToList()
+                    })
+                    .ToDictionaryAsync(x => x.CourseInstanceId, x => x.InstructorNames);
+
                 foreach (var cs in courseStudents)
                 {
                     var courseInstance = await _courseInstanceRepository.GetByIdAsync(cs.CourseInstanceId);
@@ -558,7 +580,14 @@ namespace Service.Service
                     {
                         changedByUser = await _userRepository.GetByIdAsync(cs.ChangedByUserId.Value);
                     }
-                    responses.Add(MapToResponse(cs, courseInstance, user, changedByUser));
+
+                    var response = MapToResponse(cs, courseInstance, user, changedByUser);
+
+                    // Thêm thông tin số lượng sinh viên và instructor
+                    response.StudentCount = studentCounts.GetValueOrDefault(cs.CourseInstanceId, 0);
+                    response.InstructorNames = instructors.GetValueOrDefault(cs.CourseInstanceId, new List<string>());
+
+                    responses.Add(response);
                 }
 
                 return new BaseResponse<List<CourseStudentResponse>>(
@@ -574,7 +603,6 @@ namespace Service.Service
                     null);
             }
         }
-
         public async Task<BaseResponse<CourseStudentResponse>> UpdateCourseStudentStatusAsync(int courseStudentId, string status, int changedByUserId)
         {
             try
@@ -957,7 +985,9 @@ namespace Service.Service
                 IsPassed = courseStudent.IsPassed,
                 StatusChangedAt = courseStudent.StatusChangedAt,
                 ChangedByUserId = courseStudent.ChangedByUserId,
-                ChangedByUserName = changedByUser?.UserName ?? string.Empty
+                ChangedByUserName = changedByUser?.UserName ?? string.Empty,
+                StudentCount = 0,
+                InstructorNames = new List<string>()
             };
         }
     }

@@ -22,6 +22,7 @@ namespace Service.RequestAndResponse.Response.RegradeRequest
         public decimal? UpdatedScore { get; set; }       // điểm sau khi regrade
         public string CourseName { get; set; }           // tên khóa học
         public string ClassName { get; set; }
+        public GradeInfoResponse GradeInfo { get; set; }
     }
 
     public class SubmissionInfoResponse
@@ -31,6 +32,12 @@ namespace Service.RequestAndResponse.Response.RegradeRequest
         public string FileName { get; set; }
         public DateTime SubmittedAt { get; set; }
         public string Status { get; set; }
+
+        public decimal? InstructorScore { get; set; }
+        public decimal? PeerAverageScore { get; set; }
+        public decimal? FinalScore { get; set; }
+        public string Feedback { get; set; }
+        public DateTime? GradedAt { get; set; }
     }
 
     public class UserInfoRegradeResponse
@@ -47,5 +54,16 @@ namespace Service.RequestAndResponse.Response.RegradeRequest
         public string Title { get; set; }
         public string CourseName { get; set; }
         public string ClassName { get; set; }
+    }
+
+    public class GradeInfoResponse
+    {
+        public decimal? FinalScoreAfterRegrade { get; set; }
+        public decimal? InstructorScore { get; set; }
+        public decimal? PeerAverageScore { get; set; }
+        public string InstructorFeedback { get; set; }
+        public DateTime? GradedAt { get; set; }
+        public bool HasBeenRegraded { get; set; }
+        public string RegradeStatus { get; set; }
     }
 }
