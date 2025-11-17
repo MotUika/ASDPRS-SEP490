@@ -17,11 +17,6 @@ namespace Service.RequestAndResponse.Response.RegradeRequest
         public UserInfoRegradeResponse RequestedByStudent { get; set; }
         public UserInfoRegradeResponse ReviewedByInstructor { get; set; }
         public AssignmentInfoRegradeResponse Assignment { get; set; }
-
-        public decimal? CurrentScore { get; set; }       // điểm hiện tại trước khi regrade
-        public decimal? UpdatedScore { get; set; }       // điểm sau khi regrade
-        public string CourseName { get; set; }           // tên khóa học
-        public string ClassName { get; set; }
         public GradeInfoResponse GradeInfo { get; set; }
 
         public string CourseName { get; set; }
@@ -31,7 +26,6 @@ namespace Service.RequestAndResponse.Response.RegradeRequest
     public class SubmissionInfoResponse
     {
         public int SubmissionId { get; set; }
-        public decimal? Score { get; set; }
         public string FileName { get; set; }
         public DateTime SubmittedAt { get; set; }
         public string Status { get; set; }

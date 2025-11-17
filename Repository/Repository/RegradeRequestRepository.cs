@@ -61,8 +61,7 @@ namespace Repository.Repository
                 .Include(r => r.Submission)
                     .ThenInclude(s => s.Assignment)
                         .ThenInclude(a => a.CourseInstance)
-                            .ThenInclude(ci => ci.Course)           // <<< Thêm dòng này
-                            .ThenInclude(ci => ci.Course)             // include Course để lấy CourseName
+                            .ThenInclude(ci => ci.Course)           
                 .Include(r => r.Submission)
                     .ThenInclude(s => s.Assignment)
                         .ThenInclude(a => a.CourseInstance)
