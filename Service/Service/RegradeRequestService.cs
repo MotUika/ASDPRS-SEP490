@@ -61,6 +61,14 @@ namespace Service.Service
                         null);
                 }
 
+                if (submission.FileUrl == "Not Submitted" || submission.OriginalFileName == "Not Submitted" || submission.FileName == "Not Submitted")
+                {
+                    return new BaseResponse<RegradeRequestResponse>(
+                        "Cannot request regrade for non-submitted assignments",
+                        StatusCodeEnum.BadRequest_400,
+                        null);
+                }
+
                 var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
                 if (assignment == null || assignment.Status != "GradesPublished")
                 {
