@@ -439,6 +439,7 @@ namespace Service.Service
             // Load additional data if needed
             if (regradeRequest.Submission != null)
             {
+                var submission = regradeRequest.Submission;
                 response.Submission = _mapper.Map<SubmissionInfoResponse>(regradeRequest.Submission);
 
                 response.Submission.InstructorScore = regradeRequest.Submission.InstructorScore;
@@ -463,13 +464,30 @@ namespace Service.Service
                     response.RequestedByStudent = _mapper.Map<UserInfoRegradeResponse>(regradeRequest.Submission.User);
                 }
 
-                if (regradeRequest.Submission.Assignment != null)
+                // Map Assignment
+                if (submission.Assignment != null)
                 {
-                    response.Assignment = _mapper.Map<AssignmentInfoRegradeResponse>(regradeRequest.Submission.Assignment);
-                }
-            }
+                    var assignment = submission.Assignment;
+                    response.Assignment = _mapper.Map<AssignmentInfoRegradeResponse>(assignment);
 
-            if (regradeRequest.ReviewedByInstructor != null)
+                    // Map courseName và className null-safe
+                    var courseName = assignment.CourseInstance?.Course?.CourseName ?? "Unknown Course";
+                    var className = assignment.CourseInstance?.SectionCode ?? "Unknown Section";
+
+                    response.CourseName = assignment.CourseInstance?.Course?.CourseName;
+                    response.ClassName = assignment.CourseInstance?.SectionCode;
+
+
+                    if (response.Assignment != null)
+                    {
+                        response.CourseName = assignment.CourseInstance?.Course?.CourseName;
+                        response.ClassName = assignment.CourseInstance?.SectionCode;
+
+                    }
+                }
+                }
+
+                if (regradeRequest.ReviewedByInstructor != null)
             {
                 response.ReviewedByInstructor = _mapper.Map<UserInfoRegradeResponse>(regradeRequest.ReviewedByInstructor);
             }

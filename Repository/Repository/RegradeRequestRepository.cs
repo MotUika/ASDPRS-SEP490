@@ -57,16 +57,23 @@ namespace Repository.Repository
                 .Include(r => r.Submission)
                     .ThenInclude(s => s.Assignment)
                         .ThenInclude(a => a.CourseInstance)
-                            .ThenInclude(ci => ci.CourseInstructors)
+                            .ThenInclude(ci => ci.Course)             // include Course để lấy CourseName
+                .Include(r => r.Submission)
+                    .ThenInclude(s => s.Assignment)
+                        .ThenInclude(a => a.CourseInstance)
+                            .ThenInclude(ci => ci.CourseInstructors) // include CourseInstructors
                 .Include(r => r.Submission.User)
                 .Include(r => r.ReviewedByInstructor)
                 .Where(r =>
+                    r.Submission.Assignment.CourseInstance != null &&
+                    r.Submission.Assignment.CourseInstance.CourseInstructors != null &&
                     r.Submission.Assignment.CourseInstance.CourseInstructors
-                        .Any(ci => ci.UserId == userId)   // SAME LOGIC
+                        .Any(ci => ci.UserId == userId)
                 )
                 .OrderByDescending(r => r.RequestedAt)
                 .ToListAsync();
         }
+
 
 
         public async Task<IEnumerable<RegradeRequest>> GetPendingRequestsAsync()
