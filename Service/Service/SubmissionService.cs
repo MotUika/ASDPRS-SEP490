@@ -879,7 +879,6 @@ namespace Service.Service
         {
             try
             {
-                // 🟩 Gọi hàm có sẵn để lấy thông tin submission chi tiết
                 var request = new GetSubmissionByIdRequest
                 {
                     SubmissionId = submissionId,
@@ -889,27 +888,36 @@ namespace Service.Service
 
                 var baseResponse = await GetSubmissionByIdAsync(request);
 
-                // Nếu không tìm thấy submission thì trả về luôn
                 if (baseResponse?.Data == null)
                     return baseResponse;
 
                 var response = baseResponse.Data;
 
-                // 🟩 Truy vấn Criteria Feedbacks theo submissionId
+                // 🟢 Bổ sung Criteria Feedbacks
                 var feedbacks = await _context.CriteriaFeedbacks
                     .Where(cf => cf.Review.ReviewAssignment.SubmissionId == submissionId)
                     .Select(cf => new SubmissionCriteriaFeedbackResponse
                     {
                         CriteriaId = cf.CriteriaId,
                         ScoreAwarded = cf.ScoreAwarded,
-                        Feedback = cf.Feedback
+                        Feedback = cf.Feedback ?? string.Empty  // tránh null trong feedback chi tiết
                     })
                     .ToListAsync();
 
-                // 🟩 Gán dữ liệu vào response
                 response.CriteriaFeedbacks = feedbacks;
 
-                // 🟩 Trả về response hoàn chỉnh
+                // 🟢 Quan trọng: Đảm bảo các trường KHÔNG BAO GIỜ null khi trả về client
+                response.InstructorScore ??= 0;
+                response.PeerAverageScore ??= 0;
+                response.FinalScore ??= 0;
+                response.Feedback ??= string.Empty;
+
+                // Đảm bảo các List không null (dù đã khởi tạo = new(), nhưng phòng trường hợp bị override)
+                response.CriteriaFeedbacks ??= new List<SubmissionCriteriaFeedbackResponse>();
+                response.ReviewAssignments ??= new List<SubmissionReviewAssignmentResponse>();
+                response.AISummaries ??= new List<AISummaryResponse>();
+                response.RegradeRequests ??= new List<RegradeRequestSubmissionResponse>();
+
                 return new BaseResponse<SubmissionResponse>(
                     "Submission with detailed feedback retrieved successfully",
                     StatusCodeEnum.OK_200,
