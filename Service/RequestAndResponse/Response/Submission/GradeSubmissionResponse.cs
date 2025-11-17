@@ -32,6 +32,7 @@ namespace Service.RequestAndResponse.Response.Submission
 
         // 📘 Trạng thái bài nộp
         public string? Status { get; set; }
+        public string? RegradeRequestStatus { get; set; }
         public bool IsPublic { get; set; }
 
         // 👨‍🎓 Thông tin sinh viên & bài tập
