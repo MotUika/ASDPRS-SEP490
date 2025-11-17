@@ -70,6 +70,13 @@ namespace Service.Service
                 }
 
                 var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
+                if (assignment.Status == "Cancelled")
+                {
+                    return new BaseResponse<RegradeRequestResponse>(
+                        "Cannot request regrade for cancelled assignments",
+                        StatusCodeEnum.BadRequest_400,
+                        null);
+                }
                 if (assignment == null || assignment.Status != "GradesPublished")
                 {
                     return new BaseResponse<RegradeRequestResponse>(
