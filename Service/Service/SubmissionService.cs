@@ -1184,33 +1184,33 @@ namespace Service.Service
                 if (assignment == null)
                     return new BaseResponse<GradeSubmissionResponse>("Assignment not found", StatusCodeEnum.NotFound_404, null);
                 // 2.5️⃣ Kiểm tra điều kiện regrade
-                if (submission.Status == "Graded")
-                {
-                    // ❗ BẮT BUỘC assignment phải ở trạng thái GradePublish mới được regrade
-                    if (!string.Equals(assignment.Status, "GradePublish", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return new BaseResponse<GradeSubmissionResponse>(
-                            "You cannot regrade this submission because the assignment is not in GradePublish status.",
-                            StatusCodeEnum.BadRequest_400,
-                            null
-                        );
-                    }
+                //if (submission.Status == "Graded")
+                //{
+                //    // ❗ BẮT BUỘC assignment phải ở trạng thái GradePublish mới được regrade
+                //    if (!string.Equals(assignment.Status, "GradePublish", StringComparison.OrdinalIgnoreCase))
+                //    {
+                //        return new BaseResponse<GradeSubmissionResponse>(
+                //            "You cannot regrade this submission because the assignment is not in GradePublish status.",
+                //            StatusCodeEnum.BadRequest_400,
+                //            null
+                //        );
+                //    }
 
-                    // ❗ Phải có yêu cầu phúc khảo APPROVED mới cho chấm lại
-                    var latestRegradeRequest = await _context.RegradeRequests
-                        .Where(r => r.SubmissionId == submission.SubmissionId)
-                        .OrderByDescending(r => r.RequestedAt)
-                        .FirstOrDefaultAsync();
+                //    // ❗ Phải có yêu cầu phúc khảo APPROVED mới cho chấm lại
+                //    var latestRegradeRequest = await _context.RegradeRequests
+                //        .Where(r => r.SubmissionId == submission.SubmissionId)
+                //        .OrderByDescending(r => r.RequestedAt)
+                //        .FirstOrDefaultAsync();
 
-                    if (latestRegradeRequest == null || latestRegradeRequest.Status != "Approved")
-                    {
-                        return new BaseResponse<GradeSubmissionResponse>(
-                            "You cannot regrade this submission because there is no approved regrade request.",
-                            StatusCodeEnum.BadRequest_400,
-                            null
-                        );
-                    }
-                }
+                //    if (latestRegradeRequest == null || latestRegradeRequest.Status != "Approved")
+                //    {
+                //        return new BaseResponse<GradeSubmissionResponse>(
+                //            "You cannot regrade this submission because there is no approved regrade request.",
+                //            StatusCodeEnum.BadRequest_400,
+                //            null
+                //        );
+                //    }
+                //}
 
 
                 decimal instructorScore = 0m;
