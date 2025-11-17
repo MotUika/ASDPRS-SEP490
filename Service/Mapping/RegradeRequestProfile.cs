@@ -14,6 +14,7 @@ namespace Service.Mapping
                 {
                     UserId = src.Submission.UserId,
                     FullName = src.Submission.User != null ? $"{src.Submission.User.FirstName} {src.Submission.User.LastName}".Trim() : null,
+                    StudentCode = src.Submission.User.StudentCode,
                     Email = src.Submission.User.Email
                 }))
                 .ForMember(dest => dest.ReviewedByInstructor, opt => opt.MapFrom(src => new UserInfoRegradeResponse
