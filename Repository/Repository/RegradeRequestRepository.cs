@@ -24,6 +24,10 @@ namespace Repository.Repository
             return await _regradeRequestDAO.GetAll()
                 .Where(r => r.SubmissionId == submissionId)
                 .Include(r => r.Submission)
+                .ThenInclude(s => s.Assignment)
+                .ThenInclude(a => a.CourseInstance)
+                    .ThenInclude(ci => ci.Course)
+                .Include(r => r.Submission)
                 .Include(r => r.ReviewedByInstructor)
                 .OrderByDescending(r => r.RequestedAt)
                 .ToListAsync();
@@ -57,6 +61,7 @@ namespace Repository.Repository
                 .Include(r => r.Submission)
                     .ThenInclude(s => s.Assignment)
                         .ThenInclude(a => a.CourseInstance)
+                            .ThenInclude(ci => ci.Course)           // <<< Thêm dòng này
                             .ThenInclude(ci => ci.Course)             // include Course để lấy CourseName
                 .Include(r => r.Submission)
                     .ThenInclude(s => s.Assignment)
@@ -133,6 +138,7 @@ namespace Repository.Repository
                     .ThenInclude(s => s.User)
                 .Include(r => r.Submission.Assignment)
                     .ThenInclude(a => a.CourseInstance)
+                    .ThenInclude(ci => ci.Course)
                 .FirstOrDefaultAsync(r => r.RequestId == requestId);
         }
 

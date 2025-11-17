@@ -166,10 +166,10 @@ namespace Service.Service
                 }
 
                 // Validate NumPeerReviewsRequired
-                if (request.NumPeerReviewsRequired < 0 || request.NumPeerReviewsRequired > 10)
+                if (request.NumPeerReviewsRequired < 1 || request.NumPeerReviewsRequired > 10)
                 {
                     return new BaseResponse<AssignmentResponse>(
-                        "NumPeerReviewsRequired must be between 0 and 10",
+                        "NumPeerReviewsRequired must be between 1 and 10",
                         StatusCodeEnum.BadRequest_400,
                         null
                     );

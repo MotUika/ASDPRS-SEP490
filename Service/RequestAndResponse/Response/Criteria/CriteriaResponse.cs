@@ -8,6 +8,7 @@
         public int? CriteriaTemplateId { get; set; }
         public string CriteriaTemplateTitle { get; set; }
         public string Title { get; set; }
+        public string AssignmentTitle { get; set; }
         public string Description { get; set; }
         public int Weight { get; set; }
         public decimal MaxScore { get; set; }

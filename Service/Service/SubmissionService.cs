@@ -689,7 +689,7 @@ namespace Service.Service
             try
             {
                 // 1. Lấy Assignment
-                var assignment = await _assignmentRepository.GetByIdAsync(assignmentId);
+                var assignment = await _assignmentRepository.GetAssignmentWithRubricAsync(assignmentId);
                 if (assignment == null)
                 {
                     return new BaseResponse<SubmissionListResponse>(
@@ -1174,22 +1174,22 @@ namespace Service.Service
         {
             try
             {
-                // 1️⃣ Kiểm tra submission
+                // 1️⃣ Lấy submission
                 var submission = await _submissionRepository.GetByIdAsync(request.SubmissionId);
                 if (submission == null)
                     return new BaseResponse<GradeSubmissionResponse>("Submission not found", StatusCodeEnum.NotFound_404, null);
 
-                // 2️⃣ Kiểm tra assignment
+                // 2️⃣ Lấy assignment
                 var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
                 if (assignment == null)
                     return new BaseResponse<GradeSubmissionResponse>("Assignment not found", StatusCodeEnum.NotFound_404, null);
 
-                decimal instructorScore = 0;
+                decimal instructorScore = 0m;
 
-                // 3️⃣ Nếu giảng viên chấm theo từng tiêu chí (rubric)
+                // 3️⃣ Xử lý chấm theo tiêu chí (rubric)
                 if (request.CriteriaFeedbacks != null && request.CriteriaFeedbacks.Any())
                 {
-                    // Xóa feedback cũ của instructor (nếu có)
+                    // Xóa feedback cũ của instructor
                     var oldInstructorReviews = await _context.ReviewAssignments
                         .Where(ra => ra.SubmissionId == submission.SubmissionId)
                         .SelectMany(ra => ra.Reviews)
@@ -1206,9 +1206,11 @@ namespace Service.Service
                         _context.Reviews.Remove(oldReview);
                     }
 
-                    // Tạo ReviewAssignment mới cho instructor nếu chưa có
+                    // Tạo ReviewAssignment mới nếu chưa có
                     var instructorReviewAssignment = await _context.ReviewAssignments
-                        .FirstOrDefaultAsync(ra => ra.SubmissionId == submission.SubmissionId && ra.ReviewerUserId == request.InstructorId && ra.IsAIReview == false);
+                        .FirstOrDefaultAsync(ra => ra.SubmissionId == submission.SubmissionId
+                                                   && ra.ReviewerUserId == request.InstructorId
+                                                   && !ra.IsAIReview);
 
                     if (instructorReviewAssignment == null)
                     {
@@ -1238,12 +1240,22 @@ namespace Service.Service
                     _context.Reviews.Add(review);
                     await _context.SaveChangesAsync();
 
-                    // Tính tổng điểm có trọng số
-                    decimal totalScore = 0;
-                    decimal totalWeight = 0;
+                    // Tính tổng điểm theo trọng số
+                    decimal totalScore = 0m;
+                    decimal totalWeight = 0m;
 
                     foreach (var cf in request.CriteriaFeedbacks)
                     {
+                        // ✅ Validate score
+                        if (cf.Score < 0 || cf.Score > 10)
+                        {
+                            return new BaseResponse<GradeSubmissionResponse>(
+                                $"Score for criteria {cf.CriteriaId} must be between 0 and 10",
+                                StatusCodeEnum.BadRequest_400,
+                                null
+                            );
+                        }
+
                         var criteria = await _context.Criteria.FirstOrDefaultAsync(c => c.CriteriaId == cf.CriteriaId);
                         if (criteria == null) continue;
 
@@ -1262,15 +1274,16 @@ namespace Service.Service
                         _context.CriteriaFeedbacks.Add(criteriaFeedback);
                     }
 
-                    instructorScore = totalWeight > 0 ? Math.Round(totalScore / totalWeight, 2) : 0;
+                    instructorScore = totalWeight > 0 ? Math.Round(totalScore / totalWeight, 2) : 0m;
                     review.OverallScore = instructorScore;
                     await _context.SaveChangesAsync();
                 }
                 else
                 {
-                    // Nếu không chấm theo tiêu chí → chỉ lưu feedback tổng quát
+                    // Không chấm theo tiêu chí → chỉ lưu feedback tổng quát
                     var reviewAssignment = await _context.ReviewAssignments
-                        .FirstOrDefaultAsync(ra => ra.SubmissionId == submission.SubmissionId && ra.ReviewerUserId == request.InstructorId);
+                        .FirstOrDefaultAsync(ra => ra.SubmissionId == submission.SubmissionId
+                                                   && ra.ReviewerUserId == request.InstructorId);
 
                     if (reviewAssignment == null)
                     {
@@ -1300,37 +1313,78 @@ namespace Service.Service
                     await _context.SaveChangesAsync();
                 }
 
-                // 4️⃣ Lấy điểm trung bình từ peer review
+                // 4️⃣ Lấy điểm peer trung bình
                 var peerAverage = await _reviewAssignmentRepository.GetPeerAverageScoreBySubmissionIdAsync(submission.SubmissionId);
-                var peerAvg = peerAverage ?? 0;
+                var peerAvg = peerAverage ?? 0m;
 
                 // 5️⃣ Chuẩn hóa trọng số
                 var instructorWeight = assignment.InstructorWeight;
                 var peerWeight = assignment.PeerWeight;
-                if (instructorWeight == 0 && peerWeight == 0)
+
+                if (instructorWeight + peerWeight == 0)
                 {
-                    instructorWeight = 50.0m;
-                    peerWeight = 50.0m;
+                    instructorWeight = 50m;
+                    peerWeight = 50m;
                 }
-                if (instructorWeight + peerWeight != 100)
+                else if (instructorWeight + peerWeight != 100m)
                 {
                     var total = instructorWeight + peerWeight;
-                    instructorWeight = (instructorWeight / total) * 100;
-                    peerWeight = (peerWeight / total) * 100;
+                    instructorWeight = (instructorWeight / total) * 100m;
+                    peerWeight = (peerWeight / total) * 100m;
                 }
 
                 decimal instructorScoreNormalized = instructorScore;
-                decimal peerScoreNormalized = peerAvg / 10;
+                decimal peerScoreNormalized = peerAvg / 10m;
 
-                // 6️⃣ Tính điểm cuối cùng
-                var finalScore = Math.Round(
-            (instructorScoreNormalized * instructorWeight / 100) +
-            (peerScoreNormalized * peerWeight / 100), 2 );
+                // 6️⃣ Tính FinalScore trước penalty
+                decimal finalScore = Math.Round(
+                    (instructorScoreNormalized * instructorWeight / 100m) +
+                    (peerScoreNormalized * peerWeight / 100m),
+                    2);
+
+                decimal finalScoreBeforePenalty = finalScore;
+
+                // === Missing Review Penalty ===
+                int requiredReviews = assignment.NumPeerReviewsRequired;
+                int missingReviews = 0;
+                decimal missingReviewPenaltyPerReview = assignment.MissingReviewPenalty ?? 0m;
+                decimal missingReviewPenaltyTotal = 0m;
+
+                if (requiredReviews > 0)
+                {
+                    int completedReviews = await _context.ReviewAssignments
+                    .Where(ra => ra.SubmissionId == submission.SubmissionId)
+                    .SelectMany(ra => ra.Reviews)
+                    .CountAsync(r => r.ReviewedAt.HasValue);
+
+
+                    missingReviews = Math.Max(0, requiredReviews - completedReviews);
+
+                    if (missingReviews > 0 && missingReviewPenaltyPerReview > 0)
+                    {
+                        missingReviewPenaltyTotal = missingReviews * missingReviewPenaltyPerReview;
+                        finalScore = Math.Max(0m, finalScore - missingReviewPenaltyTotal);
+
+                        _logger.LogInformation(
+                            "Penalty applied: submission {SubId}, missing {Missing}, perReview {Per}, total {Total}, before {Before}, after {After}",
+                            submission.SubmissionId,
+                            missingReviews,
+                            missingReviewPenaltyPerReview,
+                            missingReviewPenaltyTotal,
+                            finalScoreBeforePenalty,
+                            finalScore
+                        );
+                    }
+                }
 
                 // 7️⃣ Cập nhật submission
                 submission.InstructorScore = instructorScore;
                 submission.PeerAverageScore = peerScoreNormalized;
                 submission.FinalScore = finalScore;
+                //submission.FinalScoreBeforePenalty = finalScoreBeforePenalty;
+                //submission.MissingReviews = missingReviews;
+                //submission.MissingReviewPenaltyPerReview = missingReviewPenaltyPerReview;
+                //submission.MissingReviewPenaltyTotal = missingReviewPenaltyTotal;
                 submission.Feedback = request.Feedback ?? submission.Feedback;
                 submission.GradedAt = DateTime.UtcNow;
                 submission.Status = "Graded";
@@ -1348,6 +1402,10 @@ namespace Service.Service
                     InstructorScore = submission.InstructorScore,
                     PeerAverageScore = submission.PeerAverageScore,
                     FinalScore = submission.FinalScore,
+                    FinalScoreBeforePenalty = finalScoreBeforePenalty,
+                    MissingReviews = missingReviews,
+                    MissingReviewPenaltyPerReview = missingReviewPenaltyPerReview,
+                    MissingReviewPenaltyTotal = missingReviewPenaltyTotal,
                     Feedback = submission.Feedback,
                     GradedAt = submission.GradedAt,
                     FileUrl = submission.FileUrl,
@@ -1376,6 +1434,8 @@ namespace Service.Service
                 );
             }
         }
+
+
 
 
 
@@ -1885,6 +1945,7 @@ public async Task<BaseResponse<MyScoreDetailsResponse>> GetMyScoreDetailsAsync(i
                             CourseName = submission.Assignment?.CourseInstance?.Course?.CourseName,
                             ClassName = submission.Assignment?.CourseInstance?.SectionCode,
                             AssignmentTitle = submission.Assignment?.Title,
+                            AssignmentStatus = submission.Assignment?.Status,
                             PeerAverageScore = submission.PeerAverageScore ?? 0,
                             InstructorScore = submission.InstructorScore ?? 0,
                             FinalScore = submission.FinalScore ?? 0,
@@ -1911,6 +1972,7 @@ public async Task<BaseResponse<MyScoreDetailsResponse>> GetMyScoreDetailsAsync(i
                             CourseName = assignment?.CourseInstance?.Course?.CourseName,
                             ClassName = assignment?.CourseInstance?.SectionCode,
                             AssignmentTitle = assignment?.Title,
+                            AssignmentStatus = assignment?.Status,
                             PeerAverageScore = 0,
                             InstructorScore = 0,
                             FinalScore = 0,

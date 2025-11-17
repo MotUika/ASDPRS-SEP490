@@ -14,6 +14,7 @@ namespace Service.RequestAndResponse.Response.Submission
         public string? CourseName { get; set; }
         public string? ClassName { get; set; }
         public string? AssignmentTitle { get; set; }
+        public string AssignmentStatus { get; set; }
         public DateTime SubmittedAt { get; set; }
 
         public decimal? PeerAverageScore { get; set; }

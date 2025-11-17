@@ -441,6 +441,15 @@ namespace Service.Service
             {
                 var submission = regradeRequest.Submission;
                 response.Submission = _mapper.Map<SubmissionInfoResponse>(regradeRequest.Submission);
+                response.Submission.Score = regradeRequest.Submission.FinalScore;
+
+                // Map điểm hiện tại (FinalScore) và điểm mới (InstructorScore)
+                // Điểm trước regrade
+                response.CurrentScore = regradeRequest.Submission.FinalScore;
+
+                // Điểm sau regrade (nếu đã regrade, bằng FinalScore)
+                response.UpdatedScore = regradeRequest.Submission.FinalScore;
+
 
                 response.Submission.InstructorScore = regradeRequest.Submission.InstructorScore;
                 response.Submission.PeerAverageScore = regradeRequest.Submission.PeerAverageScore;
@@ -467,6 +476,31 @@ namespace Service.Service
                 // Map Assignment
                 if (submission.Assignment != null)
                 {
+                    var assignment = regradeRequest.Submission.Assignment;
+
+                    // Map bằng AutoMapper
+                    response.Assignment = _mapper.Map<AssignmentInfoRegradeResponse>(assignment);
+
+                    // Lấy CourseName và ClassName null-safe
+                    var courseName = assignment.CourseInstance?.Course?.CourseName ?? "Unknown Course";
+                    var className = assignment.CourseInstance?.SectionCode ?? "Unknown Section";
+
+                    // Map cho root-level
+                    response.CourseName = courseName;
+                    response.ClassName = className;
+
+                    // Map cho AssignmentInfoRegradeResponse
+                    if (response.Assignment != null)
+                    {
+                        response.Assignment.CourseName = assignment.CourseInstance?.Course?.CourseName;
+                        response.Assignment.ClassName = assignment.CourseInstance?.SectionCode; 
+
+                    }
+                }
+
+
+            }
+
                     var assignment = submission.Assignment;
                     response.Assignment = _mapper.Map<AssignmentInfoRegradeResponse>(assignment);
 
@@ -486,6 +520,7 @@ namespace Service.Service
                     }
                 }
                 }
+
 
                 if (regradeRequest.ReviewedByInstructor != null)
             {
@@ -617,15 +652,6 @@ namespace Service.Service
         {
             try
             {
-                // ❌ Validate status từ client: chỉ chấp nhận Completed hoặc null
-                if (request.Status != "Completed")
-                {
-                    return new BaseResponse<RegradeRequestResponse>(
-                        "Invalid status. Only 'Completed' is allowed for this operation",
-                        StatusCodeEnum.BadRequest_400,
-                        null
-                    );
-                }
 
                 var existingRequest = await _regradeRequestRepository.GetByIdAsync(request.RequestId);
                 if (existingRequest == null)

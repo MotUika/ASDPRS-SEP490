@@ -13,6 +13,14 @@ namespace Service.RequestAndResponse.Response.Submission
         public decimal? PeerAverageScore { get; set; }
         public decimal? FinalScore { get; set; }
 
+        // ⭐ NEW: Điểm trước khi trừ penalty
+        public decimal? FinalScoreBeforePenalty { get; set; }
+
+        // ⭐ NEW: Thông tin Missing Review Penalty
+        public int MissingReviews { get; set; }
+        public decimal MissingReviewPenaltyPerReview { get; set; }
+        public decimal MissingReviewPenaltyTotal { get; set; }
+
         // 🗒️ Thông tin feedback
         public string? Feedback { get; set; }
         public DateTime? GradedAt { get; set; }
