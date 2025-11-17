@@ -276,7 +276,7 @@ namespace Service.Service
                     RubricTitle = c.Rubric?.Title,
                     CriteriaTemplateId = c.CriteriaTemplateId,
                     CriteriaTemplateTitle = c.CriteriaTemplate?.Title,
-                    Title = c.Title,
+                    Title = c.Rubric.Assignment?.Title,
                     Description = c.Description,
                     Weight = c.Weight,
                     MaxScore = c.MaxScore,
