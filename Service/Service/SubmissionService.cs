@@ -1966,6 +1966,13 @@ public async Task<BaseResponse<MyScoreDetailsResponse>> GetMyScoreDetailsAsync(i
                         ? submissions.FirstOrDefault(s => s.UserId == student.Id)
                         : null;
 
+                    var newestRegradeRequest = submission != null
+        ? await _context.RegradeRequests
+            .Where(r => r.SubmissionId == submission.SubmissionId)
+            .OrderByDescending(r => r.RequestedAt)
+            .FirstOrDefaultAsync()
+        : null;
+
                     if (submission != null)
                     {
                         result.Add(new SubmissionSummaryResponse
@@ -1980,6 +1987,7 @@ public async Task<BaseResponse<MyScoreDetailsResponse>> GetMyScoreDetailsAsync(i
                             ClassName = submission.Assignment?.CourseInstance?.SectionCode,
                             AssignmentTitle = submission.Assignment?.Title,
                             AssignmentStatus = submission.Assignment?.Status,
+                            RegradeRequestStatus = newestRegradeRequest?.Status,
                             PeerAverageScore = submission.PeerAverageScore ?? 0,
                             InstructorScore = submission.InstructorScore ?? 0,
                             FinalScore = submission.FinalScore ?? 0,
@@ -2007,10 +2015,11 @@ public async Task<BaseResponse<MyScoreDetailsResponse>> GetMyScoreDetailsAsync(i
                             ClassName = assignment?.CourseInstance?.SectionCode,
                             AssignmentTitle = assignment?.Title,
                             AssignmentStatus = assignment?.Status,
+                            RegradeRequestStatus = newestRegradeRequest?.Status,
                             PeerAverageScore = 0,
                             InstructorScore = 0,
                             FinalScore = 0,
-                            Feedback = "Không nộp bài",
+                            Feedback = "Not Submitted",
                             Status = "Not Submitted",
                             GradedAt = null
                         });
@@ -2110,14 +2119,14 @@ public async Task<BaseResponse<MyScoreDetailsResponse>> GetMyScoreDetailsAsync(i
                     {
                         AssignmentId = request.AssignmentId,
                         UserId = userId,
-                        FileUrl = "Không nộp",           // KHÔNG NULL
-                        FileName = "Không nộp",          // KHÔNG NULL
-                        OriginalFileName = "Không nộp bài",
+                        FileUrl = "Not Submitted",           // KHÔNG NULL
+                        FileName = "Not Submitted",          // KHÔNG NULL
+                        OriginalFileName = "Not Submitted",
                         Keywords = " ",
                         SubmittedAt = submittedAt,
                         Status = "Graded",
                         FinalScore = 0,
-                        Feedback = "Không nộp bài, tự động chấm 0 điểm.",
+                        Feedback = "Not Submitted, auto grade zero",
                         GradedAt = now,
                         IsPublic = true
                     };
