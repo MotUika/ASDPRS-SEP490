@@ -434,46 +434,48 @@ namespace Service.Service
 
         private async Task<RegradeRequestResponse> MapToRegradeRequestResponse(RegradeRequest regradeRequest)
         {
-            // Map các field cơ bản bằng AutoMapper
             var response = _mapper.Map<RegradeRequestResponse>(regradeRequest);
 
-            // Map Submission info
+            // Load additional data if needed
             if (regradeRequest.Submission != null)
             {
                 response.Submission = _mapper.Map<SubmissionInfoResponse>(regradeRequest.Submission);
 
-                // Map RequestedByStudent
-                response.RequestedByStudent = new UserInfoRegradeResponse
+                response.Submission.InstructorScore = regradeRequest.Submission.InstructorScore;
+                response.Submission.PeerAverageScore = regradeRequest.Submission.PeerAverageScore;
+                response.Submission.FinalScore = regradeRequest.Submission.FinalScore;
+                response.Submission.Feedback = regradeRequest.Submission.Feedback;
+                response.Submission.GradedAt = regradeRequest.Submission.GradedAt;
+
+                response.GradeInfo = new GradeInfoResponse
                 {
-                    UserId = regradeRequest.Submission.UserId, // Nếu UserId là int?, tự động cast
-                    FullName = regradeRequest.Submission.User != null
-                               ? $"{regradeRequest.Submission.User.FirstName} {regradeRequest.Submission.User.LastName}".Trim()
-                               : null,
-                    Email = regradeRequest.Submission.User?.Email
-                    
+                    FinalScoreAfterRegrade = regradeRequest.Submission.FinalScore,
+                    InstructorScore = regradeRequest.Submission.InstructorScore,
+                    PeerAverageScore = regradeRequest.Submission.PeerAverageScore,
+                    InstructorFeedback = regradeRequest.Submission.Feedback,
+                    GradedAt = regradeRequest.Submission.GradedAt,
+                    HasBeenRegraded = regradeRequest.Status == "Completed" || regradeRequest.Status == "Accepted",
+                    RegradeStatus = regradeRequest.Status
                 };
 
-                // Map Assignment
+                if (regradeRequest.Submission.User != null)
+                {
+                    response.RequestedByStudent = _mapper.Map<UserInfoRegradeResponse>(regradeRequest.Submission.User);
+                }
+
                 if (regradeRequest.Submission.Assignment != null)
                 {
                     response.Assignment = _mapper.Map<AssignmentInfoRegradeResponse>(regradeRequest.Submission.Assignment);
                 }
             }
 
-            // Map ReviewedByInstructor
-            response.ReviewedByInstructor = new UserInfoRegradeResponse
+            if (regradeRequest.ReviewedByInstructor != null)
             {
-                UserId = regradeRequest.ReviewedByInstructorId ?? 0, // fix nullable int
-                FullName = regradeRequest.ReviewedByInstructor != null
-                           ? $"{regradeRequest.ReviewedByInstructor.FirstName} {regradeRequest.ReviewedByInstructor.LastName}".Trim()
-                           : null,
-                Email = regradeRequest.ReviewedByInstructor?.Email
-                
-            };
+                response.ReviewedByInstructor = _mapper.Map<UserInfoRegradeResponse>(regradeRequest.ReviewedByInstructor);
+            }
 
             return response;
         }
-
 
         private async Task<int> GetTotalCountByFilter(GetRegradeRequestsByFilterRequest request)
         {
@@ -566,6 +568,7 @@ namespace Service.Service
                     instructorId,
                     request.ReviewedByUserId
                 );
+                await SendRegradeStatusNotificationToStudent(updatedRequest);
 
                 var fullRequest = await _regradeRequestRepository.GetByIdWithInstructorAsync(request.RequestId);
                 var response = await MapToRegradeRequestResponse(fullRequest);
@@ -688,6 +691,7 @@ namespace Service.Service
                     instructorId,
                     request.ReviewedByUserId
                 );
+                await SendRegradeStatusNotificationToStudent(updatedRequest);
 
                 // Load full request để map response
                 var fullRequest = await _regradeRequestRepository.GetByIdWithInstructorAsync(request.RequestId);
