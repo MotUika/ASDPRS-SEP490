@@ -20,5 +20,7 @@ namespace Service.RequestAndResponse.Response.CourseStudent
         public DateTime? StatusChangedAt { get; set; }
         public int? ChangedByUserId { get; set; }
         public string ChangedByUserName { get; set; }
+        public int StudentCount { get; set; }
+        public List<string> InstructorNames { get; set; } = new List<string>();
     }
 }

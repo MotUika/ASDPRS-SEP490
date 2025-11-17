@@ -946,20 +946,32 @@ namespace Service.Service
                 // KIỂM TRA UNHAPPY CASE - Nếu submission không phù hợp với assignment
                 if (!await CheckSubmissionRelevanceAsync(submission, assignment, extractedText))
                 {
-                    var errorSummary = "This submission does not match with the assignment requirements.";
+                    var errorSummary = "**SUBMISSION NOT RELEVANT**\n\n" +
+                                      "This submission does not match the assignment requirements. " +
+                                      $"Expected: {assignment.Title}\n" +
+                                      "Please review the assignment guidelines and resubmit appropriate content.";
 
                     // Lưu summary thông báo lỗi
                     var aiSummary = new AISummary
                     {
                         SubmissionId = request.SubmissionId,
                         Content = errorSummary,
-                        SummaryType = "OverallSummary_Error",
+                        SummaryType = "OverallSummary_NotRelevant",
                         GeneratedAt = DateTime.UtcNow
                     };
                     await _aiSummaryRepository.AddAsync(aiSummary);
 
-                    var response = new AIOverallResponse { Summary = errorSummary, IsRelevant = false };
-                    return new BaseResponse<AIOverallResponse>("Submission not relevant to assignment", StatusCodeEnum.OK_200, response);
+                    var response = new AIOverallResponse
+                    {
+                        Summary = errorSummary,
+                        IsRelevant = false
+                    };
+
+                    return new BaseResponse<AIOverallResponse>(
+                        "Submission is not relevant to assignment",
+                        StatusCodeEnum.BadRequest_400, // Đổi sang 400 thay vì 200
+                        response
+                    );
                 }
 
                 // Happy case - tiếp tục xử lý bình thường
@@ -1044,11 +1056,81 @@ namespace Service.Service
                         criteria = (await _criteriaRepository.GetByRubricIdAsync(rubric.RubricId)).ToList();
                     }
                 }
+
                 if (criteria == null || !criteria.Any())
                 {
                     return new BaseResponse<AICriteriaResponse>("No rubric criteria found", StatusCodeEnum.NotFound_404, null);
                 }
 
+                // Extract text từ file
+                using var fileStream = await _fileStorageService.GetFileStreamAsync(submission.FileUrl);
+                if (fileStream == null)
+                {
+                    return new BaseResponse<AICriteriaResponse>("Could not download file", StatusCodeEnum.BadRequest_400, null);
+                }
+
+                var fileName = submission.FileName ?? submission.OriginalFileName;
+                var extractedText = await _documentTextExtractor.ExtractTextAsync(fileStream, fileName);
+                if (string.IsNullOrWhiteSpace(extractedText))
+                {
+                    return new BaseResponse<AICriteriaResponse>("No text extracted", StatusCodeEnum.BadRequest_400, null);
+                }
+
+                if (extractedText.Length > 12000)
+                    extractedText = extractedText.Substring(0, 12000) + "...";
+
+                // ===== KIỂM TRA RELEVANCE TRƯỚC KHI XỬ LÝ =====
+                var isRelevant = await CheckSubmissionRelevanceAsync(submission, assignment, extractedText);
+
+                if (!isRelevant)
+                {
+                    _logger.LogWarning($"Submission {request.SubmissionId} is not relevant to assignment. Returning error criteria feedback.");
+
+                    // Tạo error feedback cho TẤT CẢ các criteria
+                    var errorFeedbacks = new List<AICriteriaFeedbackItem>();
+
+                    foreach (var criterion in criteria)
+                    {
+                        var errorMessage = "⚠Unable to evaluate: Submission content does not match assignment requirements.";
+
+                        // Lưu error feedback vào database
+                        var errorSummary = new AISummary
+                        {
+                            SubmissionId = request.SubmissionId,
+                            Content = $"Score: 0 | Summary: {errorMessage}",
+                            SummaryType = $"CriteriaFeedback_{criterion.CriteriaId}_NotRelevant",
+                            GeneratedAt = DateTime.UtcNow
+                        };
+                        await _aiSummaryRepository.AddAsync(errorSummary);
+
+                        errorFeedbacks.Add(new AICriteriaFeedbackItem
+                        {
+                            CriteriaId = criterion.CriteriaId,
+                            Title = criterion.Title,
+                            Description = criterion.Description ?? "",
+                            Summary = errorMessage,
+                            Score = 0, // Điểm 0 vì không liên quan
+                            MaxScore = criterion.MaxScore
+                        });
+                    }
+
+                    var errorResponse = new AICriteriaResponse
+                    {
+                        Feedbacks = errorFeedbacks,
+                        IsRelevant = false,
+                        ErrorMessage = "This submission does not match the assignment requirements. " +
+                                      $"Expected: {assignment.Title}. " +
+                                      "Please review the assignment guidelines and resubmit appropriate content."
+                    };
+
+                    return new BaseResponse<AICriteriaResponse>(
+                        "Submission is not relevant to assignment",
+                        StatusCodeEnum.BadRequest_400,
+                        errorResponse
+                    );
+                }
+
+                // Kiểm tra xem đã có feedback chưa
                 var feedbacks = new List<AICriteriaFeedbackItem>();
                 var allExist = true;
 
@@ -1063,6 +1145,7 @@ namespace Service.Service
                         // Parse score and summary from existing
                         decimal score = 0;
                         string summaryText = existingSummary.Content;
+
                         if (summaryText.Contains("Score:"))
                         {
                             var parts = summaryText.Split('|');
@@ -1091,43 +1174,18 @@ namespace Service.Service
                     }
                 }
 
+                // Nếu đã tồn tại hết feedback, trả về luôn
                 if (allExist)
                 {
                     return new BaseResponse<AICriteriaResponse>(
                         "Existing criteria feedback loaded",
                         StatusCodeEnum.OK_200,
-                        new AICriteriaResponse { Feedbacks = feedbacks });
+                        new AICriteriaResponse { Feedbacks = feedbacks, IsRelevant = true });
                 }
 
                 // Nếu không tồn tại hết, generate mới
-                // Extract text (reuse)
-                using var fileStream = await _fileStorageService.GetFileStreamAsync(submission.FileUrl);
-                if (fileStream == null)
-                {
-                    return new BaseResponse<AICriteriaResponse>("Could not download file", StatusCodeEnum.BadRequest_400, null);
-                }
+                _logger.LogInformation($"Generating new criteria feedback for submission {request.SubmissionId}");
 
-                var fileName = submission.FileName ?? submission.OriginalFileName;
-                var extractedText = await _documentTextExtractor.ExtractTextAsync(fileStream, fileName);
-
-                if (string.IsNullOrWhiteSpace(extractedText))
-                {
-                    return new BaseResponse<AICriteriaResponse>("No text extracted", StatusCodeEnum.BadRequest_400, null);
-                }
-
-                if (extractedText.Length > 12000) extractedText = extractedText.Substring(0, 12000) + "...";
-                // KIỂM TRA UNHAPPY CASE
-                if (!await CheckSubmissionRelevanceAsync(submission, assignment, extractedText))
-                {
-                    var errorFeedback = new AICriteriaResponse
-                    {
-                        Feedbacks = new List<AICriteriaFeedbackItem>(),
-                        IsRelevant = false,
-                        ErrorMessage = "This submission does not match with the assignment requirements."
-                    };
-
-                    return new BaseResponse<AICriteriaResponse>("Submission not relevant to assignment", StatusCodeEnum.OK_200, errorFeedback);
-                }
                 // Build context
                 var context = BuildEnhancedContext(assignment, rubric, criteria);
 
@@ -1135,63 +1193,122 @@ namespace Service.Service
                 feedbacks.Clear();
                 foreach (var criterion in criteria)
                 {
-                    var criteriaSummary = await _genAIService.GenerateCriteriaSummaryAsync(extractedText, criterion, context);
-
-                    // Parse score from AI response (assume "Score: X | Summary: ...")
-                    decimal score = 0;
-                    string summaryText = criteriaSummary;
-                    if (criteriaSummary.Contains("Score:"))
+                    try
                     {
-                        var parts = criteriaSummary.Split('|');
-                        if (parts.Length >= 2)
+                        var criteriaSummary = await _genAIService.GenerateCriteriaSummaryAsync(extractedText, criterion, context);
+
+                        // Parse score from AI response (assume "Score: X | Summary: ...")
+                        decimal score = 0;
+                        string summaryText = criteriaSummary;
+
+                        if (criteriaSummary.Contains("Score:"))
                         {
-                            var scoreStr = parts[0].Replace("Score:", "").Trim();
-                            decimal.TryParse(scoreStr, out score);
-                            summaryText = parts[1].Replace("Summary:", "").Trim();
+                            var parts = criteriaSummary.Split('|');
+                            if (parts.Length >= 2)
+                            {
+                                var scoreStr = parts[0].Replace("Score:", "").Trim();
+                                if (decimal.TryParse(scoreStr, out var parsedScore))
+                                {
+                                    score = parsedScore;
+                                }
+                                summaryText = parts[1].Replace("Summary:", "").Trim();
+                            }
                         }
+                        else
+                        {
+                            // Nếu AI không trả về đúng format, log warning
+                            _logger.LogWarning($"AI did not return expected format for criteria {criterion.CriteriaId}. Response: {criteriaSummary}");
+                            summaryText = criteriaSummary;
+                        }
+
+                        // Truncate summary nếu quá dài
+                        if (summaryText.Split(' ').Length > 30)
+                        {
+                            var words = summaryText.Split(' ').Take(30).ToArray();
+                            summaryText = string.Join(" ", words) + "...";
+                        }
+
+                        // Clamp score trong khoảng hợp lệ
+                        score = Math.Clamp(score, 0, criterion.MaxScore);
+
+                        // Truncate toàn bộ content để fit database column
+                        var fullContent = $"Score: {score} | Summary: {summaryText}";
+                        if (fullContent.Length > 2000)
+                        {
+                            fullContent = fullContent.Substring(0, 2000);
+                        }
+
+                        // Lưu vào DB
+                        var aiSummary = new AISummary
+                        {
+                            SubmissionId = request.SubmissionId,
+                            Content = fullContent,
+                            SummaryType = $"CriteriaFeedback_{criterion.CriteriaId}",
+                            GeneratedAt = DateTime.UtcNow
+                        };
+                        await _aiSummaryRepository.AddAsync(aiSummary);
+
+                        feedbacks.Add(new AICriteriaFeedbackItem
+                        {
+                            CriteriaId = criterion.CriteriaId,
+                            Title = criterion.Title,
+                            Description = criterion.Description ?? "",
+                            Summary = summaryText,
+                            Score = score,
+                            MaxScore = criterion.MaxScore
+                        });
+
+                        _logger.LogInformation($"Generated feedback for criteria {criterion.CriteriaId} ({criterion.Title}): Score={score}/{criterion.MaxScore}");
                     }
-
-                    // Truncate summary
-                    if (summaryText.Split(' ').Length > 30)
+                    catch (Exception ex)
                     {
-                        var words = summaryText.Split(' ').Take(30).ToArray();
-                        summaryText = string.Join(" ", words) + "...";
+                        _logger.LogError(ex, $"Error generating feedback for criteria {criterion.CriteriaId}");
+
+                        // Thêm error feedback cho criteria này
+                        var errorMessage = $"Error generating feedback: {ex.Message}";
+                        feedbacks.Add(new AICriteriaFeedbackItem
+                        {
+                            CriteriaId = criterion.CriteriaId,
+                            Title = criterion.Title,
+                            Description = criterion.Description ?? "",
+                            Summary = errorMessage,
+                            Score = 0,
+                            MaxScore = criterion.MaxScore
+                        });
+
+                        // Lưu error vào DB
+                        var errorSummary = new AISummary
+                        {
+                            SubmissionId = request.SubmissionId,
+                            Content = $"Score: 0 | Summary: {errorMessage}",
+                            SummaryType = $"CriteriaFeedback_{criterion.CriteriaId}_Error",
+                            GeneratedAt = DateTime.UtcNow
+                        };
+                        await _aiSummaryRepository.AddAsync(errorSummary);
                     }
-
-                    // Clamp score
-                    score = Math.Clamp(score, 0, criterion.MaxScore);
-
-                    // Lưu vào DB
-                    var aiSummary = new AISummary
-                    {
-                        SubmissionId = request.SubmissionId,
-                        Content = $"Score: {score} | Summary: {summaryText}",
-                        SummaryType = $"CriteriaFeedback_{criterion.CriteriaId}",
-                        GeneratedAt = DateTime.UtcNow
-                    };
-                    await _aiSummaryRepository.AddAsync(aiSummary);
-
-                    feedbacks.Add(new AICriteriaFeedbackItem
-                    {
-                        CriteriaId = criterion.CriteriaId,
-                        Title = criterion.Title,
-                        Description = criterion.Description ?? "",
-                        Summary = summaryText,
-                        Score = score,
-                        MaxScore = criterion.MaxScore
-                    });
                 }
 
-                var response = new AICriteriaResponse { Feedbacks = feedbacks };
-                return new BaseResponse<AICriteriaResponse>("AI criteria feedback generated and saved", StatusCodeEnum.Created_201, response);
+                var response = new AICriteriaResponse
+                {
+                    Feedbacks = feedbacks,
+                    IsRelevant = true,
+                    ErrorMessage = null
+                };
+
+                return new BaseResponse<AICriteriaResponse>(
+                    "AI criteria feedback generated and saved",
+                    StatusCodeEnum.Created_201,
+                    response);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error generating criteria feedback");
-                return new BaseResponse<AICriteriaResponse>($"Error: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
+                _logger.LogError(ex, $"Error generating criteria feedback for submission {request.SubmissionId}");
+                return new BaseResponse<AICriteriaResponse>(
+                    $"Error: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
             }
         }
-
         public async Task<BaseResponse<AIOverallResponse>> GenerateInstructorOverallSummaryAsync(GenerateAIOverallRequest request)
         {
             return await GenerateOverallSummaryAsync(request);
@@ -1206,29 +1323,162 @@ namespace Service.Service
         {
             try
             {
-                // Build context với thông tin assignment
-                var context = BuildEnhancedContext(assignment, null, null);
+                // Build context với thông tin chi tiết về assignment
+                Rubric rubric = null;
+                List<Criteria> criteria = null;
 
-                // Gọi AI để kiểm tra relevance
-                var relevanceCheck = await _genAIService.CheckSubmissionRelevanceAsync(extractedText, context, assignment.Title);
-
-                // Nếu AI trả về kết quả không phù hợp
-                if (relevanceCheck.Contains("NOT_RELEVANT") || relevanceCheck.Contains("not match") || relevanceCheck.Contains("unrelated"))
+                if (assignment.RubricId.HasValue)
                 {
-                    _logger.LogWarning($"Submission {submission.SubmissionId} is not relevant to assignment {assignment.Title}");
-                    return false;
+                    rubric = await _rubricRepository.GetByIdAsync(assignment.RubricId.Value);
+                    if (rubric != null)
+                    {
+                        criteria = (await _criteriaRepository.GetByRubricIdAsync(rubric.RubricId)).ToList();
+                    }
                 }
 
-                return true;
+                var context = BuildEnhancedContext(assignment, rubric, criteria);
+
+                // Giới hạn độ dài text để tránh vượt quá token limit
+                var textToCheck = extractedText;
+                if (textToCheck.Length > 8000)
+                {
+                    textToCheck = textToCheck.Substring(0, 8000) + "... [truncated]";
+                }
+
+                // Gọi AI để kiểm tra relevance
+                var relevanceCheck = await _genAIService.CheckSubmissionRelevanceAsync(
+                    textToCheck,
+                    context,
+                    assignment.Title
+                );
+
+                _logger.LogInformation($"Relevance check result for submission {submission.SubmissionId}: {relevanceCheck}");
+
+                // Parse kết quả theo format RELEVANT|reason hoặc NOT_RELEVANT|reason
+                var upperCheck = relevanceCheck.ToUpper().Trim();
+
+                // Kiểm tra format response
+                if (upperCheck.StartsWith("NOT_RELEVANT"))
+                {
+                    // Extract lý do
+                    var parts = relevanceCheck.Split('|');
+                    var reason = parts.Length > 1 ? parts[1].Trim() : "No reason provided";
+
+                    _logger.LogWarning($"Submission {submission.SubmissionId} is NOT RELEVANT to assignment '{assignment.Title}'. Reason: {reason}");
+                    return false;
+                }
+                else if (upperCheck.StartsWith("RELEVANT"))
+                {
+                    // Extract lý do (optional logging)
+                    var parts = relevanceCheck.Split('|');
+                    var reason = parts.Length > 1 ? parts[1].Trim() : "No reason provided";
+
+                    _logger.LogInformation($"Submission {submission.SubmissionId} is RELEVANT to assignment '{assignment.Title}'. Reason: {reason}");
+                    return true;
+                }
+                else
+                {
+                    // AI không trả về đúng format - cảnh báo và default là KHÔNG phù hợp để an toàn
+                    _logger.LogWarning($"AI returned unexpected format for submission {submission.SubmissionId}: {relevanceCheck}. Defaulting to NOT RELEVANT for safety.");
+
+                    // Kiểm tra fallback bằng keyword matching đơn giản
+                    return PerformBasicRelevanceCheck(extractedText, assignment, criteria);
+                }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error checking submission relevance");
-                // Mặc định cho là phù hợp nếu có lỗi
+                _logger.LogError(ex, $"Error checking submission relevance for submission {submission.SubmissionId}");
+
+                // Nếu có lỗi, thực hiện kiểm tra cơ bản thay vì mặc định cho qua
+                return PerformBasicRelevanceCheck(extractedText, assignment, null);
+            }
+        }
+
+        /// <summary>
+        /// Kiểm tra relevance cơ bản dựa trên keywords khi AI service fail
+        /// </summary>
+        private bool PerformBasicRelevanceCheck(string extractedText, Assignment assignment, List<Criteria> criteria)
+        {
+            try
+            {
+                var textLower = extractedText.ToLower();
+                var titleLower = assignment.Title.ToLower();
+
+                // Kiểm tra 1: Assignment về programming nhưng không có code
+                var isProgrammingAssignment = titleLower.Contains("code") ||
+                                             titleLower.Contains("programming") ||
+                                             titleLower.Contains("implement") ||
+                                             titleLower.Contains("system") && titleLower.Contains("oop");
+
+                if (isProgrammingAssignment)
+                {
+                    // Kiểm tra xem có code keywords không
+                    var hasCodeIndicators = textLower.Contains("class ") ||
+                                           textLower.Contains("public ") ||
+                                           textLower.Contains("private ") ||
+                                           textLower.Contains("function") ||
+                                           textLower.Contains("method") ||
+                                           textLower.Contains("void ") ||
+                                           textLower.Contains("return ") ||
+                                           textLower.Contains("{") && textLower.Contains("}");
+
+                    if (!hasCodeIndicators)
+                    {
+                        _logger.LogWarning($"Programming assignment but no code found in submission. Marking as NOT RELEVANT.");
+                        return false;
+                    }
+                }
+
+                // Kiểm tra 2: Extract main topic từ assignment title
+                var titleKeywords = ExtractKeywords(titleLower);
+                var contentKeywords = ExtractKeywords(textLower);
+
+                // Đếm số keyword match
+                var matchCount = titleKeywords.Count(tk => contentKeywords.Contains(tk));
+                var matchRatio = titleKeywords.Any() ? (double)matchCount / titleKeywords.Count : 0;
+
+                _logger.LogInformation($"Keyword match ratio: {matchRatio:P} ({matchCount}/{titleKeywords.Count})");
+
+                // Nếu match < 20% keywords chính → không liên quan
+                if (matchRatio < 0.2)
+                {
+                    _logger.LogWarning($"Low keyword match ratio ({matchRatio:P}). Marking as NOT RELEVANT.");
+                    return false;
+                }
+
+                // Default: cho qua nếu không phát hiện vấn đề rõ ràng
+                return true;
+            }
+            catch
+            {
+                // Nếu fallback cũng lỗi, mặc định cho qua
                 return true;
             }
         }
 
+        /// <summary>
+        /// Extract keywords quan trọng từ text (bỏ stopwords)
+        /// </summary>
+        private List<string> ExtractKeywords(string text)
+        {
+            var stopWords = new HashSet<string>
+    {
+        "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
+        "of", "with", "by", "from", "up", "about", "into", "through", "during",
+        "is", "are", "was", "were", "be", "been", "being", "have", "has", "had",
+        "do", "does", "did", "will", "would", "should", "could", "may", "might",
+        "must", "can", "using", "use", "system", "design", "implement", "create"
+    };
+
+            var words = text.Split(new[] { ' ', ',', '.', ';', ':', '\n', '\r', '\t' },
+                                  StringSplitOptions.RemoveEmptyEntries)
+                            .Select(w => w.Trim().ToLower())
+                            .Where(w => w.Length > 3 && !stopWords.Contains(w))
+                            .Distinct()
+                            .ToList();
+
+            return words;
+        }
         // Thêm method mới để build context với URL
         private string BuildEnhancedContextWithUrl(Assignment assignment, Rubric rubric, List<Criteria> criteria, string submissionFileUrl)
         {
