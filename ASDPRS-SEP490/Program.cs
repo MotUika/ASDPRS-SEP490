@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using OfficeOpenXml;
 using Repository;
 using Repository.BaseRepository;
 using Repository.IBaseRepository;
@@ -270,5 +271,7 @@ app.MapControllers();
 
 // Default route
 app.MapGet("/", () => "ASDPRS API is running! Visit /swagger for API documentation.");
+
+ExcelPackage.License.SetNonCommercialOrganization("ASDPRS Project");
 
 app.Run();

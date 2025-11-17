@@ -58,6 +58,7 @@ namespace Service.Service
         }
 
         // Method import Excel: Đọc file, thêm sinh viên, kiểm tra đơn giản
+        // Method import Excel: Đọc file, thêm sinh viên, kiểm tra đơn giản
         public async Task<BaseResponse<List<CourseStudentResponse>>> ImportStudentsFromExcelAsync(int courseInstanceId, Stream fileStream, int? changedByUserId)
         {
             try
@@ -73,6 +74,13 @@ namespace Service.Service
 
                 var results = new List<CourseStudentResponse>();
                 var createdUsers = new List<User>();
+
+                // Fetch changedByUser once
+                User changedBy = null;
+                if (changedByUserId.HasValue)
+                {
+                    changedBy = await _userManager.FindByIdAsync(changedByUserId.Value.ToString());
+                }
 
                 using (var package = new ExcelPackage(fileStream))
                 {
@@ -119,7 +127,8 @@ namespace Service.Service
                                 };
 
                                 var created = await _courseStudentRepository.AddAsync(courseStudent);
-                                var response = _mapper.Map<CourseStudentResponse>(created);
+                                // Sử dụng MapToResponse thay vì _mapper.Map
+                                var response = MapToResponse(created, courseInstance, user, changedBy);
                                 results.Add(response);
                             }
                         }
@@ -142,6 +151,13 @@ namespace Service.Service
                 {
                     SheetResults = new List<SheetImportResult>()
                 };
+
+                // Fetch changedByUser once
+                User changedBy = null;
+                if (changedByUserId.HasValue)
+                {
+                    changedBy = await _userManager.FindByIdAsync(changedByUserId.Value.ToString());
+                }
 
                 using (var package = new ExcelPackage(fileStream))
                 {
@@ -209,7 +225,8 @@ namespace Service.Service
                                         };
 
                                         var created = await _courseStudentRepository.AddAsync(courseStudent);
-                                        var response = _mapper.Map<CourseStudentResponse>(created);
+                                        // Sử dụng MapToResponse thay vì _mapper.Map
+                                        var response = MapToResponse(created, courseInstance, user, changedBy);
                                         sheetResult.ImportedStudents.Add(response);
                                         successCount++;
                                     }
