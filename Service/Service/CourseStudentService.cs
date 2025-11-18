@@ -66,27 +66,22 @@ namespace Service.Service
                 var courseInstance = await _context.CourseInstances
                     .Include(ci => ci.Course)
                     .FirstOrDefaultAsync(ci => ci.CourseInstanceId == courseInstanceId);
-
                 if (courseInstance == null)
                 {
                     return new BaseResponse<List<CourseStudentResponse>>("Không tìm thấy lớp học", StatusCodeEnum.NotFound_404, null);
                 }
-
                 var results = new List<CourseStudentResponse>();
                 var createdUsers = new List<User>();
-
                 // Fetch changedByUser once
                 User changedBy = null;
                 if (changedByUserId.HasValue)
                 {
                     changedBy = await _userManager.FindByIdAsync(changedByUserId.Value.ToString());
                 }
-
                 using (var package = new ExcelPackage(fileStream))
                 {
                     var worksheet = package.Workbook.Worksheets[0]; // Sheet đầu tiên
                     var rowCount = worksheet.Dimension.Rows;
-
                     for (int row = 2; row <= rowCount; row++) // Bắt đầu từ dòng 2 (bỏ header)
                     {
                         var code = worksheet.Cells[row, 2].Value?.ToString().Trim(); // Cột B: Code
@@ -94,27 +89,24 @@ namespace Service.Service
                         var middleName = worksheet.Cells[row, 4].Value?.ToString().Trim(); // Cột D: Middle name
                         var givenName = worksheet.Cells[row, 5].Value?.ToString().Trim(); // Cột E: Given name
                         var email = worksheet.Cells[row, 6].Value?.ToString().Trim(); // Cột F: Email
-
+                        var majorCode = worksheet.Cells[row, 7].Value?.ToString().Trim(); // Cột G: Major (thêm để import Major)
                         if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(email))
                             continue;
-
                         // Tìm hoặc tạo user
                         var user = await _userManager.FindByEmailAsync(email);
                         if (user == null)
                         {
-                            user = await CreateStudentUserAsync(code, surname, middleName, givenName, email, courseInstance.CampusId);
+                            user = await CreateStudentUserAsync(code, surname, middleName, givenName, email, courseInstance.CampusId, majorCode);
                             if (user != null)
                             {
                                 createdUsers.Add(user);
                             }
                         }
-
                         if (user != null)
                         {
                             // Kiểm tra xem sinh viên đã trong lớp chưa
                             var existingCourseStudent = await _context.CourseStudents
                                 .FirstOrDefaultAsync(cs => cs.CourseInstanceId == courseInstanceId && cs.UserId == user.Id);
-
                             if (existingCourseStudent == null)
                             {
                                 var courseStudent = new CourseStudent
@@ -125,7 +117,6 @@ namespace Service.Service
                                     Status = "Enrolled",
                                     ChangedByUserId = changedByUserId
                                 };
-
                                 var created = await _courseStudentRepository.AddAsync(courseStudent);
                                 // Sử dụng MapToResponse thay vì _mapper.Map
                                 var response = MapToResponse(created, courseInstance, user, changedBy);
@@ -134,7 +125,6 @@ namespace Service.Service
                         }
                     }
                 }
-
                 return new BaseResponse<List<CourseStudentResponse>>($"Import thành công {results.Count} sinh viên", StatusCodeEnum.Created_201, results);
             }
             catch (Exception ex)
@@ -142,7 +132,6 @@ namespace Service.Service
                 return new BaseResponse<List<CourseStudentResponse>>($"Lỗi khi import: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
-
         public async Task<BaseResponse<MultipleCourseImportResponse>> ImportStudentsFromMultipleSheetsAsync(int campusId, Stream fileStream, int? changedByUserId)
         {
             try
@@ -151,14 +140,12 @@ namespace Service.Service
                 {
                     SheetResults = new List<SheetImportResult>()
                 };
-
                 // Fetch changedByUser once
                 User changedBy = null;
                 if (changedByUserId.HasValue)
                 {
                     changedBy = await _userManager.FindByIdAsync(changedByUserId.Value.ToString());
                 }
-
                 using (var package = new ExcelPackage(fileStream))
                 {
                     foreach (var worksheet in package.Workbook.Worksheets)
@@ -168,25 +155,20 @@ namespace Service.Service
                             SheetName = worksheet.Name,
                             ImportedStudents = new List<CourseStudentResponse>()
                         };
-
                         // Tìm CourseInstance dựa trên sheet name (section code) và campus
                         var courseInstance = await _context.CourseInstances
                             .Include(ci => ci.Course)
                             .FirstOrDefaultAsync(ci => ci.SectionCode == worksheet.Name && ci.CampusId == campusId);
-
                         if (courseInstance == null)
                         {
                             sheetResult.Message = $"Không tìm thấy lớp học với mã section: {worksheet.Name} trong campus {campusId}";
                             results.SheetResults.Add(sheetResult);
                             continue;
                         }
-
                         sheetResult.CourseInstanceId = courseInstance.CourseInstanceId;
                         sheetResult.CourseName = courseInstance.Course?.CourseName;
-
                         var rowCount = worksheet.Dimension?.Rows ?? 0;
                         int successCount = 0;
-
                         for (int row = 2; row <= rowCount; row++)
                         {
                             var code = worksheet.Cells[row, 2].Value?.ToString().Trim();
@@ -194,25 +176,22 @@ namespace Service.Service
                             var middleName = worksheet.Cells[row, 4].Value?.ToString().Trim();
                             var givenName = worksheet.Cells[row, 5].Value?.ToString().Trim();
                             var email = worksheet.Cells[row, 6].Value?.ToString().Trim();
-
+                            var majorCode = worksheet.Cells[row, 7].Value?.ToString().Trim(); // Thêm để import Major
                             if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(email))
                                 continue;
-
                             try
                             {
                                 // Tìm hoặc tạo user
                                 var user = await _userManager.FindByEmailAsync(email);
                                 if (user == null)
                                 {
-                                    user = await CreateStudentUserAsync(code, surname, middleName, givenName, email, campusId);
+                                    user = await CreateStudentUserAsync(code, surname, middleName, givenName, email, campusId, majorCode);
                                 }
-
                                 if (user != null)
                                 {
                                     // Kiểm tra xem sinh viên đã trong lớp chưa
                                     var existingCourseStudent = await _context.CourseStudents
                                         .FirstOrDefaultAsync(cs => cs.CourseInstanceId == courseInstance.CourseInstanceId && cs.UserId == user.Id);
-
                                     if (existingCourseStudent == null)
                                     {
                                         var courseStudent = new CourseStudent
@@ -223,7 +202,6 @@ namespace Service.Service
                                             Status = "Enrolled",
                                             ChangedByUserId = changedByUserId
                                         };
-
                                         var created = await _courseStudentRepository.AddAsync(courseStudent);
                                         // Sử dụng MapToResponse thay vì _mapper.Map
                                         var response = MapToResponse(created, courseInstance, user, changedBy);
@@ -238,14 +216,12 @@ namespace Service.Service
                                 Console.WriteLine($"Lỗi import sinh viên {code}: {ex.Message}");
                             }
                         }
-
                         sheetResult.SuccessCount = successCount;
                         sheetResult.Message = $"Import thành công {successCount} sinh viên";
                         results.SheetResults.Add(sheetResult);
                         results.TotalSuccessCount += successCount;
                     }
                 }
-
                 return new BaseResponse<MultipleCourseImportResponse>("Import hoàn tất", StatusCodeEnum.OK_200, results);
             }
             catch (Exception ex)
@@ -254,16 +230,14 @@ namespace Service.Service
             }
         }
 
-        private async Task<User> CreateStudentUserAsync(string studentCode, string surname, string middleName, string givenName, string email, int campusId)
+        private async Task<User> CreateStudentUserAsync(string studentCode, string surname, string middleName, string givenName, string email, int campusId, string majorCode = null)
         {
             try
             {
                 // Tạo LastName từ Surname + Middle name
                 var lastName = $"{surname} {middleName}".Trim();
-
                 // Tạo username từ email (phần trước @)
                 var username = email.Split('@')[0];
-
                 // Kiểm tra xem username đã tồn tại chưa
                 var existingUser = await _userManager.FindByNameAsync(username);
                 if (existingUser != null)
@@ -271,7 +245,6 @@ namespace Service.Service
                     // Nếu đã tồn tại, thêm số ngẫu nhiên
                     username = $"{username}_{new Random().Next(1000, 9999)}";
                 }
-
                 var user = new User
                 {
                     UserName = username,
@@ -283,11 +256,17 @@ namespace Service.Service
                     IsActive = true,
                     CreatedAt = DateTime.UtcNow
                 };
-
+                if (!string.IsNullOrEmpty(majorCode))
+                {
+                    var major = await _context.Majors.FirstOrDefaultAsync(m => m.MajorCode == majorCode);
+                    if (major != null)
+                    {
+                        user.MajorId = major.MajorId;
+                    }
+                }
                 // Tạo mật khẩu ngẫu nhiên
                 var password = GenerateRandomPassword();
                 var result = await _userManager.CreateAsync(user, password);
-
                 if (result.Succeeded)
                 {
                     // Gán role Student
@@ -306,7 +285,6 @@ namespace Service.Service
                 return null;
             }
         }
-
         private string GenerateRandomPassword(int length = 12)
         {
             const string validChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_-+=[{]};:>|./?";
