@@ -328,7 +328,6 @@ namespace Service.Service
                 if (!string.IsNullOrEmpty(request.StudentCode) && request.UserId == 0)
                 {
                     var userByCode = await _userRepository.GetByStudentCodeAsync(request.StudentCode);
-
                     if (userByCode == null)
                     {
                         return new BaseResponse<CourseStudentResponse>(
@@ -336,10 +335,8 @@ namespace Service.Service
                             StatusCodeEnum.NotFound_404,
                             null);
                     }
-
                     request.UserId = userByCode.Id;
                 }
-
                 // Validate course instance exists
                 var courseInstance = await _courseInstanceRepository.GetByIdAsync(request.CourseInstanceId);
                 if (courseInstance == null)
@@ -349,7 +346,6 @@ namespace Service.Service
                         StatusCodeEnum.NotFound_404,
                         null);
                 }
-
                 // Validate user exists
                 var user = await _userRepository.GetByIdAsync(request.UserId);
                 if (user == null)
@@ -359,11 +355,16 @@ namespace Service.Service
                         StatusCodeEnum.BadRequest_400,
                         null);
                 }
-
+                if (!await _userManager.IsInRoleAsync(user, "Student"))
+                {
+                    return new BaseResponse<CourseStudentResponse>(
+                        "User does not have the Student role",
+                        StatusCodeEnum.BadRequest_400,
+                        null);
+                }
                 // Check if student is already enrolled
                 var existing = (await _courseStudentRepository.GetByCourseInstanceIdAsync(request.CourseInstanceId))
                     .FirstOrDefault(cs => cs.UserId == request.UserId);
-
                 if (existing != null)
                 {
                     return new BaseResponse<CourseStudentResponse>(
@@ -371,7 +372,6 @@ namespace Service.Service
                         StatusCodeEnum.Conflict_409,
                         null);
                 }
-
                 var courseStudent = new CourseStudent
                 {
                     CourseInstanceId = request.CourseInstanceId,
@@ -383,15 +383,12 @@ namespace Service.Service
                     StatusChangedAt = DateTime.UtcNow,
                     ChangedByUserId = request.ChangedByUserId
                 };
-
                 await _courseStudentRepository.AddAsync(courseStudent);
-
                 User changedByUser = null;
                 if (request.ChangedByUserId.HasValue)
                 {
                     changedByUser = await _userRepository.GetByIdAsync(request.ChangedByUserId.Value);
                 }
-
                 var response = MapToResponse(courseStudent, courseInstance, user, changedByUser);
                 return new BaseResponse<CourseStudentResponse>(
                     "Course student enrolled successfully",
@@ -406,7 +403,6 @@ namespace Service.Service
                     null);
             }
         }
-
         public async Task<BaseResponse<bool>> DeleteCourseStudentAsync(int courseStudentId, int courseInstanceId, int userId)
         {
             try
@@ -420,7 +416,15 @@ namespace Service.Service
                         StatusCodeEnum.NotFound_404,
                         false);
                 }
-
+                // Check if course is ongoing
+                var now = DateTime.UtcNow;
+                if (courseInstance.StartDate <= now && now <= courseInstance.EndDate)
+                {
+                    return new BaseResponse<bool>(
+                        "Cannot remove student from an ongoing course",
+                        StatusCodeEnum.BadRequest_400,
+                        false);
+                }
                 // 2. Kiểm tra user có tồn tại không
                 var user = await _userRepository.GetByIdAsync(userId);
                 if (user == null)
@@ -430,7 +434,6 @@ namespace Service.Service
                         StatusCodeEnum.NotFound_404,
                         false);
                 }
-
                 // 3. Tìm courseStudent theo id
                 var courseStudent = await _courseStudentRepository.GetByIdAsync(courseStudentId);
                 if (courseStudent == null)
@@ -440,7 +443,6 @@ namespace Service.Service
                         StatusCodeEnum.NotFound_404,
                         false);
                 }
-
                 // 4. Kiểm tra xem có khớp cả 3 field không
                 if (courseStudent.UserId != userId || courseStudent.CourseInstanceId != courseInstanceId)
                 {
@@ -449,10 +451,8 @@ namespace Service.Service
                         StatusCodeEnum.BadRequest_400,
                         false);
                 }
-
                 // 5. Tiến hành xóa
                 await _courseStudentRepository.DeleteAsync(courseStudent);
-
                 return new BaseResponse<bool>(
                     "Student removed from course successfully",
                     StatusCodeEnum.OK_200,
@@ -466,7 +466,6 @@ namespace Service.Service
                     false);
             }
         }
-
 
         public async Task<BaseResponse<CourseStudentResponse>> GetCourseStudentByIdAsync(int id)
         {
