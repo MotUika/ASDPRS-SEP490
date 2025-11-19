@@ -105,7 +105,6 @@ namespace Service.Service
                 {
                     return new BaseResponse<UserResponse>("User not found", StatusCodeEnum.NotFound_404, null);
                 }
-
                 if (existingUser.Email != request.Email)
                 {
                     var userWithSameEmail = await _userManager.FindByEmailAsync(request.Email);
@@ -114,7 +113,6 @@ namespace Service.Service
                         return new BaseResponse<UserResponse>("Another user with this email already exists", StatusCodeEnum.Conflict_409, null);
                     }
                 }
-
                 if (existingUser.UserName != request.Username)
                 {
                     var userWithSameUsername = await _userManager.FindByNameAsync(request.Username);
@@ -123,15 +121,21 @@ namespace Service.Service
                         return new BaseResponse<UserResponse>("Another user with this username already exists", StatusCodeEnum.Conflict_409, null);
                     }
                 }
-
+                // New: Check for duplicate StudentCode if changed
+                if (!string.IsNullOrEmpty(request.StudentCode) && existingUser.StudentCode != request.StudentCode)
+                {
+                    var userWithSameCode = await _context.Users.FirstOrDefaultAsync(u => u.StudentCode == request.StudentCode);
+                    if (userWithSameCode != null && userWithSameCode.Id != request.UserId)
+                    {
+                        return new BaseResponse<UserResponse>("Another user with this student code already exists", StatusCodeEnum.Conflict_409, null);
+                    }
+                }
                 _mapper.Map(request, existingUser);
                 var result = await _userManager.UpdateAsync(existingUser);
-
                 if (!result.Succeeded)
                 {
                     return new BaseResponse<UserResponse>($"Error updating user: {string.Join(", ", result.Errors.Select(e => e.Description))}", StatusCodeEnum.BadRequest_400, null);
                 }
-
                 var response = _mapper.Map<UserResponse>(existingUser);
                 return new BaseResponse<UserResponse>("User updated successfully", StatusCodeEnum.OK_200, response);
             }
@@ -140,7 +144,6 @@ namespace Service.Service
                 return new BaseResponse<UserResponse>($"Error updating user: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
-
         public async Task<BaseResponse<bool>> DeleteUserAsync(int id)
         {
             try
