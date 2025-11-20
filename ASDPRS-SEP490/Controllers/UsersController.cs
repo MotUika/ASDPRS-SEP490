@@ -44,6 +44,19 @@ namespace ASDPRS_SEP490.Controllers
             return StatusCode((int)result.StatusCode, result);
         }
 
+        [HttpGet("{id}/detail")]
+        [SwaggerOperation(
+        Summary = "Lấy thông tin chi tiết người dùng theo ID",
+        Description = "Trả về thông tin chi tiết đầy đủ của người dùng bao gồm lịch sử lớp học, điểm số, submissions, reviews dựa trên ID được cung cấp"
+    )]
+        [SwaggerResponse(200, "Thành công", typeof(BaseResponse<UserDetailResponse>))]
+        [SwaggerResponse(404, "Không tìm thấy người dùng")]
+        public async Task<IActionResult> GetUserDetail(int id)
+        {
+            var result = await _userService.GetUserByIdDetailAsync(id);
+            return StatusCode((int)result.StatusCode, result);
+        }
+
         [HttpGet]
         [Authorize(Roles = "Admin")]
         [SwaggerOperation(
