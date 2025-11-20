@@ -70,6 +70,68 @@ namespace Service.Service
                 return new BaseResponse<UserResponse>($"Error retrieving user: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
+        public async Task<BaseResponse<UserDetailResponse>> GetUserByIdDetailAsync(int id)
+        {
+            try
+            {
+                var user = await _context.Users
+                    .Include(u => u.Campus)
+                    .Include(u => u.Major)
+                    .Include(u => u.CourseStudents).ThenInclude(cs => cs.CourseInstance).ThenInclude(ci => ci.Course)
+                    .Include(u => u.CourseInstructors).ThenInclude(ci => ci.CourseInstance).ThenInclude(ci => ci.Course)
+                    .Include(u => u.Submissions).ThenInclude(s => s.Assignment).ThenInclude(a => a.CourseInstance).ThenInclude(ci => ci.Course)
+                    .Include(u => u.Submissions).ThenInclude(s => s.Assignment).ThenInclude(a => a.CourseInstance).ThenInclude(ci => ci.Semester)
+                    .Include(u => u.ReviewAssignments)
+                    .FirstOrDefaultAsync(u => u.Id == id);
+                if (user == null)
+                {
+                    return new BaseResponse<UserDetailResponse>("User not found", StatusCodeEnum.NotFound_404, null);
+                }
+                var response = _mapper.Map<UserDetailResponse>(user);
+                response.Roles = (await _userManager.GetRolesAsync(user)).ToList();
+
+                // Populate enrolled courses (for students)
+                if (response.Roles.Contains("Student"))
+                {
+                    response.EnrolledCourses = user.CourseStudents.Select(cs => new EnrolledCourseDetail
+                    {
+                        CourseInstanceId = cs.CourseInstanceId,
+                        CourseName = cs.CourseInstance?.Course?.CourseName,
+                        Status = cs.Status,
+                        FinalGrade = cs.FinalGrade,
+                        IsPassed = cs.IsPassed
+                    }).ToList();
+                }
+
+                // Populate taught courses (for instructors)
+                if (response.Roles.Contains("Instructor"))
+                {
+                    response.TaughtCourses = user.CourseInstructors.Select(ci => new TaughtCourseDetail
+                    {
+                        CourseInstanceId = ci.CourseInstanceId,
+                        CourseName = ci.CourseInstance?.Course?.CourseName
+                    }).ToList();
+                }
+
+                response.SubmissionsHistory = user.Submissions.Select(s => new SubmissionHistory
+                {
+                    AssignmentId = s.AssignmentId,
+                    AssignmentTitle = s.Assignment?.Title,
+                    CourseInstanceId = s.Assignment?.CourseInstanceId ?? 0,
+                    CourseName = s.Assignment?.CourseInstance?.Course?.CourseName,
+                    SemesterName = s.Assignment?.CourseInstance?.Semester?.Name,
+                    SubmittedAt = s.SubmittedAt,
+                    Status = s.Status,
+                    FinalScore = s.FinalScore
+                }).ToList();
+
+                return new BaseResponse<UserDetailResponse>("User retrieved successfully with full history", StatusCodeEnum.OK_200, response);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<UserDetailResponse>($"Error retrieving user: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
+            }
+        }
 
         public async Task<BaseResponse<IEnumerable<UserResponse>>> GetAllUsersAsync()
         {

@@ -11,6 +11,7 @@ namespace Service.IService
     public interface IUserService
     {
         Task<BaseResponse<UserResponse>> GetUserByIdAsync(int id);
+        Task<BaseResponse<UserDetailResponse>> GetUserByIdDetailAsync(int id);
         Task<BaseResponse<IEnumerable<UserResponse>>> GetAllUsersAsync();
         Task<BaseResponse<UserResponse>> CreateUserAsync(CreateUserRequest request);
         Task<BaseResponse<UserResponse>> UpdateUserAsync(UpdateUserRequest request);

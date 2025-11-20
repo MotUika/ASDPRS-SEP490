@@ -1,4 +1,5 @@
 ﻿using BussinessObject.Models;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Repository.IRepository;
 using Service.IService;
@@ -19,17 +20,20 @@ namespace Service.Service
         private readonly ICourseInstanceRepository _courseInstanceRepository;
         private readonly IUserRepository _userRepository;
         private readonly ICourseStudentRepository _courseStudentRepository;
+        private readonly UserManager<User> _userManager;
 
         public CourseInstructorService(
             ICourseInstructorRepository courseInstructorRepository,
             ICourseInstanceRepository courseInstanceRepository,
             IUserRepository userRepository,
-            ICourseStudentRepository courseStudentRepository)
+            ICourseStudentRepository courseStudentRepository,
+            UserManager<User> userManager)
         {
             _courseInstructorRepository = courseInstructorRepository;
             _courseInstanceRepository = courseInstanceRepository;
             _userRepository = userRepository;
             _courseStudentRepository = courseStudentRepository;
+            _userManager = userManager;
         }
 
         // 🟢 Tạo mới instructor trong lớp
@@ -51,6 +55,13 @@ namespace Service.Service
                 {
                     return new BaseResponse<CourseInstructorResponse>(
                         "User not found",
+                        StatusCodeEnum.BadRequest_400,
+                        null);
+                }
+                if (!await _userManager.IsInRoleAsync(user, "Instructor"))
+                {
+                    return new BaseResponse<CourseInstructorResponse>(
+                        "User does not have the Instructor role",
                         StatusCodeEnum.BadRequest_400,
                         null);
                 }
@@ -102,7 +113,15 @@ namespace Service.Service
                         StatusCodeEnum.NotFound_404,
                         false);
                 }
-
+                var courseInstance = await _courseInstanceRepository.GetByIdAsync(courseInstructor.CourseInstanceId);
+                var now = DateTime.UtcNow;
+                if (courseInstance.StartDate <= now && now <= courseInstance.EndDate)
+                {
+                    return new BaseResponse<bool>(
+                        "Cannot remove instructor from an ongoing course",
+                        StatusCodeEnum.BadRequest_400,
+                        false);
+                }
                 await _courseInstructorRepository.DeleteAsync(courseInstructor);
                 return new BaseResponse<bool>(
                     "Course instructor deleted successfully",
