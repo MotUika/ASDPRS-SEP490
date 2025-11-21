@@ -12,5 +12,6 @@ namespace Service.RequestAndResponse.Response.SystemConfig
         public int AISummaryMaxTokens { get; set; }
         public int AISummaryMaxWords { get; set; }
         public decimal DefaultPassThreshold { get; set; }
+        public int RegradeProcessingDeadlineDays { get; set; }
     }
 }

@@ -21,6 +21,7 @@ namespace Service.RequestAndResponse.Response.RegradeRequest
 
         public string CourseName { get; set; }
         public string ClassName { get; set; }
+        public DateTime? ProcessingDeadline { get; set; }
     }
 
     public class SubmissionInfoResponse

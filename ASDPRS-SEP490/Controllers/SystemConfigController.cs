@@ -79,13 +79,15 @@ namespace ASDPRS_SEP490.Controllers
                 var aiSummaryMaxTokens = await _systemConfigService.GetConfigValueAsync("AISummaryMaxTokens", 1000);
                 var aiSummaryMaxWords = await _systemConfigService.GetConfigValueAsync("AISummaryMaxWords", 200);
                 var defaultPassThreshold = await _systemConfigService.GetConfigValueAsync("DefaultPassThreshold", 50m);
+                var regradeProcessingDeadlineDays = await _systemConfigService.GetConfigValueAsync("RegradeProcessingDeadlineDays", 7);
 
                 var response = new ImportantConfigsResponse
                 {
                     ScorePrecision = scorePrecision,
                     AISummaryMaxTokens = aiSummaryMaxTokens,
                     AISummaryMaxWords = aiSummaryMaxWords,
-                    DefaultPassThreshold = defaultPassThreshold
+                    DefaultPassThreshold = defaultPassThreshold,
+                    RegradeProcessingDeadlineDays = regradeProcessingDeadlineDays
                 };
 
                 return Ok(new BaseResponse<ImportantConfigsResponse>(

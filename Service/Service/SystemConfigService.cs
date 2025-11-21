@@ -175,6 +175,7 @@ namespace Service.Service
                 "AISummaryMaxWords" => ValidatePositiveInteger(value, "AISummaryMaxWords"),
                 "DefaultPassThreshold" => ValidatePercentage(value),
                 "PlagiarismThreshold" => ValidatePercentage(value),
+                "RegradeProcessingDeadlineDays" => ValidatePositiveInteger(value, "RegradeProcessingDeadlineDays"),
                 _ => (true, string.Empty) // Cho phép update các config khác không cần validate
             };
         }
