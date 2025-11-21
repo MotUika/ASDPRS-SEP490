@@ -529,6 +529,15 @@ namespace DataAccessLayer
                     Description = "Maximum allowed plagiarism percentage before blocking submission (0-100)",
                     UpdatedAt = DateTime.UtcNow,
                     UpdatedByUserId = 1
+                },
+                new SystemConfig
+                {
+                    ConfigId = 105,
+                    ConfigKey = "RegradeProcessingDeadlineDays",
+                    ConfigValue = "7",
+                    Description = "Number of days for instructors to process regrade requests",
+                    UpdatedAt = DateTime.UtcNow,
+                    UpdatedByUserId = 1
                 }
             );
         }

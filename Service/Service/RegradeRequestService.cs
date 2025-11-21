@@ -27,7 +27,7 @@ namespace Service.Service
         private readonly ILogger<RegradeRequestService> _logger;
         private readonly INotificationService _notificationService;
         private readonly ICourseInstructorRepository _courseInstructorRepository;
-
+        private readonly ISystemConfigService _systemConfigService;
 
         public RegradeRequestService(
             IRegradeRequestRepository regradeRequestRepository,
@@ -35,7 +35,7 @@ namespace Service.Service
             IUserRepository userRepository,
             IAssignmentRepository assignmentRepository,
             IMapper mapper,
-            ILogger<RegradeRequestService> logger, INotificationService notificationService, ICourseInstructorRepository courseInstructorRepository)
+            ILogger<RegradeRequestService> logger, INotificationService notificationService, ICourseInstructorRepository courseInstructorRepository, ISystemConfigService systemConfigService)
         {
             _regradeRequestRepository = regradeRequestRepository;
             _submissionRepository = submissionRepository;
@@ -45,6 +45,7 @@ namespace Service.Service
             _logger = logger;
             _notificationService = notificationService;
             _courseInstructorRepository = courseInstructorRepository;
+            _systemConfigService = systemConfigService;
         }
 
         public async Task<BaseResponse<RegradeRequestResponse>> CreateRegradeRequestAsync(CreateRegradeRequestRequest request)
@@ -506,7 +507,8 @@ namespace Service.Service
             {
                 response.ReviewedByInstructor = _mapper.Map<UserInfoRegradeResponse>(regradeRequest.ReviewedByInstructor);
             }
-
+            var deadlineDays = await _systemConfigService.GetConfigValueAsync<int>("RegradeProcessingDeadlineDays", 7);
+            response.ProcessingDeadline = regradeRequest.RequestedAt.AddDays(deadlineDays);
             return response;
         }
 
@@ -529,6 +531,18 @@ namespace Service.Service
                     return new BaseResponse<RegradeRequestResponse>(
                         "Regrade request not found",
                         StatusCodeEnum.NotFound_404,
+                        null
+                    );
+                }
+
+                var deadlineDays = await _systemConfigService.GetConfigValueAsync<int>("RegradeProcessingDeadlineDays", 7);
+                var deadline = existingRequest.RequestedAt.AddDays(deadlineDays);
+                if (DateTime.UtcNow > deadline && existingRequest.Status == "Pending")
+                {
+                    _logger.LogWarning($"Regrade request processing deadline exceeded. RequestId: {request.RequestId}");
+                    return new BaseResponse<RegradeRequestResponse>(
+                        "Processing deadline for this regrade request has passed",
+                        StatusCodeEnum.BadRequest_400,
                         null
                     );
                 }
@@ -655,7 +669,16 @@ namespace Service.Service
                     );
                 }
 
-                
+                var deadlineDays = await _systemConfigService.GetConfigValueAsync<int>("RegradeProcessingDeadlineDays", 7);
+                var deadline = existingRequest.RequestedAt.AddDays(deadlineDays);
+                if (DateTime.UtcNow > deadline)
+                {
+                    return new BaseResponse<RegradeRequestResponse>(
+                        "Processing deadline for this regrade request has passed",
+                        StatusCodeEnum.BadRequest_400,
+                        null
+                    );
+                }
 
                 // Lấy CourseInstanceId
                 int? courseInstanceId = existingRequest.Submission?.Assignment?.CourseInstanceId;
@@ -747,6 +770,8 @@ namespace Service.Service
         {
             try
             {
+                var deadlineDays = await _systemConfigService.GetConfigValueAsync<int>("RegradeProcessingDeadlineDays", 7);
+                var deadline = regradeRequest.RequestedAt.AddDays(deadlineDays).ToString("yyyy-MM-dd HH:mm:ss");
                 // Lấy danh sách instructors của course
                 var instructors = await _courseInstructorRepository.GetByCourseInstanceIdAsync(assignment.CourseInstanceId);
 
