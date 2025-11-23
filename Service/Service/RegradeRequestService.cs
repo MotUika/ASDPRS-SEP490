@@ -774,11 +774,9 @@ namespace Service.Service
                 var deadline = regradeRequest.RequestedAt.AddDays(deadlineDays).ToString("yyyy-MM-dd HH:mm:ss");
                 // Lấy danh sách instructors của course
                 var instructors = await _courseInstructorRepository.GetByCourseInstanceIdAsync(assignment.CourseInstanceId);
-
                 // Lấy thông tin student
                 var student = await _userRepository.GetByIdAsync(submission.UserId);
                 var studentName = student != null ? $"{student.FirstName} {student.LastName}" : "Unknown Student";
-
                 foreach (var instructor in instructors)
                 {
                     var notificationRequest = new CreateNotificationRequest
@@ -791,10 +789,12 @@ namespace Service.Service
                         SubmissionId = submission.SubmissionId,
                         SenderUserId = submission.UserId // Student là người gửi
                     };
-
-                    await _notificationService.CreateNotificationAsync(notificationRequest);
+                    var result = await _notificationService.CreateNotificationAsync(notificationRequest);
+                    if (result.StatusCode != StatusCodeEnum.Created_201)
+                    {
+                        _logger.LogError($"Failed to create notification for instructor {instructor.UserId}: {result.Message}");
+                    }
                 }
-
                 _logger.LogInformation($"Sent regrade notifications to {instructors.Count()} instructors for request {regradeRequest.RequestId}");
             }
             catch (Exception ex)
