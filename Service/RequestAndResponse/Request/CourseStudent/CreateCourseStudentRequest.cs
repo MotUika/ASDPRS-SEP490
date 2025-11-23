@@ -14,11 +14,6 @@ namespace Service.RequestAndResponse.Request.CourseStudent
 
         [StringLength(50)]
         public string Status { get; set; } = "Enrolled";
-
-        public decimal? FinalGrade { get; set; }
-
-        public bool IsPassed { get; set; } = false;
-
         public int? ChangedByUserId { get; set; }
     }
 }

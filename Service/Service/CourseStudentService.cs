@@ -378,8 +378,8 @@ namespace Service.Service
                     UserId = request.UserId,
                     EnrolledAt = DateTime.UtcNow,
                     Status = request.Status,
-                    FinalGrade = request.FinalGrade,
-                    IsPassed = request.IsPassed,
+                    FinalGrade = null,
+                    IsPassed = false,
                     StatusChangedAt = DateTime.UtcNow,
                     ChangedByUserId = request.ChangedByUserId
                 };
