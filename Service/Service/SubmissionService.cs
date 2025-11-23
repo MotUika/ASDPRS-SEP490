@@ -214,8 +214,8 @@ namespace Service.Service
                 {
                     AssignmentId = request.AssignmentId,
                     UserId = request.UserId,
-                    FileUrl = uploadResult.FileUrl,        
-                    FileName = uploadResult.FileName,      
+                    FileUrl = uploadResult.FileUrl,
+                    FileName = uploadResult.FileName,
                     OriginalFileName = request.File.FileName,
                     Keywords = request.Keywords,
                     SubmittedAt = DateTime.UtcNow,
@@ -1822,7 +1822,7 @@ namespace Service.Service
         }
 
         // Thêm method để lấy chi tiết điểm
-public async Task<BaseResponse<MyScoreDetailsResponse>> GetMyScoreDetailsAsync(int assignmentId, int studentId)
+        public async Task<BaseResponse<MyScoreDetailsResponse>> GetMyScoreDetailsAsync(int assignmentId, int studentId)
         {
             try
             {
@@ -2196,6 +2196,145 @@ public async Task<BaseResponse<MyScoreDetailsResponse>> GetMyScoreDetailsAsync(i
                     StatusCodeEnum.InternalServerError_500, null);
             }
         }
+
+        public async Task<IEnumerable<InstructorSubmissionInfoResponse>> GetInstructorSubmissionInfoAsync(
+    int userId, int? courseId, int? classId, int? assignmentId)
+        {
+            try
+            {
+                // 1️⃣ Xác định CourseInstanceId
+                int? courseInstanceId = null;
+
+                if (classId.HasValue)
+                {
+                    var ci = await _context.CourseInstances
+                        .Include(c => c.Course)
+                        .FirstOrDefaultAsync(c => c.CourseInstanceId == classId.Value);
+
+                    if (ci == null) return Enumerable.Empty<InstructorSubmissionInfoResponse>();
+                    courseInstanceId = ci.CourseInstanceId;
+                }
+                else if (courseId.HasValue)
+                {
+                    var firstCI = await _context.CourseInstances
+                        .Where(ci => ci.CourseId == courseId.Value)
+                        .Include(ci => ci.Course)
+                        .FirstOrDefaultAsync();
+
+                    if (firstCI == null) return Enumerable.Empty<InstructorSubmissionInfoResponse>();
+                    courseInstanceId = firstCI.CourseInstanceId;
+                }
+                else if (assignmentId.HasValue)
+                {
+                    var asm = await _context.Assignments
+                        .Include(a => a.CourseInstance)
+                            .ThenInclude(ci => ci.Course)
+                        .FirstOrDefaultAsync(a => a.AssignmentId == assignmentId.Value);
+
+                    if (asm == null) return Enumerable.Empty<InstructorSubmissionInfoResponse>();
+                    courseInstanceId = asm.CourseInstanceId;
+                }
+
+                if (courseInstanceId == null) return Enumerable.Empty<InstructorSubmissionInfoResponse>();
+
+                // 2️⃣ Check instructor
+                bool isInstructor = await _context.CourseInstructors
+                    .AnyAsync(ci => ci.CourseInstanceId == courseInstanceId.Value && ci.UserId == userId);
+                if (!isInstructor) return Enumerable.Empty<InstructorSubmissionInfoResponse>();
+
+                // 3️⃣ Lấy tất cả students
+                var students = await _context.CourseStudents
+                    .Where(cs => cs.CourseInstanceId == courseInstanceId.Value)
+                    .Include(cs => cs.User)
+                    .ToListAsync();
+
+                // 4️⃣ Lấy tất cả assignments trong course instance (hoặc filter assignmentId)
+                var assignmentsQuery = _context.Assignments
+                    .Include(a => a.CourseInstance)
+                        .ThenInclude(ci => ci.Course)
+                    .Where(a => a.CourseInstanceId == courseInstanceId.Value)
+                    .AsQueryable();
+
+                if (assignmentId.HasValue)
+                    assignmentsQuery = assignmentsQuery.Where(a => a.AssignmentId == assignmentId.Value);
+
+                var assignments = await assignmentsQuery.ToListAsync();
+
+                // 5️⃣ Lấy tất cả submissions của students + assignments
+                var submissions = await _context.Submissions
+                    .Include(s => s.RegradeRequests)
+                    .Where(s => s.Assignment.CourseInstanceId == courseInstanceId.Value)
+                    .ToListAsync();
+
+                // 6️⃣ Map: student × assignment
+                var result = new List<InstructorSubmissionInfoResponse>();
+
+                foreach (var student in students)
+                {
+                    foreach (var asg in assignments)
+                    {
+                        var submission = submissions.FirstOrDefault(s => s.UserId == student.UserId && s.AssignmentId == asg.AssignmentId);
+
+                        result.Add(new InstructorSubmissionInfoResponse
+                        {
+                            UserId = student.UserId,
+                            Username = student.User?.UserName ?? "",
+                            StudentCode = student.User?.StudentCode ?? "",
+
+                            AssignmentId = asg.AssignmentId,
+                            AssignmentTitle = asg.Title,
+
+                            CourseInstanceId = courseInstanceId.Value,
+                            CourseId = asg.CourseInstance?.CourseId ?? 0,
+                            CourseName = asg.CourseInstance?.Course?.CourseName ?? "",
+                            ClassName = asg.CourseInstance?.SectionCode ?? "",
+
+                            SubmissionId = submission?.SubmissionId ?? 0,
+                            SubmittedAt = submission?.SubmittedAt ?? default,
+                            FileUrl = submission?.FileUrl ?? "Không nộp",
+                            FileName = submission?.FileName ?? "Không nộp",
+                            OriginalFileName = submission?.OriginalFileName ?? "Không nộp bài",
+                            StatusSubmission = submission?.Status ?? "NotSubmitted",
+                            FinalScore = submission?.FinalScore,
+                            GradedAt = submission?.GradedAt,
+
+                            RegradeReason = submission?.RegradeRequests?
+                                .OrderByDescending(r => r.RequestedAt)
+                                .Select(r => r.Reason)
+                                .FirstOrDefault(),
+
+                            RegradeStatus = submission?.RegradeRequests?
+                                .OrderByDescending(r => r.RequestedAt)
+                                .Select(r => r.Status)
+                                .FirstOrDefault(),
+
+                            RequestedAt = submission?.RegradeRequests?
+                                .OrderByDescending(r => r.RequestedAt)
+                                .Select(r => r.RequestedAt)
+                                .FirstOrDefault(),
+
+                            ReviewedByUserId = submission?.RegradeRequests?
+                                .OrderByDescending(r => r.RequestedAt)
+                                .Select(r => r.ReviewedByUserId)
+                                .FirstOrDefault(),
+
+                            ResolutionNotes = submission?.RegradeRequests?
+                                .OrderByDescending(r => r.RequestedAt)
+                                .Select(r => r.ResolutionNotes)
+                                .FirstOrDefault(),
+                        });
+                    }
+                }
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error: " + ex.Message);
+                return Enumerable.Empty<InstructorSubmissionInfoResponse>();
+            }
+        }
+
 
     }
 }
