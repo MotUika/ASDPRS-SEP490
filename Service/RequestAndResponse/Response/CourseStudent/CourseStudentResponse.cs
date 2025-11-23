@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Text.Json.Serialization;
 
 namespace Service.RequestAndResponse.Response.CourseStudent
 {
@@ -15,7 +16,10 @@ namespace Service.RequestAndResponse.Response.CourseStudent
         public string StudentCode { get; set; }
         public DateTime EnrolledAt { get; set; }
         public string Status { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public decimal? FinalGrade { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public bool IsPassed { get; set; }
         public DateTime? StatusChangedAt { get; set; }
         public int? ChangedByUserId { get; set; }
