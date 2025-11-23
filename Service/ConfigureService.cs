@@ -77,6 +77,7 @@ namespace Service
             // Add UserService and other dependencies if needed
             services.AddScoped<IUserService, UserService>();
             services.AddScoped<IEmailService, EmailService>();
+            services.AddScoped<IStatisticsService, StatisticsService>();
             services.AddScoped<ITokenService, TokenService>();
             services.AddHostedService<DeadlineReminderBackgroundService>();
 

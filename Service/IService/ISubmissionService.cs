@@ -36,5 +36,7 @@ namespace Service.Interface
         Task<BaseResponse<PlagiarismCheckResponse>> CheckPlagiarismActiveAsync(int assignmentId, IFormFile file, int? excludeSubmissionId = null);
         Task<BaseResponse<decimal?>> GetMyScoreAsync(int assignmentId, int studentId);
         Task<BaseResponse<MyScoreDetailsResponse>> GetMyScoreDetailsAsync(int assignmentId, int studentId);
+        Task<IEnumerable<InstructorSubmissionInfoResponse>> GetInstructorSubmissionInfoAsync(
+    int userId, int? courseId, int? classId, int? assignmentId);
     }
 }

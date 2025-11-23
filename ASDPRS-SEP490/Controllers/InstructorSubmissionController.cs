@@ -272,5 +272,41 @@ namespace ASDPRS_SEP490.Controllers
             var result = await _aiSummaryService.GenerateInstructorCriteriaFeedbackAsync(request);
             return StatusCode((int)result.StatusCode, result);
         }
+
+        [HttpGet("submissions")]
+        [SwaggerOperation(
+            Summary = "Xem danh sách thông tin ",
+            Description = "Lọc theo CourseId, ClassId hoặc AssignmentId. Chỉ giảng viên của lớp mới xem được.")]
+        [SwaggerResponse(200, "Danh sách bài nộp", typeof(IEnumerable<InstructorSubmissionInfoResponse>))]
+        [SwaggerResponse(403, "Không phải giảng viên của lớp")]
+        [SwaggerResponse(404, "Không tìm thấy dữ liệu")]
+        public async Task<IActionResult> GetInstructorSubmissionInfo(
+            [FromQuery] int userId,
+            [FromQuery] int? courseId,
+            [FromQuery] int? classId,
+            [FromQuery] int? assignmentId)
+        {
+            try
+            {
+                var data = await _submissionService.GetInstructorSubmissionInfoAsync(userId, courseId, classId, assignmentId);
+
+                if (data == null || !data.Any())
+                {
+                    return NotFound(new { Message = "Không tìm thấy dữ liệu bài nộp." });
+                }
+
+                return Ok(data);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                // Khi giảng viên không dạy lớp
+                return Forbid(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in GetInstructorSubmissionInfo: {ex.Message}");
+                return StatusCode(500, new { Message = "Có lỗi xảy ra trên server.", Details = ex.Message });
+            }
+        }
     }
 }
