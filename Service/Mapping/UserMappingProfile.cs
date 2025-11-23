@@ -12,17 +12,18 @@ namespace Service.Mapping
         {
             // Request to Entity
             CreateMap<CreateUserRequest, User>()
-                .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(src => DateTime.UtcNow));
+            .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(src => DateTime.UtcNow));
 
             CreateMap<UpdateUserRequest, User>()
-                .ForMember(dest => dest.PasswordHash, opt => opt.Ignore());
-
+            .ForMember(dest => dest.PasswordHash, opt => opt.Ignore());
             // Entity to Response
             CreateMap<User, UserResponse>()
-                .ForMember(dest => dest.CampusName,
-                    opt => opt.MapFrom(src => src.Campus != null ? src.Campus.CampusName : null))
-                .ForMember(dest => dest.MajorName,
-                    opt => opt.MapFrom(src => src.Major != null ? src.Major.MajorName : null));
+            .ForMember(dest => dest.CampusName,
+            opt => opt.MapFrom(src => src.Campus != null ? src.Campus.CampusName : null))
+            .ForMember(dest => dest.MajorName,
+            opt => opt.MapFrom(src => src.Major != null ? src.Major.MajorName : null));
+            CreateMap<User, UserDetailResponse>()
+            .IncludeBase<User, UserResponse>();
         }
     }
 }
