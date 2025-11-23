@@ -3,6 +3,7 @@ using BussinessObject.Models;
 using Microsoft.AspNetCore.SignalR;
 using Repository.IRepository;
 using Repository.Repository;
+using Service.Hubs;
 using Service.IService;
 using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Enums;
@@ -10,12 +11,10 @@ using Service.RequestAndResponse.Request.Notification;
 using Service.RequestAndResponse.Response.Notification;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-
-using Service.Hubs;
-
 namespace Service.Service
 {
     public class NotificationService : INotificationService
@@ -62,6 +61,8 @@ namespace Service.Service
                 var notification = _mapper.Map<Notification>(request);
                 notification.CreatedAt = DateTime.UtcNow;
                 notification.IsRead = false;
+                var validationContext = new ValidationContext(notification);
+                Validator.ValidateObject(notification, validationContext, true);
 
                 var created = await _notificationRepository.AddAsync(notification);
                 var response = _mapper.Map<NotificationResponse>(created);
