@@ -9,7 +9,7 @@ namespace Service.IService
     public interface ICourseInstructorService
     {
         Task<BaseResponse<CourseInstructorResponse>> CreateCourseInstructorAsync(CreateCourseInstructorRequest request);
-        Task<BaseResponse<bool>> DeleteCourseInstructorAsync(int courseInstructorId);
+        Task<BaseResponse<bool>> DeleteCourseInstructorAsync(int courseInstructorId, int courseInstanceId, int instructorId);
         Task<BaseResponse<CourseInstructorResponse>> GetCourseInstructorByIdAsync(int id);
         Task<BaseResponse<List<CourseInstructorResponse>>> GetCourseInstructorsByCourseInstanceAsync(int courseInstanceId);
         Task<BaseResponse<List<CourseInstructorResponse>>> GetCourseInstructorsByInstructorAsync(int instructorId);
