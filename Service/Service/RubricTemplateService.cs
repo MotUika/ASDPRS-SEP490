@@ -153,6 +153,7 @@ namespace Service.Service
                     .Include(rt => rt.CreatedByUser)
                     .Include(rt => rt.Rubrics)
                     .Include(rt => rt.CriteriaTemplates)
+                     .Include(rt => rt.Major)
                     .FirstOrDefaultAsync(rt => rt.TemplateId == createdRubricTemplate.TemplateId);
 
                 var response = _mapper.Map<RubricTemplateResponse>(rubricTemplateWithDetails);
@@ -168,10 +169,12 @@ namespace Service.Service
         {
             try
             {
+                // Lấy RubricTemplate hiện tại với các navigation property
                 var existingRubricTemplate = await _context.RubricTemplates
                     .Include(rt => rt.CreatedByUser)
                     .Include(rt => rt.Rubrics)
                     .Include(rt => rt.CriteriaTemplates)
+                    .Include(rt => rt.Major)
                     .FirstOrDefaultAsync(rt => rt.TemplateId == request.TemplateId);
 
                 if (existingRubricTemplate == null)
@@ -179,7 +182,7 @@ namespace Service.Service
                     return new BaseResponse<RubricTemplateResponse>("Rubric template not found", StatusCodeEnum.NotFound_404, null);
                 }
 
-                // Check for duplicate title if provided
+                // Check duplicate title nếu Title được thay đổi
                 if (!string.IsNullOrEmpty(request.Title) && request.Title != existingRubricTemplate.Title)
                 {
                     var duplicateTemplate = await _context.RubricTemplates
@@ -191,16 +194,36 @@ namespace Service.Service
                     {
                         return new BaseResponse<RubricTemplateResponse>("Rubric template with the same title already exists for this user", StatusCodeEnum.BadRequest_400, null);
                     }
+
+                    existingRubricTemplate.Title = request.Title;
                 }
 
-                // Update only provided fields
-                if (!string.IsNullOrEmpty(request.Title))
-                    existingRubricTemplate.Title = request.Title;
-
+                // Update IsPublic
                 existingRubricTemplate.IsPublic = request.IsPublic;
 
-                var updatedRubricTemplate = await _rubricTemplateRepository.UpdateAsync(existingRubricTemplate);
-                var response = _mapper.Map<RubricTemplateResponse>(updatedRubricTemplate);
+                // Update MajorId nếu được cung cấp và khác với MajorId hiện tại
+                if (request.MajorId.HasValue && request.MajorId.Value != existingRubricTemplate.MajorId)
+                {
+                    // Kiểm tra MajorId hợp lệ
+                    var majorExists = await _context.Majors.AnyAsync(m => m.MajorId == request.MajorId.Value);
+                    if (!majorExists)
+                        return new BaseResponse<RubricTemplateResponse>("Major not found", StatusCodeEnum.NotFound_404, null);
+
+                    existingRubricTemplate.MajorId = request.MajorId.Value;
+                }
+
+                // Lưu thay đổi
+                await _rubricTemplateRepository.UpdateAsync(existingRubricTemplate);
+
+                // Reload entity với navigation properties để map đầy đủ dữ liệu
+                var rubricTemplateWithDetails = await _context.RubricTemplates
+                    .Include(rt => rt.CreatedByUser)
+                    .Include(rt => rt.Rubrics)
+                    .Include(rt => rt.CriteriaTemplates)
+                    .Include(rt => rt.Major)
+                    .FirstOrDefaultAsync(rt => rt.TemplateId == existingRubricTemplate.TemplateId);
+
+                var response = _mapper.Map<RubricTemplateResponse>(rubricTemplateWithDetails);
 
                 return new BaseResponse<RubricTemplateResponse>("Rubric template updated successfully", StatusCodeEnum.OK_200, response);
             }
@@ -209,6 +232,7 @@ namespace Service.Service
                 return new BaseResponse<RubricTemplateResponse>($"Error updating rubric template: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
+
 
         public async Task<BaseResponse<bool>> DeleteRubricTemplateAsync(int id)
         {
