@@ -42,6 +42,10 @@ namespace DataAccessLayer.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("CrossClassTag")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<DateTime>("Deadline")
                         .HasColumnType("datetime2");
 
@@ -124,6 +128,8 @@ namespace DataAccessLayer.Migrations
 
                     b.HasIndex("Deadline");
 
+                    b.HasIndex("Description");
+
                     b.HasIndex("FinalDeadline");
 
                     b.HasIndex("RubricTemplateId");
@@ -131,6 +137,8 @@ namespace DataAccessLayer.Migrations
                     b.HasIndex("StartDate");
 
                     b.HasIndex("Status");
+
+                    b.HasIndex("Title");
 
                     b.HasIndex("CourseInstanceId", "Status");
 
@@ -162,6 +170,8 @@ namespace DataAccessLayer.Migrations
                         .HasColumnType("nvarchar(50)");
 
                     b.HasKey("SummaryId");
+
+                    b.HasIndex("Content");
 
                     b.HasIndex("SubmissionId");
 
@@ -790,6 +800,8 @@ namespace DataAccessLayer.Migrations
 
                     b.HasKey("ReviewId");
 
+                    b.HasIndex("GeneralFeedback");
+
                     b.HasIndex("ReviewAssignmentId");
 
                     b.ToTable("Reviews");
@@ -967,7 +979,7 @@ namespace DataAccessLayer.Migrations
                             ConfigKey = "ScorePrecision",
                             ConfigValue = "0.5",
                             Description = "Number accuracy (0.25, 0.5, 1.0)",
-                            UpdatedAt = new DateTime(2025, 11, 8, 6, 14, 23, 943, DateTimeKind.Utc).AddTicks(7966),
+                            UpdatedAt = new DateTime(2025, 11, 24, 12, 41, 37, 469, DateTimeKind.Utc).AddTicks(7606),
                             UpdatedByUserId = 1
                         },
                         new
@@ -976,7 +988,7 @@ namespace DataAccessLayer.Migrations
                             ConfigKey = "AISummaryMaxTokens",
                             ConfigValue = "1000",
                             Description = "Maximum number of tokens for AI summary",
-                            UpdatedAt = new DateTime(2025, 11, 8, 6, 14, 23, 943, DateTimeKind.Utc).AddTicks(7968),
+                            UpdatedAt = new DateTime(2025, 11, 24, 12, 41, 37, 469, DateTimeKind.Utc).AddTicks(7609),
                             UpdatedByUserId = 1
                         },
                         new
@@ -985,7 +997,7 @@ namespace DataAccessLayer.Migrations
                             ConfigKey = "AISummaryMaxWords",
                             ConfigValue = "200",
                             Description = "Maximum word count for AI summary",
-                            UpdatedAt = new DateTime(2025, 11, 8, 6, 14, 23, 943, DateTimeKind.Utc).AddTicks(7969),
+                            UpdatedAt = new DateTime(2025, 11, 24, 12, 41, 37, 469, DateTimeKind.Utc).AddTicks(7610),
                             UpdatedByUserId = 1
                         },
                         new
@@ -994,7 +1006,7 @@ namespace DataAccessLayer.Migrations
                             ConfigKey = "DefaultPassThreshold",
                             ConfigValue = "50",
                             Description = "Ngưỡng điểm mặc định để Pass",
-                            UpdatedAt = new DateTime(2025, 11, 8, 6, 14, 23, 943, DateTimeKind.Utc).AddTicks(7970),
+                            UpdatedAt = new DateTime(2025, 11, 24, 12, 41, 37, 469, DateTimeKind.Utc).AddTicks(7611),
                             UpdatedByUserId = 1
                         },
                         new
@@ -1003,7 +1015,16 @@ namespace DataAccessLayer.Migrations
                             ConfigKey = "PlagiarismThreshold",
                             ConfigValue = "80",
                             Description = "Maximum allowed plagiarism percentage before blocking submission (0-100)",
-                            UpdatedAt = new DateTime(2025, 11, 8, 6, 14, 23, 943, DateTimeKind.Utc).AddTicks(7971),
+                            UpdatedAt = new DateTime(2025, 11, 24, 12, 41, 37, 469, DateTimeKind.Utc).AddTicks(7612),
+                            UpdatedByUserId = 1
+                        },
+                        new
+                        {
+                            ConfigId = 105,
+                            ConfigKey = "RegradeProcessingDeadlineDays",
+                            ConfigValue = "7",
+                            Description = "Number of days for instructors to process regrade requests",
+                            UpdatedAt = new DateTime(2025, 11, 24, 12, 41, 37, 469, DateTimeKind.Utc).AddTicks(7613),
                             UpdatedByUserId = 1
                         });
                 });
@@ -1114,8 +1135,8 @@ namespace DataAccessLayer.Migrations
                             Id = 1,
                             AccessFailedCount = 0,
                             CampusId = 1,
-                            ConcurrencyStamp = "b08f01d0-1295-40ee-b213-bcca2303e346",
-                            CreatedAt = new DateTime(2025, 11, 8, 6, 14, 23, 943, DateTimeKind.Utc).AddTicks(7909),
+                            ConcurrencyStamp = "80e2fb0a-8fc6-4629-a2c5-abd7b9800a42",
+                            CreatedAt = new DateTime(2025, 11, 24, 12, 41, 37, 469, DateTimeKind.Utc).AddTicks(7522),
                             Email = "admin@example.com",
                             EmailConfirmed = true,
                             FirstName = "Admin",
@@ -1126,7 +1147,7 @@ namespace DataAccessLayer.Migrations
                             NormalizedUserName = "ADMIN",
                             PasswordHash = "AQAAAAIAAYagAAAAEK95SlxvEPzqxJyTxIof0ufhmHVKdEGcuw7MxCBj92JUehpXlaMI0F4RrX3mzLDNzA==",
                             PhoneNumberConfirmed = false,
-                            SecurityStamp = "632ab1ae-cec2-4967-b0d3-8ed10fa132c7",
+                            SecurityStamp = "c17793b0-100a-46e9-85ef-5563891dc21a",
                             StudentCode = "ADMIN001",
                             TwoFactorEnabled = false,
                             UserName = "admin"

@@ -136,7 +136,7 @@ namespace Service.Service
                 }
 
                 // 4. Kiểm tra xem có khớp cả 3 field không
-                if (courseInstructor.Id != instructorId || courseInstructor.CourseInstanceId != courseInstanceId)
+                if (courseInstructor.UserId != instructorId || courseInstructor.CourseInstanceId != courseInstanceId)
                 {
                     return new BaseResponse<bool>(
                         "Mismatch detected: instructor does not belong to this course instance",
