@@ -30,7 +30,5 @@ namespace BussinessObject.Models
         [ForeignKey(nameof(SubmissionId))]
         public virtual Submission Submission { get; set; }
 
-        // Navigation properties
-        public virtual ICollection<DocumentEmbedding> DocumentEmbeddings { get; set; } = new List<DocumentEmbedding>();
     }
 }

@@ -35,6 +35,5 @@ namespace BussinessObject.Models
 
         // Navigation properties
         public virtual ICollection<CriteriaFeedback> CriteriaFeedbacks { get; set; } = new List<CriteriaFeedback>();
-        public virtual ICollection<DocumentEmbedding> DocumentEmbeddings { get; set; } = new List<DocumentEmbedding>();
     }
 }
