@@ -157,7 +157,7 @@ public class StatisticsService : IStatisticsService
 
 
     public async Task<BaseResponse<IEnumerable<AssignmentOverviewResponse>>>
-GetAssignmentOverviewAsync(int userId, int courseInstanceId)
+ GetAssignmentOverviewAsync(int userId, int courseInstanceId)
     {
         var assignments = await _context.Assignments
             .Where(a => a.CourseInstanceId == courseInstanceId &&
@@ -235,8 +235,6 @@ GetAssignmentOverviewAsync(int userId, int courseInstanceId)
             list
         );
     }
-
-
 
 
     public async Task<BaseResponse<IEnumerable<AssignmentSubmissionDetailResponse>>>
@@ -523,3 +521,10 @@ GetAssignmentOverviewAsync(int userId, int courseInstanceId)
 
 
 }
+
+
+       
+    
+
+
+
