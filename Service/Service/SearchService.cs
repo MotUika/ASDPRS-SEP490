@@ -23,15 +23,12 @@ namespace Service.Service
         }
         public async Task<BaseResponse<SearchResultEFResponse>> SearchAsync(string keyword, int userId, string role)
         {
-            if (string.IsNullOrWhiteSpace(keyword) || keyword.Length < 3) // Add min length validation
+            if (string.IsNullOrWhiteSpace(keyword) || keyword.Length < 3)
             {
                 return new BaseResponse<SearchResultEFResponse>("Keyword must be at least 3 characters", StatusCodeEnum.BadRequest_400, null);
             }
 
-            // Sanitize keyword (EF handles injection, but trim)
             keyword = keyword.Trim();
-
-            // Tách keyword thành các từ riêng lẻ để tìm kiếm tốt hơn, hỗ trợ OR/AND
             var searchTerms = keyword.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries)
                                      .Select(term => $"\"{term}*\"")
                                      .ToList();
@@ -44,7 +41,7 @@ namespace Service.Service
             var results = new SearchResultEFResponse();
             try
             {
-                // Search Assignments với Full-Text Search (CHANGED: Use Contains for FTS index if setup)
+                // 1. Search Assignments
                 var assignmentQuery = _context.Assignments
                     .Include(a => a.CourseInstance)
                         .ThenInclude(ci => ci.Course)
@@ -55,11 +52,15 @@ namespace Service.Service
                     assignmentQuery = assignmentQuery.Where(a =>
                         a.CourseInstance.CourseStudents.Any(cs => cs.UserId == userId));
                 }
+                else if (role == "Instructor")
+                {
+                    assignmentQuery = assignmentQuery.Where(a =>
+                        a.CourseInstance.CourseInstructors.Any(ci => ci.UserId == userId));
+                }
 
-                // CHANGED: Use FTS Contains for better performance (assume FTS index on Title, Description, CourseName)
                 assignmentQuery = assignmentQuery.Where(a =>
                     searchTerms.Any(term =>
-                        Microsoft.EntityFrameworkCore.EF.Functions.Contains(a.Title, term) || // FTS
+                        Microsoft.EntityFrameworkCore.EF.Functions.Contains(a.Title, term) ||
                         Microsoft.EntityFrameworkCore.EF.Functions.Contains(a.Description, term) ||
                         Microsoft.EntityFrameworkCore.EF.Functions.Contains(a.CourseInstance.Course.CourseName, term)
                     ));
@@ -76,7 +77,7 @@ namespace Service.Service
                     })
                     .ToListAsync();
 
-                // Search Feedback (Reviews) với cải tiến tìm kiếm
+                // 2. Search Feedback (Reviews)
                 var reviewQuery = _context.Reviews
                     .Include(r => r.ReviewAssignment)
                         .ThenInclude(ra => ra.Submission)
@@ -86,12 +87,20 @@ namespace Service.Service
 
                 if (role == "Student")
                 {
-                    reviewQuery = reviewQuery.Where(r => r.ReviewAssignment.Submission.UserId == userId);
+                    // Students can only search reviews THEY CREATED
+                    reviewQuery = reviewQuery.Where(r => r.ReviewAssignment.ReviewerUserId == userId);
+                }
+                else if (role == "Instructor")
+                {
+                    // Instructors can search reviews in their courses
+                    reviewQuery = reviewQuery.Where(r =>
+                        r.ReviewAssignment.Submission.Assignment.CourseInstance.CourseInstructors
+                            .Any(ci => ci.UserId == userId));
                 }
 
                 reviewQuery = reviewQuery.Where(r =>
                     searchTerms.Any(term =>
-                        Microsoft.EntityFrameworkCore.EF.Functions.Contains(r.GeneralFeedback, term) || // CHANGED: FTS
+                        Microsoft.EntityFrameworkCore.EF.Functions.Contains(r.GeneralFeedback, term) ||
                         r.CriteriaFeedbacks.Any(cf => Microsoft.EntityFrameworkCore.EF.Functions.Contains(cf.Feedback, term))
                     ));
 
@@ -105,37 +114,42 @@ namespace Service.Service
                     })
                     .ToListAsync();
 
-                // Search LLM Summaries với cải tiến
-                var summaryQuery = _context.AISummaries
-                    .Include(ais => ais.Submission)
-                        .ThenInclude(s => s.Assignment)
-                    .AsQueryable();
-
-                if (role == "Student")
+                // 3. Search LLM Summaries (NOT for Students)
+                if (role != "Student")
                 {
-                    summaryQuery = summaryQuery.Where(ais => ais.Submission.UserId == userId);
+                    var summaryQuery = _context.AISummaries
+                        .Include(ais => ais.Submission)
+                            .ThenInclude(s => s.Assignment)
+                        .AsQueryable();
+
+                    if (role == "Instructor")
+                    {
+                        summaryQuery = summaryQuery.Where(ais =>
+                            ais.Submission.Assignment.CourseInstance.CourseInstructors
+                                .Any(ci => ci.UserId == userId));
+                    }
+
+                    summaryQuery = summaryQuery.Where(ais =>
+                        searchTerms.Any(term =>
+                            Microsoft.EntityFrameworkCore.EF.Functions.Contains(ais.Content, term) ||
+                            Microsoft.EntityFrameworkCore.EF.Functions.Contains(ais.SummaryType, term)
+                        ));
+
+                    results.Summaries = await summaryQuery
+                        .Select(ais => new SummarySearchResult
+                        {
+                            SummaryId = ais.SummaryId,
+                            AssignmentTitle = ais.Submission.Assignment.Title,
+                            ContentSnippet = ais.Content.Length > 100
+                                ? ais.Content.Substring(0, 100) + "..."
+                                : ais.Content,
+                            SummaryType = ais.SummaryType,
+                            GeneratedAt = ais.GeneratedAt
+                        })
+                        .ToListAsync();
                 }
 
-                summaryQuery = summaryQuery.Where(ais =>
-                    searchTerms.Any(term =>
-                        Microsoft.EntityFrameworkCore.EF.Functions.Contains(ais.Content, term) || // CHANGED: FTS
-                        Microsoft.EntityFrameworkCore.EF.Functions.Contains(ais.SummaryType, term)
-                    ));
-
-                results.Summaries = await summaryQuery
-                    .Select(ais => new SummarySearchResult
-                    {
-                        SummaryId = ais.SummaryId,
-                        AssignmentTitle = ais.Submission.Assignment.Title,
-                        ContentSnippet = ais.Content.Length > 100
-                            ? ais.Content.Substring(0, 100) + "..."
-                            : ais.Content,
-                        SummaryType = ais.SummaryType,
-                        GeneratedAt = ais.GeneratedAt
-                    })
-                    .ToListAsync();
-
-                // Search Submissions với keywords
+                // 4. Search Submissions
                 var submissionQuery = _context.Submissions
                     .Include(s => s.Assignment)
                     .Include(s => s.User)
@@ -145,10 +159,15 @@ namespace Service.Service
                 {
                     submissionQuery = submissionQuery.Where(s => s.UserId == userId);
                 }
+                else if (role == "Instructor")
+                {
+                    submissionQuery = submissionQuery.Where(s =>
+                        s.Assignment.CourseInstance.CourseInstructors.Any(ci => ci.UserId == userId));
+                }
 
                 submissionQuery = submissionQuery.Where(s =>
                     searchTerms.Any(term =>
-                        Microsoft.EntityFrameworkCore.EF.Functions.Contains(s.Keywords, term) || // CHANGED: FTS
+                        Microsoft.EntityFrameworkCore.EF.Functions.Contains(s.Keywords, term) ||
                         Microsoft.EntityFrameworkCore.EF.Functions.Contains(s.OriginalFileName, term)
                     ));
 
@@ -164,25 +183,52 @@ namespace Service.Service
                     })
                     .ToListAsync();
 
-                // CHANGED: Add search for Rubric Criteria (req 6)
-                var criteriaQuery = _context.Criteria
-                    .Include(c => c.Rubric)
-                        .ThenInclude(r => r.Assignment)
-                            .ThenInclude(a => a.CourseInstance)
-                    .AsQueryable();
+                // 5. Search Rubric Criteria (Only for Instructors/Admin)
+                if (role != "Student")
+                {
+                    var criteriaQuery = _context.Criteria
+                        .Include(c => c.Rubric)
+                            .ThenInclude(r => r.Assignment)
+                                .ThenInclude(a => a.CourseInstance)
+                                    .ThenInclude(ci => ci.Course)
+                        .AsQueryable();
 
-                // CHANGED: Add logging for performance
-                Console.WriteLine($"Search completed: {results.Assignments.Count} assignments, {results.Feedback.Count} feedback, etc.");
+                    if (role == "Instructor")
+                    {
+                        criteriaQuery = criteriaQuery.Where(c =>
+                            c.Rubric.Assignment.CourseInstance.CourseInstructors
+                                .Any(ci => ci.UserId == userId));
+                    }
+
+                    criteriaQuery = criteriaQuery.Where(c =>
+                        searchTerms.Any(term =>
+                            Microsoft.EntityFrameworkCore.EF.Functions.Contains(c.Title, term) ||
+                            Microsoft.EntityFrameworkCore.EF.Functions.Contains(c.Description, term)
+                        ));
+
+                    results.Criteria = await criteriaQuery
+                        .Select(c => new CriteriaSearchResult
+                        {
+                            CriteriaId = c.CriteriaId,
+                            Title = c.Title,
+                            Description = c.Description,
+                            RubricTitle = c.Rubric.Title,
+                            AssignmentTitle = c.Rubric.Assignment.Title,
+                            CourseName = c.Rubric.Assignment.CourseInstance.Course.CourseName,
+                            MaxScore = c.MaxScore,
+                            Weight = c.Weight
+                        })
+                        .ToListAsync();
+                }
 
                 return new BaseResponse<SearchResultEFResponse>(
-                    $"Search completed successfully. Found {results.Assignments.Count} assignments, {results.Feedback.Count} feedback, {results.Summaries.Count} summaries, {results.Submissions.Count} submissions",
+                    $"Search completed successfully. Found {results.Assignments.Count} assignments, {results.Feedback.Count} feedback, {results.Summaries.Count} summaries, {results.Submissions.Count} submissions, {results.Criteria.Count} criteria",
                     StatusCodeEnum.OK_200,
                     results
                 );
             }
             catch (Exception ex)
             {
-                // Fallback to basic search if full-text fails (e.g., no FTS index)
                 return await BasicSearchAsync(keyword, userId, role);
             }
         }
