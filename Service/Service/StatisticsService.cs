@@ -157,7 +157,7 @@ public class StatisticsService : IStatisticsService
 
 
     public async Task<BaseResponse<IEnumerable<AssignmentOverviewResponse>>>
- GetAssignmentOverviewAsync(int userId, int courseInstanceId)
+GetAssignmentOverviewAsync(int userId, int courseInstanceId)
     {
         var assignments = await _context.Assignments
             .Where(a => a.CourseInstanceId == courseInstanceId &&
@@ -167,9 +167,7 @@ public class StatisticsService : IStatisticsService
                 .ThenInclude(ci => ci.CourseStudents)
             .ToListAsync();
 
-        var result = new List<AssignmentOverviewResponse>();
-
-        // --- Khởi tạo tổng hợp ---
+        // --- Khởi tạo tổng ---
         int draftCount = 0;
         int upcomingCount = 0;
         int activeCount = 0;
@@ -184,13 +182,7 @@ public class StatisticsService : IStatisticsService
 
         foreach (var a in assignments)
         {
-            var students = a.CourseInstance.CourseStudents;
             var submissions = a.Submissions;
-
-            int totalStudents = students.Count;
-            int totalSubmissions = submissions.Count;
-            int gradedCount = submissions.Count(s => s.FinalScore.HasValue);
-
             var graded = submissions.Where(s => s.FinalScore.HasValue).ToList();
 
             int passCount = graded.Count(s =>
@@ -199,7 +191,6 @@ public class StatisticsService : IStatisticsService
 
             int failCount = graded.Count - passCount;
 
-            // Cộng vào tổng hợp
             totalPassCount += passCount;
             totalFailCount += failCount;
 
@@ -214,36 +205,16 @@ public class StatisticsService : IStatisticsService
                 case "Archived": archivedCount++; break;
                 case "Cancelled": cancelledCount++; break;
             }
-
-            result.Add(new AssignmentOverviewResponse
-            {
-                AssignmentId = a.AssignmentId,
-                AssignmentTitle = a.Title,
-                TotalStudents = totalStudents,
-                TotalSubmissions = totalSubmissions,
-                GradedCount = gradedCount,
-                SubmissionRate = totalStudents == 0 ? 0 : (decimal)totalSubmissions / totalStudents * 100,
-                GradedRate = totalSubmissions == 0 ? 0 : (decimal)gradedCount / totalSubmissions * 100,
-                PassCount = passCount,
-                FailCount = failCount,
-
-                // Mỗi assignment chi tiết chỉ đánh 1 status tương ứng
-                DraftCount = a.Status == "Draft" ? 1 : 0,
-                UpcomingCount = a.Status == "Upcoming" ? 1 : 0,
-                ActiveCount = a.Status == "Active" ? 1 : 0,
-                InReviewCount = a.Status == "InReview" ? 1 : 0,
-                ClosedCount = a.Status == "Closed" ? 1 : 0,
-                GradesPublishedCount = a.Status == "GradesPublished" ? 1 : 0,
-                ArchivedCount = a.Status == "Archived" ? 1 : 0,
-                CancelledCount = a.Status == "Cancelled" ? 1 : 0
-            });
         }
 
-        // --- Entry tổng hợp ---
-        var totalOverview = new AssignmentOverviewResponse
+        // Chỉ trả về đúng 1 record tổng
+        var list = new List<AssignmentOverviewResponse>
+    {
+        new AssignmentOverviewResponse
         {
             AssignmentId = 0,
             AssignmentTitle = "Total Assignments",
+
             DraftCount = draftCount,
             UpcomingCount = upcomingCount,
             ActiveCount = activeCount,
@@ -252,92 +223,56 @@ public class StatisticsService : IStatisticsService
             GradesPublishedCount = gradesPublishedCount,
             ArchivedCount = archivedCount,
             CancelledCount = cancelledCount,
+
             PassCount = totalPassCount,
             FailCount = totalFailCount
-        };
-
-        result.Insert(0, totalOverview);
+        }
+    };
 
         return new BaseResponse<IEnumerable<AssignmentOverviewResponse>>(
             "Thống kê assignment thành công",
             StatusCodeEnum.OK_200,
-            result
+            list
         );
     }
 
 
 
+
     public async Task<BaseResponse<IEnumerable<AssignmentSubmissionDetailResponse>>>
-        GetSubmissionDetailsAsync(int userId, int courseInstanceId)
+    GetSubmissionDetailsAsync(int userId, int courseInstanceId)
     {
         var assignments = await _context.Assignments
             .Where(a => a.CourseInstanceId == courseInstanceId &&
                         a.CourseInstance.CourseInstructors.Any(ci => ci.UserId == userId))
             .Include(a => a.Submissions)
-                .ThenInclude(s => s.User)
             .Include(a => a.CourseInstance)
                 .ThenInclude(ci => ci.CourseStudents)
             .ToListAsync();
 
-        var result = new List<AssignmentSubmissionDetailResponse>();
-
-        // Biến tổng hợp
         int totalSubmitted = 0;
         int totalNotSubmitted = 0;
         int totalGraded = 0;
 
         foreach (var a in assignments)
         {
-            var assignmentDetail = new AssignmentSubmissionDetailResponse
-            {
-                AssignmentId = a.AssignmentId,
-                AssignmentTitle = a.Title
-            };
-
             var studentsInClass = a.CourseInstance.CourseStudents;
 
-            foreach (var s in a.Submissions)
-            {
-                string submissionStatus;
-                bool isNotSubmitted = s.FileUrl == "Không nộp" ||
-                                      s.FileUrl == "Not Submitted" ||
-                                      s.OriginalFileName == "Không nộp bài" ||
-                                      s.OriginalFileName == "Not Submitted";
+            int submittedCount = a.Submissions.Count(s =>
+                s.Status == "Submitted" ||
+                (s.Status == "Graded" && (s.FinalScore ?? 0) > 0)
+            );
 
-                if (isNotSubmitted)
-                    submissionStatus = "Not Submitted";
-                else if (s.Status == "Graded" && (s.FinalScore ?? 0) > 0)
-                    submissionStatus = "Graded";
-                else
-                    submissionStatus = "Submitted";
+            int gradedCount = a.Submissions.Count(s => s.Status == "Graded");
+            int notSubmittedCount = studentsInClass.Count - submittedCount;
 
-                assignmentDetail.Submissions.Add(new SubmissionStatisticResponse
-                {
-                    SubmissionId = s.SubmissionId,
-                    UserId = s.UserId,
-                    StudentName = s.User?.UserName ?? $"student{s.UserId}",
-                    StudentCode = s.User?.StudentCode ?? "",
-                    FinalScore = s.FinalScore,
-                    Status = submissionStatus
-                });
-            }
-
-            assignmentDetail.GradedCount = assignmentDetail.Submissions.Count(s => s.Status == "Graded");
-            assignmentDetail.SubmittedCount = assignmentDetail.Submissions.Count(s => s.Status == "Submitted" || s.Status == "Graded");
-            assignmentDetail.NotSubmittedCount = studentsInClass.Count
-                - assignmentDetail.Submissions.Count(s => s.Status == "Submitted" || s.Status == "Graded");
-
-            // Cộng vào tổng
-            totalGraded += assignmentDetail.GradedCount;
-            totalSubmitted += assignmentDetail.SubmittedCount;
-            totalNotSubmitted += assignmentDetail.NotSubmittedCount;
-
-
-            result.Add(assignmentDetail);
+            totalSubmitted += submittedCount;
+            totalNotSubmitted += notSubmittedCount;
+            totalGraded += gradedCount;
         }
 
-        // --- Thêm entry Total Assignment ở đầu danh sách ---
-        var totalAssignment = new AssignmentSubmissionDetailResponse
+        // ➜ Chỉ trả về đúng 1 object TOTAL
+        var totalResponse = new AssignmentSubmissionDetailResponse
         {
             AssignmentId = 0,
             AssignmentTitle = "Total Assignment",
@@ -345,44 +280,38 @@ public class StatisticsService : IStatisticsService
             TotalSubmittedCount = totalSubmitted,
             TotalNotSubmittedCount = totalNotSubmitted,
             TotalGradedCount = totalGraded,
+
+            // Không cần chi tiết từng assignment
             Submissions = new List<SubmissionStatisticResponse>(),
             SubmittedCount = 0,
             NotSubmittedCount = 0,
             GradedCount = 0
         };
 
-        // Chèn vào đầu danh sách
-        totalAssignment.TotalAssignment = assignments.Count;
-        result.Insert(0, totalAssignment);
-
         return new BaseResponse<IEnumerable<AssignmentSubmissionDetailResponse>>(
             "Lấy thống kê submission thành công",
             StatusCodeEnum.OK_200,
-            result
+            new List<AssignmentSubmissionDetailResponse> { totalResponse }
         );
     }
 
 
+
     public async Task<BaseResponse<IEnumerable<AssignmentDistributionResponse>>>
-        GetAssignmentDistributionAsync(int userId, int courseInstanceId)
+    GetAssignmentDistributionAsync(int userId, int courseInstanceId)
     {
-        // Lấy tất cả assignment mà instructor đang quản lý
         var assignments = await _context.Assignments
             .Where(a => a.CourseInstanceId == courseInstanceId &&
                         a.CourseInstance.CourseInstructors.Any(ci => ci.UserId == userId))
             .Include(a => a.Submissions)
             .ToListAsync();
 
-        var result = new List<AssignmentDistributionResponse>();
-
-        // Gộp tất cả điểm để tính tổng phân phối
         var allScores = assignments
             .SelectMany(a => a.Submissions
                 .Where(s => s.FinalScore.HasValue)
                 .Select(s => (decimal)s.FinalScore))
             .ToList();
 
-        // Tính tổng phân phối điểm
         var totalDistribution = allScores
             .GroupBy(score => (int)score)
             .Select(g => new DistributionItem
@@ -393,8 +322,7 @@ public class StatisticsService : IStatisticsService
             .OrderBy(d => d.Range)
             .ToList();
 
-        // --- Tạo entry tổng hợp ---
-        var totalAssignment = new AssignmentDistributionResponse
+        var total = new AssignmentDistributionResponse
         {
             AssignmentId = 0,
             AssignmentTitle = "Total Assignment",
@@ -403,42 +331,13 @@ public class StatisticsService : IStatisticsService
             TotalAssignmentCount = assignments.Count
         };
 
-        result.Add(totalAssignment);
-
-        // --- Thêm các assignment chi tiết ---
-        foreach (var a in assignments)
-        {
-            var gradedScores = a.Submissions
-                .Where(s => s.FinalScore.HasValue)
-                .Select(s => (decimal)s.FinalScore)
-                .ToList();
-
-            var distribution = gradedScores
-                .GroupBy(score => (int)score)
-                .Select(g => new DistributionItem
-                {
-                    Range = $"{g.Key} - {g.Key + 1}",
-                    Count = g.Count()
-                })
-                .OrderBy(d => d.Range)
-                .ToList();
-
-            result.Add(new AssignmentDistributionResponse
-            {
-                AssignmentId = a.AssignmentId,
-                AssignmentTitle = a.Title,
-                Distribution = distribution,
-                IsTotal = false,
-                TotalAssignmentCount = 0
-            });
-        }
-
         return new BaseResponse<IEnumerable<AssignmentDistributionResponse>>(
             "Thống kê phân phối điểm thành công",
             StatusCodeEnum.OK_200,
-            result
+            new List<AssignmentDistributionResponse> { total } // 👈 chỉ 1 item
         );
     }
+
 
 
 
