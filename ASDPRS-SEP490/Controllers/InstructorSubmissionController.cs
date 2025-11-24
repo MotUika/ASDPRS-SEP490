@@ -282,13 +282,12 @@ namespace ASDPRS_SEP490.Controllers
         [SwaggerResponse(404, "Không tìm thấy dữ liệu")]
         public async Task<IActionResult> GetInstructorSubmissionInfo(
             [FromQuery] int userId,
-            [FromQuery] int? courseId,
             [FromQuery] int? classId,
             [FromQuery] int? assignmentId)
         {
             try
             {
-                var data = await _submissionService.GetInstructorSubmissionInfoAsync(userId, courseId, classId, assignmentId);
+                var data = await _submissionService.GetInstructorSubmissionInfoAsync(userId, classId, assignmentId);
 
                 if (data == null || !data.Any())
                 {

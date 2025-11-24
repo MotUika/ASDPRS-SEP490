@@ -12,5 +12,14 @@ namespace Service.IService
 
         Task<BaseResponse<IEnumerable<ClassStatisticResponse>>>
             GetClassStatisticsByCourseAsync(int userId, int courseId);
+
+        Task<BaseResponse<IEnumerable<AssignmentOverviewResponse>>>
+             GetAssignmentOverviewAsync(int userId, int courseInstanceId);
+
+        Task<BaseResponse<IEnumerable<AssignmentSubmissionDetailResponse>>>
+         GetSubmissionDetailsAsync(int userId, int courseInstanceId);
+
+        Task<BaseResponse<IEnumerable<AssignmentDistributionResponse>>>
+         GetAssignmentDistributionAsync(int userId, int courseInstanceId);
     }
 }

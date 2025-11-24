@@ -37,6 +37,6 @@ namespace Service.Interface
         Task<BaseResponse<decimal?>> GetMyScoreAsync(int assignmentId, int studentId);
         Task<BaseResponse<MyScoreDetailsResponse>> GetMyScoreDetailsAsync(int assignmentId, int studentId);
         Task<IEnumerable<InstructorSubmissionInfoResponse>> GetInstructorSubmissionInfoAsync(
-    int userId, int? courseId, int? classId, int? assignmentId);
+    int userId, int? classId, int? assignmentId);
     }
 }
