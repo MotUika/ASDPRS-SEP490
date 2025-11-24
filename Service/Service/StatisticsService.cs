@@ -157,7 +157,7 @@ public class StatisticsService : IStatisticsService
 
 
     public async Task<BaseResponse<IEnumerable<AssignmentOverviewResponse>>>
-GetAssignmentOverviewAsync(int userId, int courseInstanceId)
+ GetAssignmentOverviewAsync(int userId, int courseInstanceId)
     {
         var assignments = await _context.Assignments
             .Where(a => a.CourseInstanceId == courseInstanceId &&
@@ -206,7 +206,6 @@ GetAssignmentOverviewAsync(int userId, int courseInstanceId)
                 case "Cancelled": cancelledCount++; break;
             }
         }
-    };
 
         // Chỉ trả về đúng 1 record tổng
         var list = new List<AssignmentOverviewResponse>
@@ -236,8 +235,6 @@ GetAssignmentOverviewAsync(int userId, int courseInstanceId)
             list
         );
     }
-
-
 
 
     public async Task<BaseResponse<IEnumerable<AssignmentSubmissionDetailResponse>>>
@@ -524,3 +521,10 @@ GetAssignmentDistributionAsync(int userId, int courseInstanceId)
 
 
 }
+
+
+       
+    
+
+
+
