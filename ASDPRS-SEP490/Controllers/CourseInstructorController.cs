@@ -144,21 +144,22 @@ namespace ASDPRS_SEP490.Controllers
         }
 
         // 🔹 Xóa giảng viên khỏi lớp học
-        [HttpDelete("{id}")]
+        [HttpDelete]
         [SwaggerOperation(
-            Summary = "Xóa giảng viên khỏi lớp học",
-            Description = "Loại bỏ một giảng viên ra khỏi lớp học. Thường chỉ dùng cho admin hoặc quản lý học vụ."
+         Summary = "Xóa giảng viên khỏi lớp học",
+         Description = "Loại bỏ một giảng viên ra khỏi lớp học. Thường chỉ dùng cho admin hoặc quản lý học vụ."
         )]
         [SwaggerResponse(200, "Xóa thành công", typeof(BaseResponse<bool>))]
         [SwaggerResponse(404, "Không tìm thấy bản ghi")]
         [SwaggerResponse(500, "Lỗi server")]
-        public async Task<IActionResult> DeleteCourseInstructor(int id)
+        public async Task<IActionResult> DeleteCourseInstructor(int courseInstructorId, int courseInstanceId, int instructorId)
         {
-            var result = await _courseInstructorService.DeleteCourseInstructorAsync(id);
+            var result = await _courseInstructorService.DeleteCourseInstructorAsync(courseInstructorId, courseInstanceId, instructorId);
             return result.StatusCode switch
             {
                 StatusCodeEnum.OK_200 => Ok(result),
                 StatusCodeEnum.NotFound_404 => NotFound(result),
+                StatusCodeEnum.BadRequest_400 => BadRequest(result),
                 _ => StatusCode(500, result)
             };
         }
