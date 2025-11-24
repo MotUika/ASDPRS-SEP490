@@ -237,7 +237,7 @@ public class StatisticsService : IStatisticsService
                 string submissionStatus;
 
                 // Chưa nộp
-                bool isNotSubmitted = s.FileUrl == "Không nộp" || s.OriginalFileName == "Không nộp bài";
+                bool isNotSubmitted = s.FileUrl == "Không nộp" ||s.FileUrl == "Not Submitted" || s.OriginalFileName == "Không nộp bài" || s.OriginalFileName == "Not Submitted";
 
                 if (isNotSubmitted)
                     submissionStatus = "Not Submitted";
