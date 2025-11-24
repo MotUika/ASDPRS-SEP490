@@ -44,6 +44,7 @@ namespace Service.RequestAndResponse.Request.Assignment
 
         [Required]
         public bool AllowCrossClass { get; set; } = false;
+        public string? CrossClassTag { get; set; }
 
         //public bool IsBlindReview { get; set; } = true;
 

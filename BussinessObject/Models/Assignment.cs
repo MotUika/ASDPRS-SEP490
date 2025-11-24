@@ -47,6 +47,9 @@ public class Assignment
     [Required]
     public bool AllowCrossClass { get; set; } = false;
 
+    [StringLength(50)]
+    public string? CrossClassTag { get; set; }  // e.g., "#Week5Review"
+
     [Required]
     public bool IsBlindReview { get; set; } = false;
 

@@ -36,6 +36,7 @@ namespace Service.RequestAndResponse.Request.Assignment
         public decimal? PassThreshold { get; set; } = 50;
 
         public bool? AllowCrossClass { get; set; }
+        public string? CrossClassTag { get; set; }
 
         //[JsonIgnore]
         //public bool IsBlindReview { get; set; } = true;

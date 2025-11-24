@@ -17,6 +17,7 @@ using Service.RequestAndResponse.Response.Rubric;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace Service.Service
@@ -174,6 +175,20 @@ namespace Service.Service
                         null
                     );
                 }
+                var warnings = new List<ErrorDetail>();
+                if (request.AllowCrossClass)
+                {
+                    var validationResult = await ValidateCrossClassAsync(request.CrossClassTag, request.CourseInstanceId);
+                    if (validationResult != null) return validationResult;
+
+                    var userId = GetCurrentUserId();
+                    var existingTags = await GetPopularCrossClassTagsByUserAsync(userId);
+                    var normalizedTag = NormalizeCrossClassTag(request.CrossClassTag);
+                    if (!existingTags.Contains(normalizedTag))
+                    {
+                        warnings.Add(new ErrorDetail { Field = "CrossClassTag", Message = "This is a new tag.", Suggestion = "Fine for first assignment!" });
+                    }
+                }
 
                 bool isBlindReviewFinal = true;     
                 bool includeAIScoreFinal = false;
@@ -192,6 +207,7 @@ namespace Service.Service
                     ReviewDeadline = request.ReviewDeadline,
                     NumPeerReviewsRequired = request.NumPeerReviewsRequired,
                     AllowCrossClass = request.AllowCrossClass,
+                    CrossClassTag = request.AllowCrossClass ? NormalizeCrossClassTag(request.CrossClassTag) : null,
                     InstructorWeight = request.InstructorWeight,
                     PeerWeight = request.PeerWeight,
                     GradingScale = request.GradingScale,
@@ -260,6 +276,7 @@ namespace Service.Service
                     null);
             }
         }
+
         private async Task SaveAssignmentConfigs(int assignmentId, string key, string value)
         {
             var configKey = $"{key}_{assignmentId}";
@@ -320,6 +337,31 @@ namespace Service.Service
                         StatusCodeEnum.BadRequest_400,
                         null
                     );
+                }
+
+                var warnings = new List<ErrorDetail>();
+                if (request.AllowCrossClass.HasValue)
+                {
+                    if (request.AllowCrossClass.Value)
+                    {
+                        var tagToValidate = request.CrossClassTag ?? assignment.CrossClassTag;
+                        var validationResult = await ValidateCrossClassAsync(tagToValidate, assignment.CourseInstanceId);
+                        if (validationResult != null) return validationResult;
+
+                        var userId = GetCurrentUserId();
+                        var existingTags = await GetPopularCrossClassTagsByUserAsync(userId);
+                        var normalizedTag = NormalizeCrossClassTag(tagToValidate);
+                        if (!existingTags.Contains(normalizedTag))
+                        {
+                            warnings.Add(new ErrorDetail { Field = "CrossClassTag", Message = "This is a new tag.", Suggestion = "Fine for first assignment!" });
+                        }
+                        assignment.CrossClassTag = normalizedTag;
+                    }
+                    else
+                    {
+                        assignment.CrossClassTag = null;
+                    }
+                    assignment.AllowCrossClass = request.AllowCrossClass.Value;
                 }
 
                 // 🧩 Validate file upload
@@ -518,6 +560,133 @@ namespace Service.Service
                     StatusCodeEnum.InternalServerError_500,
                     false);
             }
+        }
+
+        private string NormalizeCrossClassTag(string tag)
+        {
+            tag = tag.Trim();
+            return tag.StartsWith("#") ? tag : "#" + tag;
+        }
+
+        private bool IsValidCrossClassTag(string tag)
+        {
+            var regex = new Regex(@"^[a-zA-Z0-9#_-]+$");
+            return regex.IsMatch(tag);
+        }
+
+        private async Task<List<string>> GetPopularCrossClassTagsByUserAsync(int userId)
+        {
+            var tags = await _context.Assignments
+                .Where(a => a.CourseInstance.CourseInstructors.Any(ci => ci.UserId == userId)
+                            && a.AllowCrossClass
+                            && !string.IsNullOrEmpty(a.CrossClassTag))
+                .GroupBy(a => a.CrossClassTag)
+                .OrderByDescending(g => g.Count())
+                .Select(g => g.Key)
+                .Take(10)
+                .ToListAsync();
+
+            return tags;
+        }
+
+        private async Task<TimeSpan> GetCrossClassReviewWindowToleranceAsync()
+        {
+            var config = await _systemConfigService.GetSystemConfigAsync("CrossClassReviewWindowToleranceDays");
+            var days = int.TryParse(config, out int d) ? d : 3;
+            return TimeSpan.FromDays(days);
+        }
+
+        private async Task<BaseResponse<AssignmentResponse>> ValidateCrossClassAsync(string crossClassTag, int courseInstanceId)
+        {
+            if (string.IsNullOrWhiteSpace(crossClassTag))
+            {
+                return new BaseResponse<AssignmentResponse>(
+                    "Cross-class peer review requires a shared tag",
+                    StatusCodeEnum.BadRequest_400,
+                    null,
+                    new List<ErrorDetail> { new ErrorDetail { Field = "CrossClassTag", Message = "You must enter a Cross-Class Tag (e.g., #Midterm2025, #Week5Review).", Suggestion = "This tag will match with other classes." } });
+            }
+
+            var tag = crossClassTag.Trim();
+            if (tag.Length > 50)
+            {
+                return new BaseResponse<AssignmentResponse>(
+                    "Cross-class tag is too long",
+                    StatusCodeEnum.BadRequest_400,
+                    null,
+                    new List<ErrorDetail> { new ErrorDetail { Field = "CrossClassTag", Message = "Tag cannot exceed 50 characters.", Suggestion = "Use a short tag like #FinalProject." } });
+            }
+
+            if (!IsValidCrossClassTag(tag))
+            {
+                return new BaseResponse<AssignmentResponse>(
+                    "Invalid cross-class tag format",
+                    StatusCodeEnum.BadRequest_400,
+                    null,
+                    new List<ErrorDetail> { new ErrorDetail { Field = "CrossClassTag", Message = "Tag contains invalid characters.", Suggestion = "Use letters, numbers, -, _, #. Example: #Project2-2025" } });
+            }
+
+            return null; // Pass
+        }
+
+        private async Task<bool> CanCrossClassWithAsync(Assignment current, Assignment other)
+        {
+            if (current.AssignmentId == other.AssignmentId) return false;
+            if (!current.AllowCrossClass || !other.AllowCrossClass) return false;
+            if (current.Status != "Active" && current.Status != "InReview") return false;
+            if (other.Status != "Active" && other.Status != "InReview") return false;
+
+            var currentCourse = await _courseInstanceRepository.GetByIdAsync(current.CourseInstanceId);
+            var otherCourse = await _courseInstanceRepository.GetByIdAsync(other.CourseInstanceId);
+            if (currentCourse?.CourseId != otherCourse?.CourseId) return false;
+
+            if (string.IsNullOrEmpty(current.CrossClassTag) || current.CrossClassTag != other.CrossClassTag) return false;
+
+            var currentInstructors = await _courseInstructorRepository.GetByCourseInstanceIdAsync(current.CourseInstanceId);
+            var otherInstructors = await _courseInstructorRepository.GetByCourseInstanceIdAsync(other.CourseInstanceId);
+            var commonInstructors = currentInstructors.Select(ci => ci.UserId).Intersect(otherInstructors.Select(ci => ci.UserId));
+            if (!commonInstructors.Any()) return false;
+
+            var currentReviewWindow = (current.ReviewDeadline ?? current.Deadline.AddDays(7)) - current.Deadline;
+            var otherReviewWindow = (other.ReviewDeadline ?? other.Deadline.AddDays(7)) - other.Deadline;
+            var tolerance = await GetCrossClassReviewWindowToleranceAsync();
+            var diff = Math.Abs((currentReviewWindow - otherReviewWindow).TotalDays);
+
+            return diff <= tolerance.TotalDays;
+        }
+
+        public async Task<List<Submission>> GetEligibleSubmissionsForCrossClassReviewAsync(int reviewerStudentId, int currentAssignmentId)
+        {
+            var currentAssignment = await _assignmentRepository.GetByIdAsync(currentAssignmentId);
+            if (!currentAssignment.AllowCrossClass) return new List<Submission>();
+
+            var allEligibleSubmissions = new List<Submission>();
+
+            var potentialAssignments = await _context.Assignments
+                .Where(a => a.Status == "Active" || a.Status == "InReview")
+                .ToListAsync();
+
+            foreach (var assignment in potentialAssignments.Where(a => a.AssignmentId != currentAssignmentId))
+            {
+                if (await CanCrossClassWithAsync(currentAssignment, assignment))
+                {
+                    var submissions = await _submissionRepository.GetByAssignmentIdAsync(assignment.AssignmentId);
+                    var filtered = submissions.Where(s => s.UserId != reviewerStudentId).ToList();
+                    allEligibleSubmissions.AddRange(filtered);
+                }
+            }
+
+            return allEligibleSubmissions;
+        }
+
+        private int GetCurrentUserId()
+        {
+            var userIdClaim = _httpContextAccessor.HttpContext?.User.FindFirst("userId");
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
+            {
+                throw new UnauthorizedAccessException("Invalid user token - userId not found");
+            }
+            return userId;
         }
 
         public async Task<BaseResponse<AssignmentResponse>> GetAssignmentByIdAsync(int assignmentId)
