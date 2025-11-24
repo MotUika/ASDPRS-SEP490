@@ -206,7 +206,6 @@ GetAssignmentOverviewAsync(int userId, int courseInstanceId)
                 case "Cancelled": cancelledCount++; break;
             }
         }
-    };
 
         // Chỉ trả về đúng 1 record tổng
         var list = new List<AssignmentOverviewResponse>
@@ -241,7 +240,7 @@ GetAssignmentOverviewAsync(int userId, int courseInstanceId)
 
 
     public async Task<BaseResponse<IEnumerable<AssignmentSubmissionDetailResponse>>>
- GetSubmissionDetailsAsync(int userId, int courseInstanceId)
+    GetSubmissionDetailsAsync(int userId, int courseInstanceId)
     {
         var assignments = await _context.Assignments
             .Where(a => a.CourseInstanceId == courseInstanceId &&
@@ -299,7 +298,7 @@ GetAssignmentOverviewAsync(int userId, int courseInstanceId)
 
 
     public async Task<BaseResponse<IEnumerable<AssignmentDistributionResponse>>>
-GetAssignmentDistributionAsync(int userId, int courseInstanceId)
+    GetAssignmentDistributionAsync(int userId, int courseInstanceId)
     {
         var assignments = await _context.Assignments
             .Where(a => a.CourseInstanceId == courseInstanceId &&
@@ -335,7 +334,7 @@ GetAssignmentDistributionAsync(int userId, int courseInstanceId)
         return new BaseResponse<IEnumerable<AssignmentDistributionResponse>>(
             "Thống kê phân phối điểm thành công",
             StatusCodeEnum.OK_200,
-            new List<AssignmentDistributionResponse> { total } // :point_left: chỉ 1 item
+            new List<AssignmentDistributionResponse> { total } // 👈 chỉ 1 item
         );
     }
 
