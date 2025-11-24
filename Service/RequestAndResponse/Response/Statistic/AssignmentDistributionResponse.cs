@@ -14,5 +14,5 @@ namespace Service.RequestAndResponse.Response.Statistic
         public int TotalAssignmentCount { get; set; }   // tổng số assignment, chỉ dùng khi IsTotal = true
     }
 
-    
+
 }
