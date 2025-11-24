@@ -465,6 +465,7 @@ namespace DataAccessLayer.Migrations
                     ReviewDeadline = table.Column<DateTime>(type: "datetime2", nullable: true),
                     NumPeerReviewsRequired = table.Column<int>(type: "int", nullable: false),
                     AllowCrossClass = table.Column<bool>(type: "bit", nullable: false),
+                    CrossClassTag = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
                     IsBlindReview = table.Column<bool>(type: "bit", nullable: false),
                     InstructorWeight = table.Column<decimal>(type: "decimal(5,2)", precision: 5, scale: 2, nullable: false),
                     GradingScale = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
@@ -860,41 +861,6 @@ namespace DataAccessLayer.Migrations
                         onDelete: ReferentialAction.Restrict);
                 });
 
-            migrationBuilder.CreateTable(
-                name: "DocumentEmbeddings",
-                columns: table => new
-                {
-                    EmbeddingId = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
-                    SourceType = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
-                    SourceId = table.Column<int>(type: "int", nullable: false),
-                    Content = table.Column<string>(type: "nvarchar(2000)", maxLength: 2000, nullable: false),
-                    ContentVector = table.Column<byte[]>(type: "varbinary(max)", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_DocumentEmbeddings", x => x.EmbeddingId);
-                    table.ForeignKey(
-                        name: "FK_DocumentEmbeddings_AISummary",
-                        column: x => x.SourceId,
-                        principalTable: "AISummaries",
-                        principalColumn: "SummaryId",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_DocumentEmbeddings_Review",
-                        column: x => x.SourceId,
-                        principalTable: "Reviews",
-                        principalColumn: "ReviewId",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_DocumentEmbeddings_Submission",
-                        column: x => x.SourceId,
-                        principalTable: "Submissions",
-                        principalColumn: "SubmissionId",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
             migrationBuilder.InsertData(
                 table: "AspNetRoles",
                 columns: new[] { "Id", "ConcurrencyStamp", "Name", "NormalizedName" },
@@ -927,7 +893,7 @@ namespace DataAccessLayer.Migrations
             migrationBuilder.InsertData(
                 table: "AspNetUsers",
                 columns: new[] { "Id", "AccessFailedCount", "AvatarUrl", "CampusId", "ConcurrencyStamp", "CreatedAt", "Email", "EmailConfirmed", "FirstName", "IsActive", "LastName", "LockoutEnabled", "LockoutEnd", "MajorId", "NormalizedEmail", "NormalizedUserName", "PasswordHash", "PhoneNumber", "PhoneNumberConfirmed", "SecurityStamp", "StudentCode", "TwoFactorEnabled", "UserName" },
-                values: new object[] { 1, 0, null, 1, "b08f01d0-1295-40ee-b213-bcca2303e346", new DateTime(2025, 11, 8, 6, 14, 23, 943, DateTimeKind.Utc).AddTicks(7909), "admin@example.com", true, "Admin", true, "User", true, null, null, "ADMIN@EXAMPLE.COM", "ADMIN", "AQAAAAIAAYagAAAAEK95SlxvEPzqxJyTxIof0ufhmHVKdEGcuw7MxCBj92JUehpXlaMI0F4RrX3mzLDNzA==", null, false, "632ab1ae-cec2-4967-b0d3-8ed10fa132c7", "ADMIN001", false, "admin" });
+                values: new object[] { 1, 0, null, 1, "932d575a-5140-41b4-bb96-9085af75c510", new DateTime(2025, 11, 24, 13, 4, 11, 199, DateTimeKind.Utc).AddTicks(1912), "admin@example.com", true, "Admin", true, "User", true, null, null, "ADMIN@EXAMPLE.COM", "ADMIN", "AQAAAAIAAYagAAAAEK95SlxvEPzqxJyTxIof0ufhmHVKdEGcuw7MxCBj92JUehpXlaMI0F4RrX3mzLDNzA==", null, false, "ebedf431-d435-4ac9-b3dc-24a20d452722", "ADMIN001", false, "admin" });
 
             migrationBuilder.InsertData(
                 table: "AspNetUserRoles",
@@ -939,17 +905,23 @@ namespace DataAccessLayer.Migrations
                 columns: new[] { "ConfigId", "ConfigKey", "ConfigValue", "Description", "UpdatedAt", "UpdatedByUserId" },
                 values: new object[,]
                 {
-                    { 100, "ScorePrecision", "0.5", "Number accuracy (0.25, 0.5, 1.0)", new DateTime(2025, 11, 8, 6, 14, 23, 943, DateTimeKind.Utc).AddTicks(7966), 1 },
-                    { 101, "AISummaryMaxTokens", "1000", "Maximum number of tokens for AI summary", new DateTime(2025, 11, 8, 6, 14, 23, 943, DateTimeKind.Utc).AddTicks(7968), 1 },
-                    { 102, "AISummaryMaxWords", "200", "Maximum word count for AI summary", new DateTime(2025, 11, 8, 6, 14, 23, 943, DateTimeKind.Utc).AddTicks(7969), 1 },
-                    { 103, "DefaultPassThreshold", "50", "Ngưỡng điểm mặc định để Pass", new DateTime(2025, 11, 8, 6, 14, 23, 943, DateTimeKind.Utc).AddTicks(7970), 1 },
-                    { 104, "PlagiarismThreshold", "80", "Maximum allowed plagiarism percentage before blocking submission (0-100)", new DateTime(2025, 11, 8, 6, 14, 23, 943, DateTimeKind.Utc).AddTicks(7971), 1 }
+                    { 100, "ScorePrecision", "0.5", "Number accuracy (0.25, 0.5, 1.0)", new DateTime(2025, 11, 24, 13, 4, 11, 199, DateTimeKind.Utc).AddTicks(1975), 1 },
+                    { 101, "AISummaryMaxTokens", "1000", "Maximum number of tokens for AI summary", new DateTime(2025, 11, 24, 13, 4, 11, 199, DateTimeKind.Utc).AddTicks(1976), 1 },
+                    { 102, "AISummaryMaxWords", "200", "Maximum word count for AI summary", new DateTime(2025, 11, 24, 13, 4, 11, 199, DateTimeKind.Utc).AddTicks(1977), 1 },
+                    { 103, "DefaultPassThreshold", "50", "Ngưỡng điểm mặc định để Pass", new DateTime(2025, 11, 24, 13, 4, 11, 199, DateTimeKind.Utc).AddTicks(1978), 1 },
+                    { 104, "PlagiarismThreshold", "80", "Maximum allowed plagiarism percentage before blocking submission (0-100)", new DateTime(2025, 11, 24, 13, 4, 11, 199, DateTimeKind.Utc).AddTicks(1978), 1 },
+                    { 105, "RegradeProcessingDeadlineDays", "7", "Number of days for instructors to process regrade requests", new DateTime(2025, 11, 24, 13, 4, 11, 199, DateTimeKind.Utc).AddTicks(1979), 1 }
                 });
 
             migrationBuilder.CreateIndex(
                 name: "IX_AcademicYears_CampusId",
                 table: "AcademicYears",
                 column: "CampusId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AISummaries_Content",
+                table: "AISummaries",
+                column: "Content");
 
             migrationBuilder.CreateIndex(
                 name: "IX_AISummaries_SubmissionId",
@@ -1021,6 +993,11 @@ namespace DataAccessLayer.Migrations
                 column: "Deadline");
 
             migrationBuilder.CreateIndex(
+                name: "IX_Assignments_Description",
+                table: "Assignments",
+                column: "Description");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Assignments_FinalDeadline",
                 table: "Assignments",
                 column: "FinalDeadline");
@@ -1039,6 +1016,11 @@ namespace DataAccessLayer.Migrations
                 name: "IX_Assignments_Status",
                 table: "Assignments",
                 column: "Status");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Assignments_Title",
+                table: "Assignments",
+                column: "Title");
 
             migrationBuilder.CreateIndex(
                 name: "IX_CourseInstances_CampusId",
@@ -1121,17 +1103,6 @@ namespace DataAccessLayer.Migrations
                 column: "MajorId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_DocumentEmbeddings_SourceId",
-                table: "DocumentEmbeddings",
-                column: "SourceId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_DocumentEmbeddings_SourceType_SourceId",
-                table: "DocumentEmbeddings",
-                columns: new[] { "SourceType", "SourceId" },
-                unique: true);
-
-            migrationBuilder.CreateIndex(
                 name: "IX_Notifications_AssignmentId",
                 table: "Notifications",
                 column: "AssignmentId");
@@ -1192,6 +1163,11 @@ namespace DataAccessLayer.Migrations
                 column: "SubmissionId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_Reviews_GeneralFeedback",
+                table: "Reviews",
+                column: "GeneralFeedback");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Reviews_ReviewAssignmentId",
                 table: "Reviews",
                 column: "ReviewAssignmentId");
@@ -1243,6 +1219,9 @@ namespace DataAccessLayer.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
+                name: "AISummaries");
+
+            migrationBuilder.DropTable(
                 name: "AspNetRoleClaims");
 
             migrationBuilder.DropTable(
@@ -1264,9 +1243,6 @@ namespace DataAccessLayer.Migrations
                 name: "CriteriaFeedbacks");
 
             migrationBuilder.DropTable(
-                name: "DocumentEmbeddings");
-
-            migrationBuilder.DropTable(
                 name: "Notifications");
 
             migrationBuilder.DropTable(
@@ -1283,9 +1259,6 @@ namespace DataAccessLayer.Migrations
 
             migrationBuilder.DropTable(
                 name: "Criteria");
-
-            migrationBuilder.DropTable(
-                name: "AISummaries");
 
             migrationBuilder.DropTable(
                 name: "Reviews");

@@ -206,6 +206,7 @@ GetAssignmentOverviewAsync(int userId, int courseInstanceId)
                 case "Cancelled": cancelledCount++; break;
             }
         }
+    };
 
         // Chỉ trả về đúng 1 record tổng
         var list = new List<AssignmentOverviewResponse>
@@ -235,6 +236,9 @@ GetAssignmentOverviewAsync(int userId, int courseInstanceId)
             list
         );
     }
+
+
+
 
     public async Task<BaseResponse<IEnumerable<AssignmentSubmissionDetailResponse>>>
  GetSubmissionDetailsAsync(int userId, int courseInstanceId)
@@ -292,6 +296,8 @@ GetAssignmentOverviewAsync(int userId, int courseInstanceId)
         );
     }
 
+
+
     public async Task<BaseResponse<IEnumerable<AssignmentDistributionResponse>>>
 GetAssignmentDistributionAsync(int userId, int courseInstanceId)
     {
@@ -332,6 +338,8 @@ GetAssignmentDistributionAsync(int userId, int courseInstanceId)
             new List<AssignmentDistributionResponse> { total } // :point_left: chỉ 1 item
         );
     }
+
+
 
 
 

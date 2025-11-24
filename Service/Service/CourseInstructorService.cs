@@ -101,10 +101,31 @@ namespace Service.Service
         }
 
         // 🔴 Xóa instructor khỏi lớp
-        public async Task<BaseResponse<bool>> DeleteCourseInstructorAsync(int courseInstructorId)
+        public async Task<BaseResponse<bool>> DeleteCourseInstructorAsync(int courseInstructorId, int courseInstanceId, int instructorId)
         {
             try
             {
+                // 1. Kiểm tra lớp có tồn tại không
+                var courseInstance = await _courseInstanceRepository.GetByIdAsync(courseInstanceId);
+                if (courseInstance == null)
+                {
+                    return new BaseResponse<bool>(
+                        "Course instance not found",
+                        StatusCodeEnum.NotFound_404,
+                        false);
+                }
+
+                // 2. Kiểm tra instructor có tồn tại không
+                var instructor = await _userRepository.GetByIdAsync(instructorId);
+                if (instructor == null)
+                {
+                    return new BaseResponse<bool>(
+                        "Instructor not found",
+                        StatusCodeEnum.NotFound_404,
+                        false);
+                }
+
+                // 3. Tìm courseInstructor theo id
                 var courseInstructor = await _courseInstructorRepository.GetByIdAsync(courseInstructorId);
                 if (courseInstructor == null)
                 {
@@ -113,7 +134,17 @@ namespace Service.Service
                         StatusCodeEnum.NotFound_404,
                         false);
                 }
-                var courseInstance = await _courseInstanceRepository.GetByIdAsync(courseInstructor.CourseInstanceId);
+
+                // 4. Kiểm tra xem có khớp cả 3 field không
+                if (courseInstructor.UserId != instructorId || courseInstructor.CourseInstanceId != courseInstanceId)
+                {
+                    return new BaseResponse<bool>(
+                        "Mismatch detected: instructor does not belong to this course instance",
+                        StatusCodeEnum.BadRequest_400,
+                        false);
+                }
+
+                // 5. Kiểm tra khóa học có đang diễn ra không
                 var now = DateTime.UtcNow;
                 if (courseInstance.StartDate <= now && now <= courseInstance.EndDate)
                 {
@@ -122,6 +153,8 @@ namespace Service.Service
                         StatusCodeEnum.BadRequest_400,
                         false);
                 }
+
+                // 6. Tiến hành xóa
                 await _courseInstructorRepository.DeleteAsync(courseInstructor);
                 return new BaseResponse<bool>(
                     "Course instructor deleted successfully",

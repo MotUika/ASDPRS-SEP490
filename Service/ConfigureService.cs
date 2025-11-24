@@ -55,7 +55,6 @@ namespace Service
             services.AddScoped<ICriteriaService, CriteriaService>();
             services.AddScoped<ICriteriaFeedbackService, CriteriaFeedbackService>();
             services.AddScoped<IReviewService, ReviewService>();
-            services.AddScoped<IDocumentEmbeddingService, DocumentEmbeddingService>();
             services.AddScoped<IAssignmentService, AssignmentService>();
             services.AddScoped<IAISummaryService, AISummaryService>();
             services.AddScoped<ISubmissionService, SubmissionService>();

@@ -77,7 +77,6 @@ namespace Repository.Repository
         {
             return await _context.AISummaries
                 .Include(s => s.Submission)
-                .Include(s => s.DocumentEmbeddings)
                 .OrderByDescending(s => s.GeneratedAt)
                 .ToListAsync();
         }
