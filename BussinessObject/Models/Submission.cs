@@ -52,6 +52,5 @@ namespace BussinessObject.Models
         public ICollection<AISummary> AISummaries { get; set; }
         public ICollection<RegradeRequest> RegradeRequests { get; set; }
         public ICollection<Notification> Notifications { get; set; }
-        public ICollection<DocumentEmbedding> DocumentEmbeddings { get; set; }
     }
 }

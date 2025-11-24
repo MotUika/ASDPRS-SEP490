@@ -36,7 +36,6 @@ namespace DataAccessLayer
         public DbSet<AISummary> AISummaries { get; set; }
         public DbSet<RegradeRequest> RegradeRequests { get; set; }
         public DbSet<Notification> Notifications { get; set; }
-        public DbSet<DocumentEmbedding> DocumentEmbeddings { get; set; }
         public DbSet<RefreshToken> RefreshTokens { get; set; }
         public DbSet<Major> Majors { get; set; }
 
@@ -344,13 +343,6 @@ namespace DataAccessLayer
                 .HasForeignKey(n => n.SubmissionId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            modelBuilder.Entity<Submission>()
-                .HasMany(s => s.DocumentEmbeddings)
-                .WithOne()
-                .HasForeignKey(de => de.SourceId)
-                .OnDelete(DeleteBehavior.Restrict)
-                .HasConstraintName("FK_DocumentEmbeddings_Submission");
-
             // ReviewAssignment
             modelBuilder.Entity<ReviewAssignment>()
                 .HasMany(ra => ra.Reviews)
@@ -371,26 +363,11 @@ namespace DataAccessLayer
                 .HasForeignKey(cf => cf.ReviewId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            modelBuilder.Entity<Review>()
-                .HasMany(r => r.DocumentEmbeddings)
-                .WithOne()
-                .HasForeignKey(de => de.SourceId)
-                .OnDelete(DeleteBehavior.Restrict)
-                .HasConstraintName("FK_DocumentEmbeddings_Review");
-
             modelBuilder.Entity<Review>(entity =>
             {
                 entity.Property(r => r.OverallScore)
                     .HasPrecision(5, 2);
             });
-
-            // AISummary
-            modelBuilder.Entity<AISummary>()
-                .HasMany(ais => ais.DocumentEmbeddings)
-                .WithOne()
-                .HasForeignKey(de => de.SourceId)
-                .OnDelete(DeleteBehavior.Restrict)
-                .HasConstraintName("FK_DocumentEmbeddings_AISummary");
 
             // Notification
             modelBuilder.Entity<Notification>()
@@ -398,11 +375,6 @@ namespace DataAccessLayer
                 .WithMany(u => u.SentNotifications)
                 .HasForeignKey(n => n.SenderUserId)
                 .OnDelete(DeleteBehavior.SetNull);
-
-            // DocumentEmbedding
-            modelBuilder.Entity<DocumentEmbedding>()
-                .HasIndex(de => new { de.SourceType, de.SourceId })
-                .IsUnique();
 
             modelBuilder.Entity<RefreshToken>()
                 .HasOne(rt => rt.User)

@@ -28,7 +28,6 @@ namespace Repository
             services.AddScoped<RubricTemplateDAO>();
             services.AddScoped<RubricDAO>();
             services.AddScoped<AssignmentDAO>();
-            services.AddScoped<DocumentEmbeddingDAO>();
             services.AddScoped<AISummaryDAO>();
             services.AddScoped<ReviewDAO>();
             services.AddScoped<UserDAO>();
@@ -54,7 +53,6 @@ namespace Repository
             services.AddScoped<IRubricTemplateRepository, RubricTemplateRepository>();
             services.AddScoped<IRubricRepository, RubricRepository>();
             services.AddScoped<IAssignmentRepository, AssignmentRepository>();
-            services.AddScoped<IDocumentEmbeddingRepository, DocumentEmbeddingRepository>();
             services.AddScoped<IAISummaryRepository, AISummaryRepository>();
             services.AddScoped<IReviewRepository, ReviewRepository>();
             services.AddScoped<IRegradeRequestRepository, RegradeRequestRepository>();
