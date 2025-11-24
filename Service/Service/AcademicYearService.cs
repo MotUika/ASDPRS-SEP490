@@ -83,6 +83,17 @@ namespace Service.Service
         {
             try
             {
+                if (request.StartDate >= request.EndDate)
+                {
+                    return new BaseResponse<AcademicYearResponse>("Start date must be before end date", StatusCodeEnum.BadRequest_400, null);
+                }
+
+                var nameExists = await _context.AcademicYears.AnyAsync(ay => ay.Name == request.Name);
+                if (nameExists)
+                {
+                    return new BaseResponse<AcademicYearResponse>("Academic year name already exists", StatusCodeEnum.Conflict_409, null);
+                }
+
                 var academicYear = _mapper.Map<AcademicYear>(request);
                 var createdAcademicYear = await _academicYearRepository.AddAsync(academicYear);
                 var response = _mapper.Map<AcademicYearResponse>(createdAcademicYear);
@@ -103,6 +114,20 @@ namespace Service.Service
                 if (existingAcademicYear == null)
                 {
                     return new BaseResponse<AcademicYearResponse>("Academic year not found", StatusCodeEnum.NotFound_404, null);
+                }
+
+                if (request.StartDate >= request.EndDate)
+                {
+                    return new BaseResponse<AcademicYearResponse>("Start date must be before end date", StatusCodeEnum.BadRequest_400, null);
+                }
+
+                if (existingAcademicYear.Name != request.Name)
+                {
+                    var nameExists = await _context.AcademicYears.AnyAsync(ay => ay.Name == request.Name && ay.AcademicYearId != request.AcademicYearId);
+                    if (nameExists)
+                    {
+                        return new BaseResponse<AcademicYearResponse>("Academic year name already exists", StatusCodeEnum.Conflict_409, null);
+                    }
                 }
 
                 _mapper.Map(request, existingAcademicYear);

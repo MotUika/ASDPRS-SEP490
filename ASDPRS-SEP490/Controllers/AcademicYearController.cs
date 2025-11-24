@@ -67,6 +67,7 @@ namespace ASDPRS_SEP490.Controllers
         )]
         [SwaggerResponse(201, "Tạo thành công", typeof(BaseResponse<AcademicYearResponse>))]
         [SwaggerResponse(400, "Dữ liệu không hợp lệ")]
+        [SwaggerResponse(409, "Tên năm học đã tồn tại")]
         [SwaggerResponse(500, "Lỗi server")]
         public async Task<IActionResult> CreateAcademicYear([FromBody] CreateAcademicYearRequest request)
         {
@@ -78,6 +79,8 @@ namespace ASDPRS_SEP490.Controllers
             return result.StatusCode switch
             {
                 StatusCodeEnum.Created_201 => CreatedAtAction(nameof(GetAcademicYearById), new { id = result.Data?.AcademicYearId }, result),
+                StatusCodeEnum.BadRequest_400 => BadRequest(result),
+                StatusCodeEnum.Conflict_409 => Conflict(result),
                 _ => StatusCode(500, result)
             };
         }
@@ -90,6 +93,7 @@ namespace ASDPRS_SEP490.Controllers
         [SwaggerResponse(200, "Cập nhật thành công", typeof(BaseResponse<AcademicYearResponse>))]
         [SwaggerResponse(400, "Dữ liệu không hợp lệ")]
         [SwaggerResponse(404, "Không tìm thấy năm học")]
+        [SwaggerResponse(409, "Tên năm học đã tồn tại")]
         [SwaggerResponse(500, "Lỗi server")]
         public async Task<IActionResult> UpdateAcademicYear([FromBody] UpdateAcademicYearRequest request)
         {
@@ -102,6 +106,8 @@ namespace ASDPRS_SEP490.Controllers
             {
                 StatusCodeEnum.OK_200 => Ok(result),
                 StatusCodeEnum.NotFound_404 => NotFound(result),
+                StatusCodeEnum.BadRequest_400 => BadRequest(result),
+                StatusCodeEnum.Conflict_409 => Conflict(result),
                 _ => StatusCode(500, result)
             };
         }
