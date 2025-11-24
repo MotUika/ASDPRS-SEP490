@@ -156,6 +156,169 @@ public class StatisticsService : IStatisticsService
     }
 
 
+    public async Task<BaseResponse<IEnumerable<AssignmentOverviewResponse>>>
+    GetAssignmentOverviewAsync(int userId, int courseInstanceId)
+    {
+        var assignments = await _context.Assignments
+            .Where(a => a.CourseInstanceId == courseInstanceId &&
+                        a.CourseInstance.CourseInstructors.Any(ci => ci.UserId == userId))
+            .Include(a => a.Submissions)
+            .Include(a => a.CourseInstance)
+                .ThenInclude(ci => ci.CourseStudents)
+            .ToListAsync();
+
+        var result = new List<AssignmentOverviewResponse>();
+
+        foreach (var a in assignments)
+        {
+            var students = a.CourseInstance.CourseStudents;
+            var submissions = a.Submissions;
+
+            int totalStudents = students.Count;
+            int totalSubmissions = submissions.Count;
+            int gradedCount = submissions.Count(s => s.FinalScore.HasValue);
+
+            var graded = submissions.Where(s => s.FinalScore.HasValue).ToList();
+
+            int passCount = graded.Count(s =>
+                (a.GradingScale == "Scale10" && s.FinalScore > 0) ||
+                (a.GradingScale == "PassFail" && s.FinalScore >= a.PassThreshold));
+
+            int failCount = graded.Count - passCount;
+
+            result.Add(new AssignmentOverviewResponse
+            {
+                AssignmentId = a.AssignmentId,
+                AssignmentTitle = a.Title,
+                TotalStudents = totalStudents,
+                TotalSubmissions = totalSubmissions,
+                GradedCount = gradedCount,
+                SubmissionRate = totalStudents == 0 ? 0 : (decimal)totalSubmissions / totalStudents * 100,
+                GradedRate = totalSubmissions == 0 ? 0 : (decimal)gradedCount / totalSubmissions * 100,
+                PassCount = passCount,
+                FailCount = failCount
+            });
+        }
+
+        return new BaseResponse<IEnumerable<AssignmentOverviewResponse>>(
+            "Thống kê assignment thành công",
+            StatusCodeEnum.OK_200,
+            result
+        );
+    }
+
+    public async Task<BaseResponse<IEnumerable<AssignmentSubmissionDetailResponse>>>
+    GetSubmissionDetailsAsync(int userId, int courseInstanceId)
+    {
+        var assignments = await _context.Assignments
+            .Where(a => a.CourseInstanceId == courseInstanceId &&
+                        a.CourseInstance.CourseInstructors.Any(ci => ci.UserId == userId))
+            .Include(a => a.Submissions)
+                .ThenInclude(s => s.User)
+            .Include(a => a.CourseInstance)
+                .ThenInclude(ci => ci.CourseStudents)
+            .ToListAsync();
+
+        var result = new List<AssignmentSubmissionDetailResponse>();
+
+        foreach (var a in assignments)
+        {
+            var assignmentDetail = new AssignmentSubmissionDetailResponse
+            {
+                AssignmentId = a.AssignmentId,
+                AssignmentTitle = a.Title
+            };
+
+            // Danh sách học sinh trong lớp
+            var studentsInClass = a.CourseInstance.CourseStudents;
+
+            foreach (var s in a.Submissions)
+            {
+                string submissionStatus;
+
+                // Chưa nộp
+                bool isNotSubmitted = s.FileUrl == "Không nộp" || s.OriginalFileName == "Không nộp bài";
+
+                if (isNotSubmitted)
+                    submissionStatus = "Not Submitted";
+                else if (s.Status == "Graded" && (s.FinalScore ?? 0) > 0)
+                    submissionStatus = "Graded"; // đã chấm >0 điểm
+                else
+                    submissionStatus = "Submitted"; // đã nộp nhưng chưa chấm hoặc 0 điểm
+
+                assignmentDetail.Submissions.Add(new SubmissionStatisticResponse
+                {
+                    SubmissionId = s.SubmissionId,
+                    UserId = s.UserId,
+                    StudentName = s.User?.UserName ?? $"student{s.UserId}",
+                    StudentCode = s.User?.StudentCode ?? "",
+                    FinalScore = s.FinalScore,
+                    Status = submissionStatus
+                });
+            }
+
+            // --- Tính count ---
+            assignmentDetail.GradedCount = assignmentDetail.Submissions.Count(s => s.Status == "Graded");
+            assignmentDetail.SubmittedCount = assignmentDetail.Submissions.Count(s => s.Status == "Submitted" || s.Status == "Graded");
+
+            // NotSubmittedCount = tổng học sinh trong lớp - đã nộp hoặc đã chấm >0
+            assignmentDetail.NotSubmittedCount = studentsInClass.Count
+                - assignmentDetail.Submissions.Count(s => s.Status == "Submitted" || s.Status == "Graded");
+
+            result.Add(assignmentDetail);
+        }
+
+        return new BaseResponse<IEnumerable<AssignmentSubmissionDetailResponse>>(
+            "Lấy thống kê submission thành công",
+            StatusCodeEnum.OK_200,
+            result
+        );
+    }
+
+    public async Task<BaseResponse<IEnumerable<AssignmentDistributionResponse>>>
+    GetAssignmentDistributionAsync(int userId, int courseInstanceId)
+    {
+        var assignments = await _context.Assignments
+            .Where(a => a.CourseInstanceId == courseInstanceId &&
+                        a.CourseInstance.CourseInstructors.Any(ci => ci.UserId == userId))
+            .Include(a => a.Submissions)
+            .ToListAsync();
+
+        var result = new List<AssignmentDistributionResponse>();
+
+        foreach (var a in assignments)
+        {
+            var gradedScores = a.Submissions
+                .Where(s => s.FinalScore.HasValue)
+                .Select(s => (decimal)s.FinalScore)
+                .ToList();
+
+            var distribution = gradedScores
+                .GroupBy(score => (int)score)
+                .Select(g => new DistributionItem
+                {
+                    Range = $"{g.Key} - {g.Key + 1}",
+                    Count = g.Count()
+                })
+                .OrderBy(d => d.Range)
+                .ToList();
+
+            result.Add(new AssignmentDistributionResponse
+            {
+                AssignmentId = a.AssignmentId,
+                AssignmentTitle = a.Title,
+                Distribution = distribution
+            });
+        }
+
+        return new BaseResponse<IEnumerable<AssignmentDistributionResponse>>(
+            "Thống kê phân phối điểm thành công",
+            StatusCodeEnum.OK_200,
+            result
+        );
+    }
+
+
 
     public async Task<BaseResponse<IEnumerable<ClassStatisticResponse>>> GetClassStatisticsByCourseAsync(int userId, int courseId)
     {

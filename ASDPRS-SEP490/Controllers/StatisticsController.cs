@@ -34,6 +34,51 @@ namespace ASDPRS_SEP490.Controllers
             return StatusCode((int)result.StatusCode, result);
         }
 
+
+        [HttpGet("assignments/overview")]
+        [SwaggerOperation(
+           Summary = "Tổng quan assignment trong lớp",
+           Description = "Trả về danh sách assignment và số lượng submission, graded, pass, fail..."
+       )]
+        [SwaggerResponse(200, "Thành công", typeof(BaseResponse<IEnumerable<AssignmentOverviewResponse>>))]
+        public async Task<IActionResult> GetAssignmentOverview(
+           [FromQuery] int userId,
+           [FromQuery] int courseInstanceId)
+        {
+            var result = await _statisticsService.GetAssignmentOverviewAsync(userId, courseInstanceId);
+            return StatusCode((int)result.StatusCode, result);
+        }
+
+
+        [HttpGet("assignments/submissions")]
+        [SwaggerOperation(
+           Summary = "Chi tiết submission của từng assignment",
+           Description = "Trả về danh sách submission theo từng assignment trong lớp"
+       )]
+        [SwaggerResponse(200, "Thành công", typeof(BaseResponse<IEnumerable<AssignmentSubmissionDetailResponse>>))]
+        public async Task<IActionResult> GetAssignmentSubmissionDetails(
+           [FromQuery] int userId,
+           [FromQuery] int courseInstanceId)
+        {
+            var result = await _statisticsService.GetSubmissionDetailsAsync(userId, courseInstanceId);
+            return StatusCode((int)result.StatusCode, result);
+        }
+
+        [HttpGet("assignments/distribution")]
+        [SwaggerOperation(
+            Summary = "Phân phối điểm theo từng assignment",
+            Description = "Trả về distribution (0-1, 1-2, ..., 9-10) cho từng assignment"
+        )]
+        [SwaggerResponse(200, "Thành công", typeof(BaseResponse<IEnumerable<AssignmentDistributionResponse>>))]
+        public async Task<IActionResult> GetAssignmentDistribution(
+            [FromQuery] int userId,
+            [FromQuery] int courseInstanceId)
+        {
+            var result = await _statisticsService.GetAssignmentDistributionAsync(userId, courseInstanceId);
+            return StatusCode((int)result.StatusCode, result);
+        }
+
+
         // So sánh các lớp trong 1 môn
         [HttpGet("classes/course")]
         [SwaggerOperation(

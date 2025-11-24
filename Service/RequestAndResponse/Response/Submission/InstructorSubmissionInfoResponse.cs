@@ -25,7 +25,7 @@ namespace Service.RequestAndResponse.Response.Submission
 
         // Submission
         public int SubmissionId { get; set; }
-        public DateTime SubmittedAt { get; set; }
+        public DateTime? SubmittedAt { get; set; }
         public string FileUrl { get; set; }
         public string FileName { get; set; }
         public string OriginalFileName { get; set; }
