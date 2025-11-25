@@ -73,7 +73,8 @@ namespace Service.Service
                         CourseName = a.CourseInstance.Course.CourseName,
                         DescriptionSnippet = a.Description != null && a.Description.Length > 100
                             ? a.Description.Substring(0, 100) + "..."
-                            : a.Description
+                            : a.Description,
+                        Type = "Assignment"
                     })
                     .ToListAsync();
 
@@ -110,7 +111,8 @@ namespace Service.Service
                         ReviewId = r.ReviewId,
                         AssignmentTitle = r.ReviewAssignment.Submission.Assignment.Title,
                         OverallFeedback = r.GeneralFeedback,
-                        ReviewerType = r.ReviewType
+                        ReviewerType = r.ReviewType,
+                        Type = "Feedback"
                     })
                     .ToListAsync();
 
@@ -144,7 +146,8 @@ namespace Service.Service
                                 ? ais.Content.Substring(0, 100) + "..."
                                 : ais.Content,
                             SummaryType = ais.SummaryType,
-                            GeneratedAt = ais.GeneratedAt
+                            GeneratedAt = ais.GeneratedAt,
+                            Type = "Summary"
                         })
                         .ToListAsync();
                 }
@@ -179,7 +182,8 @@ namespace Service.Service
                         FileName = s.OriginalFileName,
                         Keywords = s.Keywords,
                         SubmittedAt = s.SubmittedAt,
-                        StudentName = $"{s.User.FirstName} {s.User.LastName}".Trim()
+                        StudentName = $"{s.User.FirstName} {s.User.LastName}".Trim(),
+                        Type = "Submission"
                     })
                     .ToListAsync();
 
@@ -216,7 +220,8 @@ namespace Service.Service
                             AssignmentTitle = c.Rubric.Assignment.Title,
                             CourseName = c.Rubric.Assignment.CourseInstance.Course.CourseName,
                             MaxScore = c.MaxScore,
-                            Weight = c.Weight
+                            Weight = c.Weight,
+                            Type = "Criteria"
                         })
                         .ToListAsync();
                 }
@@ -232,6 +237,7 @@ namespace Service.Service
                 return await BasicSearchAsync(keyword, userId, role);
             }
         }
+
         public async Task<BaseResponse<SearchResultEFResponse>> BasicSearchAsync(string keyword, int userId, string role)
         {
             if (string.IsNullOrWhiteSpace(keyword))
@@ -256,7 +262,8 @@ namespace Service.Service
             {
                 AssignmentId = a.AssignmentId,
                 Title = a.Title,
-                CourseName = a.CourseInstance.Course.CourseName
+                CourseName = a.CourseInstance.Course.CourseName,
+                Type = "Assignment"
             }).ToListAsync();
 
             // Search Feedback (Reviews)
@@ -275,7 +282,8 @@ namespace Service.Service
             {
                 ReviewId = r.ReviewId,
                 AssignmentTitle = r.ReviewAssignment.Submission.Assignment.Title,
-                OverallFeedback = r.GeneralFeedback
+                OverallFeedback = r.GeneralFeedback,
+                Type = "Feedback"
             }).ToListAsync();
 
             // Search LLM Summaries
@@ -293,7 +301,8 @@ namespace Service.Service
             {
                 SummaryId = ais.SummaryId,
                 AssignmentTitle = ais.Submission.Assignment.Title,
-                ContentSnippet = ais.Content.Substring(0, Math.Min(100, ais.Content.Length)) + "..."
+                ContentSnippet = ais.Content.Substring(0, Math.Min(100, ais.Content.Length)) + "...",
+                Type = "Summary"
             }).ToListAsync();
 
             return new BaseResponse<SearchResultEFResponse>(
