@@ -15,6 +15,7 @@
         public string Title { get; set; }
         public string CourseName { get; set; }
         public string DescriptionSnippet { get; set; }
+        public string Type { get; set; }
     }
 
     public class FeedbackSearchResult
@@ -23,6 +24,7 @@
         public string AssignmentTitle { get; set; }
         public string OverallFeedback { get; set; }
         public string ReviewerType { get; set; }
+        public string Type { get; set; }
     }
 
     public class SummarySearchResult
@@ -32,6 +34,7 @@
         public string ContentSnippet { get; set; }
         public string SummaryType { get; set; }
         public DateTime GeneratedAt { get; set; }
+        public string Type { get; set; }
     }
 
     public class SubmissionSearchResult
@@ -42,7 +45,9 @@
         public string Keywords { get; set; }
         public DateTime SubmittedAt { get; set; }
         public string StudentName { get; set; }
+        public string Type { get; set; }
     }
+
     public class CriteriaSearchResult
     {
         public int CriteriaId { get; set; }
@@ -53,5 +58,6 @@
         public string CourseName { get; set; }
         public decimal MaxScore { get; set; }
         public int Weight { get; set; }
+        public string Type { get; set; }
     }
 }
