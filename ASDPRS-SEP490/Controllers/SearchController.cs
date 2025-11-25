@@ -9,7 +9,7 @@ using Swashbuckle.AspNetCore.Annotations;
 namespace ASDPRS_SEP490.Controllers
 {
     [ApiController]
-    [Route("api/instructor/[controller]")]
+    [Route("api/[controller]")]
     [Authorize(Roles = "Instructor, Student")]
     public class SearchController : ControllerBase
     {
@@ -20,7 +20,7 @@ namespace ASDPRS_SEP490.Controllers
             _searchService = searchService;
         }
 
-        [HttpGet("search")]
+        [HttpGet("search/student")]
         [SwaggerOperation(
             Summary = "Tìm kiếm keyword trong assignments, feedback, summaries",
             Description = "Sinh viên tìm kiếm terms trong assignments, peer/instructor feedback, LLM summaries của mình"
@@ -40,7 +40,7 @@ namespace ASDPRS_SEP490.Controllers
             return StatusCode((int)result.StatusCode, result);
         }
 
-        [HttpGet]
+        [HttpGet("search/instructor")]
         [SwaggerOperation(
             Summary = "Tìm kiếm keyword trong assignments, feedback, summaries (for instructor)",
             Description = "Instructor tìm kiếm terms trong toàn bộ hệ thống"
