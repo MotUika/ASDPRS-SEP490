@@ -145,6 +145,7 @@ namespace Service.Service
 
                 var rubricTemplate = _mapper.Map<RubricTemplate>(request);
                 rubricTemplate.CreatedAt = DateTime.UtcNow;
+                rubricTemplate.IsPublic = false;
 
                 var createdRubricTemplate = await _rubricTemplateRepository.AddAsync(rubricTemplate);
 
@@ -198,8 +199,7 @@ namespace Service.Service
                     existingRubricTemplate.Title = request.Title;
                 }
 
-                // Update IsPublic
-                existingRubricTemplate.IsPublic = request.IsPublic;
+                // Bỏ update IsPublic ở đây
 
                 // Update MajorId nếu được cung cấp và khác với MajorId hiện tại
                 if (request.MajorId.HasValue && request.MajorId.Value != existingRubricTemplate.MajorId)
@@ -232,6 +232,7 @@ namespace Service.Service
                 return new BaseResponse<RubricTemplateResponse>($"Error updating rubric template: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
+
 
 
         public async Task<BaseResponse<bool>> DeleteRubricTemplateAsync(int id)
@@ -527,6 +528,159 @@ namespace Service.Service
             }
         }
 
+        public async Task<BaseResponse<IEnumerable<RubricTemplateResponse>>> GetPublicRubricTemplatesByUserIdAsync(int userId)
+        {
+            try
+            {
+                // 1️⃣ Lấy user + các thông tin course + major
+                var user = await _context.Users
+                    .Include(u => u.CourseInstructors)
+                        .ThenInclude(ci => ci.CourseInstance)
+                            .ThenInclude(ci => ci.Course)
+                                .ThenInclude(c => c.Curriculum)
+                                    .ThenInclude(cur => cur.Major)
+                    .FirstOrDefaultAsync(u => u.Id == userId);
+
+                if (user == null)
+                {
+                    return new BaseResponse<IEnumerable<RubricTemplateResponse>>(
+                        $"UserId {userId} not found.",
+                        StatusCodeEnum.NotFound_404,
+                        null);
+                }
+
+                // 2️⃣ Xác định tất cả các major mà user liên quan
+                var userMajorIds = new List<int>();
+                if (user.MajorId.HasValue)
+                    userMajorIds.Add(user.MajorId.Value);
+
+                var courseMajors = user.CourseInstructors
+                    .Where(ci => ci.CourseInstance?.Course?.Curriculum?.Major != null)
+                    .Select(ci => ci.CourseInstance.Course.Curriculum.Major.MajorId)
+                    .Distinct()
+                    .ToList();
+
+                userMajorIds.AddRange(courseMajors);
+                userMajorIds = userMajorIds.Distinct().ToList();
+
+                if (!userMajorIds.Any())
+                {
+                    return new BaseResponse<IEnumerable<RubricTemplateResponse>>(
+                        $"UserId {userId} has no associated major.",
+                        StatusCodeEnum.Forbidden_403,
+                        null);
+                }
+
+                // 3️⃣ Lấy các RubricTemplate public và major hợp lệ
+                var rubricTemplates = await _context.RubricTemplates
+                    .Include(rt => rt.CreatedByUser)
+                    .Include(rt => rt.Rubrics)
+                    .Include(rt => rt.CriteriaTemplates)
+                    .Include(rt => rt.Major)
+                    .Where(rt => rt.IsPublic && rt.MajorId.HasValue && userMajorIds.Contains(rt.MajorId.Value))
+                    .ToListAsync();
+
+                if (!rubricTemplates.Any())
+                {
+                    return new BaseResponse<IEnumerable<RubricTemplateResponse>>(
+                        $"No public rubric templates found for UserId {userId} with their major(s).",
+                        StatusCodeEnum.NotFound_404,
+                        null);
+                }
+
+                // 4️⃣ Map sang response
+                var response = _mapper.Map<IEnumerable<RubricTemplateResponse>>(rubricTemplates);
+
+                // 5️⃣ Gán danh sách assignments đang sử dụng template
+                foreach (var template in response)
+                {
+                    var assignments = await _rubricTemplateRepository.GetAssignmentsUsingTemplateAsync(template.TemplateId);
+                    template.AssignmentsUsingTemplate = (assignments != null && assignments.Any())
+                        ? assignments.Select(a => new AssignmentUsingTemplateResponse
+                        {
+                            AssignmentId = a.AssignmentId,
+                            Title = a.Title,
+                            CourseName = a.CourseInstance?.Course?.CourseName,
+                            ClassName = $"{a.CourseInstance?.Course?.CourseName} - {a.CourseInstance?.SectionCode}",
+                            CampusName = a.CourseInstance?.Campus?.CampusName,
+                            Deadline = a.Deadline
+                        }).ToList()
+                        : new List<AssignmentUsingTemplateResponse>();
+                }
+
+                return new BaseResponse<IEnumerable<RubricTemplateResponse>>(
+                    $"Found {response.Count()} public template(s) accessible to UserId {userId}.",
+                    StatusCodeEnum.OK_200,
+                    response);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<IEnumerable<RubricTemplateResponse>>(
+                    $"Error retrieving public rubric templates: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
+            }
+        }
+
+        public async Task<BaseResponse<RubricTemplateResponse>> ToggleRubricTemplatePublicStatusAsync(int templateId, bool makePublic)
+        {
+            try
+            {
+                // 1️⃣ Lấy rubric template cùng các criteria
+                var rubricTemplate = await _context.RubricTemplates
+                    .Include(rt => rt.CriteriaTemplates)
+                    .Include(rt => rt.CreatedByUser)
+                    .Include(rt => rt.Rubrics)
+                    .Include(rt => rt.Major)
+                    .FirstOrDefaultAsync(rt => rt.TemplateId == templateId);
+
+                if (rubricTemplate == null)
+                {
+                    return new BaseResponse<RubricTemplateResponse>(
+                        $"Rubric template with ID {templateId} not found.",
+                        StatusCodeEnum.NotFound_404,
+                        null);
+                }
+
+                // 2️⃣ Nếu muốn public, check điều kiện
+                if (makePublic)
+                {
+                    if (!rubricTemplate.CriteriaTemplates.Any())
+                    {
+                        return new BaseResponse<RubricTemplateResponse>(
+                            "Cannot make rubric template public: it has no criteria.",
+                            StatusCodeEnum.BadRequest_400,
+                            null);
+                    }
+
+                    var totalWeight = rubricTemplate.CriteriaTemplates.Sum(c => c.Weight);
+                    if (totalWeight != 100)
+                    {
+                        return new BaseResponse<RubricTemplateResponse>(
+                            $"Cannot make rubric template public: total criteria weight is {totalWeight}, must be 100.",
+                            StatusCodeEnum.BadRequest_400,
+                            null);
+                    }
+                }
+
+                // 3️⃣ Cập nhật trạng thái IsPublic
+                rubricTemplate.IsPublic = makePublic;
+                await _rubricTemplateRepository.UpdateAsync(rubricTemplate);
+
+                var response = _mapper.Map<RubricTemplateResponse>(rubricTemplate);
+                return new BaseResponse<RubricTemplateResponse>(
+                    $"Rubric template {(makePublic ? "made public" : "set to private")} successfully.",
+                    StatusCodeEnum.OK_200,
+                    response);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<RubricTemplateResponse>(
+                    $"Error updating rubric template public status: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
+            }
+        }
 
     }
 }
