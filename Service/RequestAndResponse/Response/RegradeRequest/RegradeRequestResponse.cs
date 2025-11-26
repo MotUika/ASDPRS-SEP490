@@ -1,4 +1,6 @@
-﻿using System;
+﻿using MathNet.Numerics.Distributions;
+using NPOI.SS.Formula.Functions;
+using System;
 
 namespace Service.RequestAndResponse.Response.RegradeRequest
 {
@@ -21,7 +23,11 @@ namespace Service.RequestAndResponse.Response.RegradeRequest
 
         public string CourseName { get; set; }
         public string ClassName { get; set; }
+        // Deadline for instructor to process
         public DateTime? ProcessingDeadline { get; set; }
+        //Deadline for student to submit request(calculated from GradedAt)
+        public DateTime? StudentRequestDeadline { get; set; }
+
     }
 
     public class SubmissionInfoResponse

@@ -71,6 +71,14 @@ namespace Service.Service
                 }
 
                 var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
+                if (assignment == null || assignment.Status != "GradesPublished")
+                {
+                    return new BaseResponse<RegradeRequestResponse>(
+                        "Cannot request regrade before grades are published",
+                        StatusCodeEnum.BadRequest_400,
+                        null);
+                }
+
                 if (assignment.Status == "Cancelled")
                 {
                     return new BaseResponse<RegradeRequestResponse>(
@@ -78,10 +86,19 @@ namespace Service.Service
                         StatusCodeEnum.BadRequest_400,
                         null);
                 }
-                if (assignment == null || assignment.Status != "GradesPublished")
+
+                if (submission.GradedAt.HasValue)
                 {
-                    return new BaseResponse<RegradeRequestResponse>(
-                        "Cannot request regrade before grades are published", StatusCodeEnum.BadRequest_400, null);
+                    var requestDeadlineDays = await _systemConfigService.GetConfigValueAsync<int>("RegradeRequestDeadlineDays", 3);
+                    var requestDeadline = submission.GradedAt.Value.AddDays(requestDeadlineDays);
+
+                    if (DateTime.UtcNow > requestDeadline)
+                    {
+                        return new BaseResponse<RegradeRequestResponse>(
+                            $"Regrade request deadline has passed. Students must submit requests within {requestDeadlineDays} days after grades are published (Deadline: {requestDeadline:yyyy-MM-dd HH:mm})",
+                            StatusCodeEnum.BadRequest_400,
+                            null);
+                    }
                 }
 
                 // Check if student exists and is the owner of the submission
@@ -447,7 +464,6 @@ namespace Service.Service
             return await GetRegradeRequestsByFilterAsync(filterRequest);
         }
 
-
         private async Task<RegradeRequestResponse> MapToRegradeRequestResponse(RegradeRequest regradeRequest)
         {
             var response = _mapper.Map<RegradeRequestResponse>(regradeRequest);
@@ -486,7 +502,6 @@ namespace Service.Service
                     var assignment = submission.Assignment;
                     response.Assignment = _mapper.Map<AssignmentInfoRegradeResponse>(assignment);
 
-                    // Map courseName và className null-safe
                     var courseName = assignment.CourseInstance?.Course?.CourseName ?? "Unknown Course";
                     var className = assignment.CourseInstance?.SectionCode ?? "Unknown Section";
 
@@ -507,8 +522,16 @@ namespace Service.Service
             {
                 response.ReviewedByInstructor = _mapper.Map<UserInfoRegradeResponse>(regradeRequest.ReviewedByInstructor);
             }
-            var deadlineDays = await _systemConfigService.GetConfigValueAsync<int>("RegradeProcessingDeadlineDays", 7);
-            response.ProcessingDeadline = regradeRequest.RequestedAt.AddDays(deadlineDays);
+
+            var processingDeadlineDays = await _systemConfigService.GetConfigValueAsync<int>("RegradeProcessingDeadlineDays", 7);
+            response.ProcessingDeadline = regradeRequest.RequestedAt.AddDays(processingDeadlineDays);
+
+            if (regradeRequest.Submission?.GradedAt.HasValue == true)
+            {
+                var requestDeadlineDays = await _systemConfigService.GetConfigValueAsync<int>("RegradeRequestDeadlineDays", 3);
+                response.StudentRequestDeadline = regradeRequest.Submission.GradedAt.Value.AddDays(requestDeadlineDays);
+            }
+
             return response;
         }
 
