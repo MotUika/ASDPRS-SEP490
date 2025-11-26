@@ -11,7 +11,7 @@ namespace Service.RequestAndResponse.Request.RubricTemplate
 
         public int? MajorId { get; set; }
 
-        public bool IsPublic { get; set; }
+        //public bool IsPublic { get; set; } = false;
 
         [Required]
         public int CreatedByUserId { get; set; }

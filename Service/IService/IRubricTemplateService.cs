@@ -17,5 +17,7 @@ namespace Service.IService
         Task<BaseResponse<IEnumerable<RubricTemplateResponse>>> GetPublicRubricTemplatesAsync();
         Task<BaseResponse<IEnumerable<RubricTemplateResponse>>> SearchRubricTemplatesAsync(string searchTerm);
         Task<BaseResponse<IEnumerable<RubricTemplateResponse>>> GetRubricTemplatesByUserAndMajorAsync(int userId, int majorId);
+        Task<BaseResponse<IEnumerable<RubricTemplateResponse>>> GetPublicRubricTemplatesByUserIdAsync(int userId);
+        Task<BaseResponse<RubricTemplateResponse>> ToggleRubricTemplatePublicStatusAsync(int templateId, bool makePublic);
     }
 }

@@ -1325,6 +1325,8 @@ namespace Service.Service
                 // 4️⃣ Lấy điểm peer trung bình
                 var peerAverage = await _reviewAssignmentRepository.GetPeerAverageScoreBySubmissionIdAsync(submission.SubmissionId);
                 var peerAvg = peerAverage ?? 0m;
+                // Nếu peerAvg = 0 => xem như không có peer review
+                bool noPeer = peerAvg == 0;
 
                 // 5️⃣ Chuẩn hóa trọng số
                 var instructorWeight = assignment.InstructorWeight;
@@ -1350,7 +1352,10 @@ namespace Service.Service
                     (instructorScoreNormalized * instructorWeight / 100m) +
                     (peerScoreNormalized * peerWeight / 100m),
                     2);
-
+                if (peerAvg == 0)
+                {
+                    finalScore = instructorScoreNormalized;
+                }
                 decimal finalScoreBeforePenalty = finalScore;
 
                 // === Missing Review Penalty ===
@@ -1395,11 +1400,12 @@ namespace Service.Service
                 //submission.MissingReviewPenaltyPerReview = missingReviewPenaltyPerReview;
                 //submission.MissingReviewPenaltyTotal = missingReviewPenaltyTotal;
                 submission.Feedback = request.Feedback ?? submission.Feedback;
-                submission.GradedAt = DateTime.UtcNow;
+                submission.GradedAt = null;
                 submission.Status = "Graded";
                 if (request.PublishImmediately)
                     submission.IsPublic = true;
 
+                await _context.SaveChangesAsync();
                 var newestRegradeRequest = await _context.RegradeRequests
                      .Where(r => r.SubmissionId == submission.SubmissionId)
                      .OrderByDescending(r => r.RequestedAt)
@@ -1420,7 +1426,7 @@ namespace Service.Service
                     MissingReviewPenaltyPerReview = missingReviewPenaltyPerReview,
                     MissingReviewPenaltyTotal = missingReviewPenaltyTotal,
                     Feedback = submission.Feedback,
-                    GradedAt = submission.GradedAt,
+                    GradedAt = null,
                     FileUrl = submission.FileUrl,
                     FileName = submission.FileName,
                     Status = submission.Status,
@@ -1706,11 +1712,13 @@ namespace Service.Service
 
                 // === PUBLIC THÀNH CÔNG ===
                 bool changed = false;
+                var publicTime = DateTime.UtcNow;
                 foreach (var s in submissions.Where(s => s.Status == "Graded" || s.FinalScore == 0))
                 {
                     if (!s.IsPublic)
                     {
                         s.IsPublic = true;
+                        s.GradedAt = publicTime;
                         changed = true;
                     }
                 }
@@ -1729,7 +1737,8 @@ namespace Service.Service
                         StudentCode = user.StudentCode,
                         FinalScore = submission?.FinalScore,
                         Feedback = submission?.Feedback ?? (submission == null ? "Không nộp bài" : null),
-                        Status = submission?.Status ?? "Not Submitted"
+                        Status = submission?.Status ?? "Not Submitted",
+                        PublicAt = submission?.GradedAt
                     });
                 }
 

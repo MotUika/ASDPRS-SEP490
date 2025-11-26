@@ -41,5 +41,6 @@ namespace Service.RequestAndResponse.Response.Submission
         public decimal? FinalScore { get; set; }
         public string? Feedback { get; set; }
         public string Status { get; set; } = string.Empty; // Graded, Not Submitted, etc.
+        public DateTime? PublicAt { get; set; }
     }
 }

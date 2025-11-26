@@ -223,5 +223,65 @@ namespace ASDPRS_SEP490.Controllers
                 _ => StatusCode(500, result)
             };
         }
+
+        // GET: Lấy Rubric Template public theo UserId
+        [HttpGet("user/{userId}/public")]
+        [SwaggerOperation(
+            Summary = "Lấy Rubric Template công khai theo UserId",
+            Description = "Trả về danh sách Rubric Template công khai (IsPublic = true) mà user có quyền truy cập theo major"
+        )]
+        [SwaggerResponse(200, "Thành công", typeof(BaseResponse<IEnumerable<RubricTemplateResponse>>))]
+        [SwaggerResponse(404, "Không tìm thấy template nào cho user")]
+        [SwaggerResponse(400, "UserId không hợp lệ")]
+        [SwaggerResponse(500, "Lỗi server")]
+        public async Task<IActionResult> GetPublicRubricTemplatesByUserId(int userId)
+        {
+            if (userId <= 0)
+                return BadRequest(new BaseResponse<IEnumerable<RubricTemplateResponse>>(
+                    "UserId must be greater than 0",
+                    StatusCodeEnum.BadRequest_400,
+                    null));
+
+            var result = await _rubricTemplateService.GetPublicRubricTemplatesByUserIdAsync(userId);
+
+            return result.StatusCode switch
+            {
+                StatusCodeEnum.OK_200 => Ok(result),
+                StatusCodeEnum.NotFound_404 => NotFound(result),
+                _ => StatusCode(500, result)
+            };
+        }
+
+        // 🔹 PUT: Toggle trạng thái Public của Rubric Template
+        [HttpPut("{id}/public")]
+        [SwaggerOperation(
+            Summary = "Cập nhật trạng thái public của Rubric Template",
+            Description = "Chỉ cho phép public nếu template có criteria và tổng weight = 100"
+        )]
+        [SwaggerResponse(200, "Cập nhật thành công", typeof(BaseResponse<RubricTemplateResponse>))]
+        [SwaggerResponse(400, "Không đủ điều kiện để public hoặc dữ liệu không hợp lệ")]
+        [SwaggerResponse(404, "Rubric Template không tồn tại")]
+        [SwaggerResponse(500, "Lỗi server")]
+        public async Task<IActionResult> ToggleRubricTemplatePublicStatus(int id, [FromQuery] bool makePublic)
+        {
+            if (id <= 0)
+            {
+                return BadRequest(new BaseResponse<RubricTemplateResponse>(
+                    "TemplateId must be greater than 0",
+                    StatusCodeEnum.BadRequest_400,
+                    null));
+            }
+
+            var result = await _rubricTemplateService.ToggleRubricTemplatePublicStatusAsync(id, makePublic);
+
+            return result.StatusCode switch
+            {
+                StatusCodeEnum.OK_200 => Ok(result),
+                StatusCodeEnum.BadRequest_400 => BadRequest(result),
+                StatusCodeEnum.NotFound_404 => NotFound(result),
+                _ => StatusCode(500, result)
+            };
+        }
+
     }
 }
