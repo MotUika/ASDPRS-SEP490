@@ -510,6 +510,15 @@ namespace DataAccessLayer
                     Description = "Number of days for instructors to process regrade requests",
                     UpdatedAt = DateTime.UtcNow,
                     UpdatedByUserId = 1
+                },
+                new SystemConfig
+                {
+                    ConfigId = 106,
+                    ConfigKey = "RegradeRequestDeadlineDays",
+                    ConfigValue = "3",
+                    Description = "Number of days after grades are published for students to submit regrade requests",
+                    UpdatedAt = DateTime.UtcNow,
+                    UpdatedByUserId = 1
                 }
             );
         }
