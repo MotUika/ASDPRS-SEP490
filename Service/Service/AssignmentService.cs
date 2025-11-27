@@ -1,6 +1,7 @@
 using AutoMapper;
 using BussinessObject.Models;
 using DataAccessLayer;
+using DocumentFormat.OpenXml.Bibliography;
 using MathNet.Numerics.Distributions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
@@ -261,7 +262,7 @@ namespace Service.Service
                     }
                 }
 
-                await _notificationService.SendNewAssignmentNotificationAsync(assignment.AssignmentId, assignment.CourseInstanceId);
+               // await _notificationService.SendNewAssignmentNotificationAsync(assignment.AssignmentId, assignment.CourseInstanceId);
                 var response = await MapToResponse(assignment);
                 return new BaseResponse<AssignmentResponse>(
                     "Assignment created successfully",
@@ -1797,7 +1798,8 @@ namespace Service.Service
                 }
 
                 await _assignmentRepository.UpdateAsync(assignment);
-
+                //Gửi notification ngay khi publish
+               await _notificationService.SendNewAssignmentNotificationAsync(assignment.AssignmentId, assignment.CourseInstanceId);
                 var response = await MapToResponse(assignment);
                 return new BaseResponse<AssignmentResponse>(
                     $"Assignment published successfully (Status: {assignment.Status})",

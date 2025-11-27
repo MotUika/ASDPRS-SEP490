@@ -23,5 +23,6 @@ namespace Service.IService
         Task<BaseResponse<bool>> SendAnnouncementToAllAsync(SendAnnouncementRequest request);
         Task<BaseResponse<bool>> SendAnnouncementToUsersAsync(SendAnnouncementRequest request, List<int> userIds);
         Task<BaseResponse<bool>> SendAnnouncementToCourseAsync(SendAnnouncementRequest request, int courseInstanceId);
+        Task SendGradesPublishedNotificationToStudents(int assignmentId);
     }
 }

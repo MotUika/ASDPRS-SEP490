@@ -31,6 +31,7 @@ namespace Service.Service
         private readonly IReviewAssignmentRepository _reviewAssignmentRepository;
         private readonly IAISummaryRepository _aiSummaryRepository;
         private readonly IRegradeRequestRepository _regradeRequestRepository;
+        private readonly INotificationService _notificationService;
         private readonly IMapper _mapper;
         private readonly ILogger<SubmissionService> _logger;
         private readonly IFileStorageService _fileStorageService;
@@ -46,6 +47,7 @@ namespace Service.Service
             IReviewAssignmentRepository reviewAssignmentRepository,
             IAISummaryRepository aiSummaryRepository,
             IRegradeRequestRepository regradeRequestRepository,
+            INotificationService notificationService,
             IMapper mapper,
             ILogger<SubmissionService> logger,
             IFileStorageService fileStorageService,
@@ -59,6 +61,7 @@ namespace Service.Service
             _reviewAssignmentRepository = reviewAssignmentRepository;
             _aiSummaryRepository = aiSummaryRepository;
             _regradeRequestRepository = regradeRequestRepository;
+            _notificationService = notificationService;
             _mapper = mapper;
             _logger = logger;
             _fileStorageService = fileStorageService;
@@ -1715,9 +1718,10 @@ namespace Service.Service
                 var publicTime = DateTime.UtcNow;
                 foreach (var s in submissions.Where(s => s.Status == "Graded" || s.FinalScore == 0))
                 {
-                    if (!s.IsPublic)
+                    s.IsPublic = true;
+
+                    if (s.GradedAt == null)
                     {
-                        s.IsPublic = true;
                         s.GradedAt = publicTime;
                         changed = true;
                     }
@@ -1750,7 +1754,15 @@ namespace Service.Service
                 assignment.Status = AssignmentStatusEnum.GradesPublished.ToString();
                 await _assignmentRepository.UpdateAsync(assignment);
                 response.AssignmentStatus = AssignmentStatusEnum.GradesPublished.ToString();
-
+                // 🔔 Gửi notification cho tất cả sinh viên trong lớp
+                try
+                {
+                    await _notificationService.SendGradesPublishedNotificationToStudents(assignment.AssignmentId);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"Error sending grades published notifications for assignment {assignment.AssignmentId}");
+                }
                 _logger.LogInformation($"✅ Grades published for assignment {request.AssignmentId}, status set to GradesPublished.");
 
                 return new BaseResponse<PublishGradesResponse>(

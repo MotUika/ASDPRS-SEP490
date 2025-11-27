@@ -180,6 +180,13 @@ namespace Service.Service
                     case "inreview":
                         message = $"Your regrade request for assignment '{assignment.Title}' is now under review.";
                         break;
+                    case "completed":
+                        message = $"Your regrade request for assignment '{assignment.Title}' has been completed.";
+                        if (!string.IsNullOrEmpty(regradeRequest.ResolutionNotes))
+                        {
+                            message += $" Notes: {regradeRequest.ResolutionNotes}";
+                        }
+                        break;
                     default:
                         message = $"Your regrade request for assignment '{assignment.Title}' has been updated to: {regradeRequest.Status}";
                         break;
@@ -487,7 +494,7 @@ namespace Service.Service
                     PeerAverageScore = regradeRequest.Submission.PeerAverageScore,
                     InstructorFeedback = regradeRequest.Submission.Feedback,
                     GradedAt = regradeRequest.Submission.GradedAt,
-                    HasBeenRegraded = regradeRequest.Status == "Completed" || regradeRequest.Status == "Accepted",
+                    HasBeenRegraded = regradeRequest.Status == "Completed" || regradeRequest.Status == "Approved",
                     RegradeStatus = regradeRequest.Status
                 };
 

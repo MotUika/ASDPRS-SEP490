@@ -221,6 +221,14 @@ namespace Service.Service
             var assignment = await _assignmentRepository.GetByIdAsync(assignmentId);
             if (assignment == null) return;
 
+            // ✅ Chỉ gửi notification nếu assignment đang Upcoming hoặc Active
+            if (assignment.Status != AssignmentStatusEnum.Upcoming.ToString() &&
+                assignment.Status != AssignmentStatusEnum.Active.ToString())
+            {
+                // Không gửi notification nếu Draft hoặc trạng thái khác
+                return;
+            }
+
             var students = await _courseStudentRepository.GetByCourseInstanceIdAsync(courseInstanceId);
 
             foreach (var student in students)
@@ -228,8 +236,12 @@ namespace Service.Service
                 var request = new CreateNotificationRequest
                 {
                     UserId = student.UserId,
-                    Title = "New Assignment Available",
-                    Message = $"A new assignment '{assignment.Title}' has been created. Deadline: {assignment.Deadline}",
+                    Title = assignment.Status == AssignmentStatusEnum.Upcoming.ToString()
+                ? "Upcoming Assignment"
+                : "New Assignment Available",
+                    Message = assignment.Status == AssignmentStatusEnum.Upcoming.ToString()
+                ? $"A new assignment '{assignment.Title}' is upcoming. Start date: {assignment.StartDate}"
+                : $"A new assignment '{assignment.Title}' is now active. Deadline: {assignment.Deadline}",
                     Type = "AssignmentNew",
                     AssignmentId = assignmentId
                 };
@@ -398,5 +410,29 @@ namespace Service.Service
 
             return new BaseResponse<bool>(message, StatusCodeEnum.OK_200, true);
         }
+
+        public async Task SendGradesPublishedNotificationToStudents(int assignmentId)
+        {
+            var assignment = await _assignmentRepository.GetByIdAsync(assignmentId);
+            if (assignment == null) return;
+
+            var students = await _courseStudentRepository.GetByCourseInstanceIdAsync(assignment.CourseInstanceId);
+
+            foreach (var student in students)
+            {
+                var request = new CreateNotificationRequest
+                {
+                    UserId = student.UserId,
+                    Title = "Grades Published",
+                    Message = $"The grades for assignment '{assignment.Title}' have been published.",
+                    Type = "GradesPublished",
+                    AssignmentId = assignment.AssignmentId
+                };
+
+                await CreateNotificationAsync(request);
+            }
+        }
+
+
     }
 }
