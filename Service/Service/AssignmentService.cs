@@ -160,7 +160,7 @@ namespace Service.Service
                 // Validate MissingReviewPenalty
                 if (request.MissingReviewPenalty.HasValue)
                 {
-                    if (request.MissingReviewPenalty < 0)
+                    if (request.MissingReviewPenalty < 1)
                         return new BaseResponse<AssignmentResponse>("MissingReviewPenalty cannot be negative", StatusCodeEnum.BadRequest_400, null);
 
                     if (request.MissingReviewPenalty > 10)

@@ -13,6 +13,7 @@ namespace Service.RequestAndResponse.Request.Notification
         public int? AssignmentId { get; set; }
         public int? SubmissionId { get; set; }
         public int? ReviewAssignmentId { get; set; }
+        public int? CourseInstanceId { get; set; }
         public string Title { get; set; }
         public string Message { get; set; }
         public string Type { get; set; }  // e.g., "AssignmentNew", "DeadlineReminder", "MissingSubmission"

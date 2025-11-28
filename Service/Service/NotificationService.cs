@@ -27,6 +27,7 @@ namespace Service.Service
         private readonly ICourseInstructorRepository _courseInstructorRepository;
         private readonly IUserRepository _userRepository;
         private readonly ISubmissionRepository _submissionRepository;
+        private readonly ICourseInstanceRepository _courseInstanceRepository;
         private readonly IEmailService _emailService;
         private readonly IHubContext<NotificationHub> _hubContext;
 
@@ -39,6 +40,7 @@ namespace Service.Service
             ICourseInstructorRepository courseInstructorRepository,
             IUserRepository userRepository,
             ISubmissionRepository submissionRepository,
+            ICourseInstanceRepository courseInstanceRepository,
             IEmailService emailService,
             IHubContext<NotificationHub> hubContext)
         {
@@ -50,6 +52,7 @@ namespace Service.Service
             _courseInstructorRepository = courseInstructorRepository;
             _userRepository = userRepository;
             _submissionRepository = submissionRepository;
+            _courseInstanceRepository = courseInstanceRepository;
             _emailService = emailService;
             _hubContext = hubContext;
         }
@@ -91,6 +94,7 @@ namespace Service.Service
                 "DeadlineReminder" => true,           // Assignment sắp hết deadline
                 "GradesPublished" => true,            // Điểm đã được publish
                 "AssignmentActive" => true,           // Bài tập vừa active
+                "InstructorAssigned" => true,        // Được gán làm giảng viên
                 "RegradeRequest" => true,             // Có yêu cầu chấm lại
                 "RegradeStatusUpdate" => true,        // Trạng thái regrade thay đổi
                 _ => false                           // Các loại khác chỉ gửi in-app
@@ -431,6 +435,29 @@ namespace Service.Service
 
                 await CreateNotificationAsync(request);
             }
+        }
+
+        public async Task SendInstructorAssignedNotificationAsync(int userId, int courseInstanceId)
+        {
+            var courseInstance = await _courseInstanceRepository.GetByIdWithRelationsAsync(courseInstanceId);
+
+            if (courseInstance == null)
+                return;
+
+            var courseName = courseInstance.Course?.CourseName ?? "Unknown Course";
+            var courseCode = courseInstance.Course?.CourseCode ?? "";
+            var section = courseInstance.SectionCode ?? "";
+
+            var request = new CreateNotificationRequest
+            {
+                UserId = userId,
+                Type = "InstructorAssigned",
+                Title = "New Teaching Assignment",
+                Message = $"You have been assigned to teach **{courseCode} - {courseName} ({section})**.",
+                CourseInstanceId = courseInstanceId
+            };
+
+            await CreateNotificationAsync(request);
         }
 
 

@@ -18,6 +18,7 @@ namespace Service.Service
     {
         private readonly ICourseInstructorRepository _courseInstructorRepository;
         private readonly ICourseInstanceRepository _courseInstanceRepository;
+        private readonly INotificationService _notificationService;
         private readonly IUserRepository _userRepository;
         private readonly ICourseStudentRepository _courseStudentRepository;
         private readonly UserManager<User> _userManager;
@@ -25,12 +26,14 @@ namespace Service.Service
         public CourseInstructorService(
             ICourseInstructorRepository courseInstructorRepository,
             ICourseInstanceRepository courseInstanceRepository,
+            INotificationService notificationService,
             IUserRepository userRepository,
             ICourseStudentRepository courseStudentRepository,
             UserManager<User> userManager)
         {
             _courseInstructorRepository = courseInstructorRepository;
             _courseInstanceRepository = courseInstanceRepository;
+            _notificationService = notificationService;
             _userRepository = userRepository;
             _courseStudentRepository = courseStudentRepository;
             _userManager = userManager;
@@ -84,6 +87,11 @@ namespace Service.Service
                 };
 
                 await _courseInstructorRepository.AddAsync(courseInstructor);
+                await _notificationService.SendInstructorAssignedNotificationAsync(
+                    user.Id,
+                    courseInstance.CourseInstanceId
+);
+
 
                 var response = await MapToResponseAsync(courseInstructor);
                 return new BaseResponse<CourseInstructorResponse>(
