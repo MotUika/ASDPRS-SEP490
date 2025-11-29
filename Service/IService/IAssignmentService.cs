@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using BussinessObject.Models;
+using Microsoft.AspNetCore.Mvc;
 using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Request.Assignment;
 using Service.RequestAndResponse.Response.Assignment;
@@ -33,6 +34,7 @@ namespace Service.IService
         Task<BaseResponse<AssignmentTrackingResponse>> GetAssignmentTrackingAsync(int assignmentId);
         Task<BaseResponse<bool>> PublishGradesAsync(int assignmentId);
         Task<BaseResponse<AssignmentResponse>> PublishAssignmentAsync(int assignmentId);
+        Task<List<Submission>> GetEligibleSubmissionsForCrossClassReviewAsync(int reviewerStudentId, int currentAssignmentId);
 
     }
 }
