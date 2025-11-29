@@ -1195,7 +1195,23 @@ namespace Service.Service
                 var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
                 if (assignment == null)
                     return new BaseResponse<GradeSubmissionResponse>("Assignment not found", StatusCodeEnum.NotFound_404, null);
-               
+                // 🔥 NEW LOGIC: Nếu assignment đã publish điểm → chỉ cho chấm nếu regrade đã được approved
+                if (assignment.Status == "GradesPublished")
+                {
+                    var latestRegradeRequest = await _context.RegradeRequests
+                        .Where(r => r.SubmissionId == submission.SubmissionId)
+                        .OrderByDescending(r => r.RequestedAt)
+                        .FirstOrDefaultAsync();
+
+                    if (latestRegradeRequest == null || latestRegradeRequest.Status != "Approved")
+                    {
+                        return new BaseResponse<GradeSubmissionResponse>(
+                            "Cannot regrade: grades already published and no approved regrade request found.",
+                            StatusCodeEnum.Forbidden_403,
+                            null
+                        );
+                    }
+                }
                 decimal instructorScore = 0m;
 
                 // 3️⃣ Xử lý chấm theo tiêu chí (rubric)

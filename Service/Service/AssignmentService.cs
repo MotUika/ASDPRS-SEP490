@@ -176,11 +176,15 @@ namespace Service.Service
                         null
                     );
                 }
+                // Validate AllowCrossClass
                 var warnings = new List<ErrorDetail>();
                 if (request.AllowCrossClass)
                 {
                     var validationResult = await ValidateCrossClassAsync(request.CrossClassTag, request.CourseInstanceId);
                     if (validationResult != null) return validationResult;
+
+                    var compatibilityCheck = await ValidateCrossClassCompatibilityOnCreateAsync(request);
+                    if (compatibilityCheck != null) return compatibilityCheck;
 
                     var userId = GetCurrentUserId();
                     var existingTags = await GetPopularCrossClassTagsByUserAsync(userId);
@@ -630,6 +634,111 @@ namespace Service.Service
             return null; // Pass
         }
 
+        private async Task<BaseResponse<AssignmentResponse>> ValidateCrossClassCompatibilityOnCreateAsync(CreateAssignmentRequest request)
+        {
+            // Lấy normalized tag
+            var tag = NormalizeCrossClassTag(request.CrossClassTag);
+
+            // Lấy tất cả assignment có cùng tag
+            var existingAssignments = await _context.Assignments
+                .Where(a => a.AllowCrossClass == true
+                            && a.CrossClassTag == tag)
+                .ToListAsync();
+
+            if (!existingAssignments.Any())
+                return null; // Đây là tag mới → OK
+
+            var first = existingAssignments.First();
+
+            // Check 1: CourseId
+            var currentCourse = await _context.CourseInstances
+                .Where(ci => ci.CourseInstanceId == request.CourseInstanceId)
+                .Select(ci => ci.CourseId)
+                .FirstAsync();
+
+            var existingCourse = await _context.CourseInstances
+                .Where(ci => ci.CourseInstanceId == first.CourseInstanceId)
+                .Select(ci => ci.CourseId)
+                .FirstAsync();
+
+            if (currentCourse != existingCourse)
+            {
+                return new BaseResponse<AssignmentResponse>(
+                    "CrossClassTag is already used for another course. Cannot mix courses.",
+                    StatusCodeEnum.BadRequest_400,
+                    null
+                );
+            }
+
+            // Check 2: RubricTemplate
+            if (request.RubricTemplateId != first.RubricTemplateId)
+            {
+                return new BaseResponse<AssignmentResponse>(
+                    "RubricTemplate must match other assignments using the same CrossClassTag.",
+                    StatusCodeEnum.BadRequest_400,
+                    null
+                );
+            }
+
+            // Check 3: GradingScale
+            if (request.GradingScale != first.GradingScale)
+            {
+                return new BaseResponse<AssignmentResponse>(
+                    "GradingScale must match other assignments using the same CrossClassTag.",
+                    StatusCodeEnum.BadRequest_400,
+                    null
+                );
+            }
+
+            // Check 4: PassThreshold (nếu GradingScale là PassFail)
+            if (request.GradingScale == "PassFail" && first.GradingScale == "PassFail")
+            {
+                if (request.PassThreshold != first.PassThreshold)
+                {
+                    return new BaseResponse<AssignmentResponse>(
+                        "PassThreshold must match other assignments using the same CrossClassTag when GradingScale is PassFail.",
+                        StatusCodeEnum.BadRequest_400,
+                        null
+                    );
+                }
+            }
+
+            // Check 5: PeerWeight
+            if (request.PeerWeight != first.PeerWeight)
+            {
+                return new BaseResponse<AssignmentResponse>(
+                    "PeerWeight must match other assignments using the same CrossClassTag.",
+                    StatusCodeEnum.BadRequest_400,
+                    null
+                );
+            }
+
+            // Check 6: NumPeerReviewsRequired
+            if (request.NumPeerReviewsRequired != first.NumPeerReviewsRequired)
+            {
+                return new BaseResponse<AssignmentResponse>(
+                    "NumPeerReviewsRequired must match other assignments using the same CrossClassTag.",
+                    StatusCodeEnum.BadRequest_400,
+                    null
+                );
+            }
+
+            // Check 7: MissingReviewPenalty
+            if (request.MissingReviewPenalty != first.MissingReviewPenalty)
+            {
+                return new BaseResponse<AssignmentResponse>(
+                    "MissingReviewPenalty must match other assignments using the same CrossClassTag.",
+                    StatusCodeEnum.BadRequest_400,
+                    null
+                );
+            }
+
+            return null;
+        }
+
+
+
+
         private async Task<bool> CanCrossClassWithAsync(Assignment current, Assignment other)
         {
             if (current.AssignmentId == other.AssignmentId) return false;
@@ -640,6 +749,21 @@ namespace Service.Service
             var currentCourse = await _courseInstanceRepository.GetByIdAsync(current.CourseInstanceId);
             var otherCourse = await _courseInstanceRepository.GetByIdAsync(other.CourseInstanceId);
             if (currentCourse?.CourseId != otherCourse?.CourseId) return false;
+            // Rubric Template must match
+            if (current.RubricTemplateId != other.RubricTemplateId)
+                return false;
+
+            // Grading scale must match
+            if (current.GradingScale != other.GradingScale)
+                return false;
+
+            // Peer review weight must match
+            if (current.PeerWeight != other.PeerWeight)
+                return false;
+
+            // Num reviews required must match
+            if (current.NumPeerReviewsRequired != other.NumPeerReviewsRequired)
+                return false;
 
             if (string.IsNullOrEmpty(current.CrossClassTag) || current.CrossClassTag != other.CrossClassTag) return false;
 
@@ -1294,6 +1418,7 @@ namespace Service.Service
                 FinalDeadline = assignment.FinalDeadline,
                 NumPeerReviewsRequired = assignment.NumPeerReviewsRequired,
                 AllowCrossClass = assignment.AllowCrossClass,
+                CrossClassTag = assignment.CrossClassTag,
                 IsBlindReview = assignment.IsBlindReview,
                 InstructorWeight = assignment.InstructorWeight,
                 PeerWeight = assignment.PeerWeight,
