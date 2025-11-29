@@ -34,6 +34,7 @@ namespace Service.Service
         private readonly INotificationService _notificationService;
         private readonly IEmailService _emailService;
         private readonly ILogger<ReviewAssignmentService> _logger;
+        private readonly IAssignmentService _assignmentService;
         private static readonly ThreadLocal<Random> _threadLocalRandom =
     new ThreadLocal<Random>(() => new Random(Guid.NewGuid().GetHashCode()));
         public ReviewAssignmentService(
@@ -49,7 +50,8 @@ namespace Service.Service
             ASDPRSContext context,
             INotificationService notificationService,
             IEmailService emailService,
-            ILogger<ReviewAssignmentService> logger)
+            ILogger<ReviewAssignmentService> logger,
+            IAssignmentService assignmentService)
         {
             _reviewAssignmentRepository = reviewAssignmentRepository;
             _submissionRepository = submissionRepository;
@@ -64,6 +66,7 @@ namespace Service.Service
             _notificationService = notificationService;
             _emailService = emailService;
             _logger = logger;
+            _assignmentService = assignmentService;
         }
 
         public async Task<BaseResponse<ReviewAssignmentResponse>> CreateReviewAssignmentAsync(CreateReviewAssignmentRequest request)
@@ -1192,7 +1195,7 @@ namespace Service.Service
                     return new BaseResponse<ReviewAssignmentDetailResponse>(
                         "Assignment is not in review phase yet", StatusCodeEnum.BadRequest_400, null);
                 }
-
+                // Ưu tiên: Tìm review assignment đang in progress hoặc assigned (như gốc)
                 var existingInProgressAssignment = await _context.ReviewAssignments
                     .Include(ra => ra.Submission)
                     .ThenInclude(s => s.Assignment)
@@ -1200,43 +1203,62 @@ namespace Service.Service
                         ra.ReviewerUserId == reviewerId &&
                         ra.Submission.AssignmentId == assignmentId &&
                         (ra.Status == "Assigned" || ra.Status == "In Progress"));
-
                 if (existingInProgressAssignment != null)
                 {
+                    if (existingInProgressAssignment.Status == "Assigned")
+                    {
+                        existingInProgressAssignment.Status = "In Progress";
+                        await _reviewAssignmentRepository.UpdateAsync(existingInProgressAssignment);
+                    }
                     await transaction.CommitAsync();
                     return await GetReviewAssignmentDetailsAsync(existingInProgressAssignment.ReviewAssignmentId, reviewerId);
                 }
-
-                // 🔴 ƯU TIÊN 2: Tìm bài đã được gán nhưng chưa bắt đầu (có thể do back ra)
-                var existingAssignedAssignment = await _context.ReviewAssignments
-                    .Include(ra => ra.Submission)
-                    .ThenInclude(s => s.Assignment)
-                    .FirstOrDefaultAsync(ra =>
-                        ra.ReviewerUserId == reviewerId &&
-                        ra.Submission.AssignmentId == assignmentId &&
-                        ra.Status == "Assigned");
-
-                if (existingAssignedAssignment != null)
+                // Đếm số completed reviews trong lớp này
+                var completedReviewsInClass = await _context.ReviewAssignments
+                    .CountAsync(ra => ra.ReviewerUserId == reviewerId &&
+                                      ra.Submission.AssignmentId == assignmentId &&
+                                      ra.Status == "Completed");
+                // Lấy available submissions trong lớp
+                var availableInClassSubmissions = await _reviewAssignmentRepository.GetAvailableSubmissionsForReviewerAsync(assignmentId, reviewerId);
+                List<Submission> availableCrossClassSubmissions = new List<Submission>();
+                bool canUseCrossClass = assignment.AllowCrossClass && !string.IsNullOrEmpty(assignment.CrossClassTag) && completedReviewsInClass >= assignment.NumPeerReviewsRequired;
+                if (canUseCrossClass)
                 {
-                    // Update status để tracking
-                    existingAssignedAssignment.Status = "In Progress";
-                    await _reviewAssignmentRepository.UpdateAsync(existingAssignedAssignment);
-                    await transaction.CommitAsync();
-
-                    return await GetReviewAssignmentDetailsAsync(existingAssignedAssignment.ReviewAssignmentId, reviewerId);
+                    // Lấy submissions từ cross-class nếu đủ min reviews
+                    availableCrossClassSubmissions = await _assignmentService.GetEligibleSubmissionsForCrossClassReviewAsync(reviewerId, assignmentId);
+                    // Lọc bỏ submissions đã review (tương tự in-class)
+                    var existingReviews = await _reviewAssignmentRepository.GetByReviewerIdAsync(reviewerId);
+                    var reviewedSubmissionIds = existingReviews.Select(ra => ra.SubmissionId).ToHashSet();
+                    availableCrossClassSubmissions = availableCrossClassSubmissions
+                        .Where(s => !reviewedSubmissionIds.Contains(s.SubmissionId) && s.UserId != reviewerId)
+                        .ToList();
                 }
-
-                // Nếu không có bài nào đang dở, mới tìm bài mới
-                var availableSubmissions = await _reviewAssignmentRepository.GetAvailableSubmissionsForReviewerAsync(assignmentId, reviewerId);
-
-                if (!availableSubmissions.Any())
+                // Kết hợp pool: Nếu canUseCrossClass, mix in-class và cross-class với tỉ lệ (ví dụ: 70% in-class, 30% cross-class)
+                var allAvailableSubmissions = new List<Submission>();
+                if (availableInClassSubmissions.Any())
+                {
+                    allAvailableSubmissions.AddRange(availableInClassSubmissions);
+                }
+                var random = _threadLocalRandom.Value;
+                if (canUseCrossClass && availableCrossClassSubmissions.Any())
+                {
+                    // Tỉ lệ: Random mix - giả sử 70% chance lấy in-class nếu còn, 30% cross-class
+                    if (availableInClassSubmissions.Any() && random.NextDouble() < 0.7) // 70% ưu tiên in-class
+                    {
+                        // Giữ nguyên in-class
+                    }
+                    else
+                    {
+                        allAvailableSubmissions.AddRange(availableCrossClassSubmissions);
+                    }
+                }
+                if (!allAvailableSubmissions.Any())
                 {
                     return new BaseResponse<ReviewAssignmentDetailResponse>(
                         "No available submissions to review", StatusCodeEnum.NotFound_404, null);
                 }
 
-                // Logic chọn bài ngẫu nhiên (giữ nguyên)
-                var submissionsWithReviewCount = availableSubmissions.Select(s => new
+                var submissionsWithReviewCount = allAvailableSubmissions.Select(s => new
                 {
                     Submission = s,
                     ReviewCount = _context.ReviewAssignments.Count(ra => ra.SubmissionId == s.SubmissionId && ra.Status == "Completed")
@@ -1247,14 +1269,13 @@ namespace Service.Service
                                                                    .Select(x => x.Submission)
                                                                    .ToList();
 
-                var random = _threadLocalRandom.Value;
                 var selectedSubmission = prioritySubmissions[random.Next(prioritySubmissions.Count)];
 
                 var reviewAssignment = new ReviewAssignment
                 {
                     SubmissionId = selectedSubmission.SubmissionId,
                     ReviewerUserId = reviewerId,
-                        Status = "Assigned",
+                    Status = "Assigned",
                     AssignedAt = DateTime.UtcNow,
                     Deadline = assignment.ReviewDeadline ?? DateTime.UtcNow.AddDays(7),
                     IsAIReview = false
