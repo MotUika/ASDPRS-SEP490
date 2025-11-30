@@ -320,54 +320,89 @@ namespace Service.Service
                         StatusCodeEnum.NotFound_404,
                         null);
                 }
+                // ❗ Không cho phép đổi RubricTemplateId
+                if (request.RubricTemplateId.HasValue &&
+                    assignment.RubricTemplateId.HasValue &&
+                    request.RubricTemplateId.Value != assignment.RubricTemplateId.Value)
+                {
+                    return new BaseResponse<AssignmentResponse>(
+                        "Rubric template cannot be changed for an existing assignment.",
+                        StatusCodeEnum.BadRequest_400,
+                        null);
+                }
+
 
                 // Validate MissingReviewPenalty
                 if (request.MissingReviewPenalty.HasValue)
                 {
-                    if (request.MissingReviewPenalty < 0)
+                    if (request.MissingReviewPenalty < 1)
                         return new BaseResponse<AssignmentResponse>("MissingReviewPenalty cannot be negative", StatusCodeEnum.BadRequest_400, null);
 
-                    if (request.MissingReviewPenalty > 100)
-                        return new BaseResponse<AssignmentResponse>("MissingReviewPenalty cannot exceed 100", StatusCodeEnum.BadRequest_400, null);
+                    if (request.MissingReviewPenalty > 10)
+                        return new BaseResponse<AssignmentResponse>("MissingReviewPenalty cannot exceed 10", StatusCodeEnum.BadRequest_400, null);
 
                     await SaveAssignmentConfigs(assignment.AssignmentId, "MissingReviewPenalty", request.MissingReviewPenalty.Value.ToString());
                 }
 
                 // Validate NumPeerReviewsRequired
                 if (request.NumPeerReviewsRequired.HasValue &&
-                    (request.NumPeerReviewsRequired < 0 || request.NumPeerReviewsRequired > 10))
+                    (request.NumPeerReviewsRequired < 1 || request.NumPeerReviewsRequired > 10))
                 {
                     return new BaseResponse<AssignmentResponse>(
-                        "NumPeerReviewsRequired must be between 0 and 10",
+                        "NumPeerReviewsRequired must be between 1 and 10",
                         StatusCodeEnum.BadRequest_400,
                         null
                     );
                 }
 
-                var warnings = new List<ErrorDetail>();
+                // Validate AllowCrossClass logic (strict + synced with Create)
                 if (request.AllowCrossClass.HasValue)
                 {
                     if (request.AllowCrossClass.Value)
                     {
-                        var tagToValidate = request.CrossClassTag ?? assignment.CrossClassTag;
-                        var validationResult = await ValidateCrossClassAsync(tagToValidate, assignment.CourseInstanceId);
-                        if (validationResult != null) return validationResult;
-
-                        var userId = GetCurrentUserId();
-                        var existingTags = await GetPopularCrossClassTagsByUserAsync(userId);
-                        var normalizedTag = NormalizeCrossClassTag(tagToValidate);
-                        if (!existingTags.Contains(normalizedTag))
+                        // Tag cần validate
+                        var tagToUse = request.CrossClassTag ?? assignment.CrossClassTag;
+                        if (string.IsNullOrWhiteSpace(tagToUse))
                         {
-                            warnings.Add(new ErrorDetail { Field = "CrossClassTag", Message = "This is a new tag.", Suggestion = "Fine for first assignment!" });
+                            return new BaseResponse<AssignmentResponse>(
+                                "CrossClassTag is required when AllowCrossClass = true",
+                                StatusCodeEnum.BadRequest_400,
+                                null);
                         }
+
+                        // Normalize tag
+                        var normalizedTag = NormalizeCrossClassTag(tagToUse);
+
+                        // Validate compatibility y như Create
+                        var compatibility = await ValidateCrossClassCompatibilityOnCreateAsync(
+                            new CreateAssignmentRequest
+                            {
+                                AllowCrossClass = true,
+                                CrossClassTag = normalizedTag,
+                                CourseInstanceId = assignment.CourseInstanceId,
+                                RubricTemplateId = request.RubricTemplateId ?? assignment.RubricTemplateId,
+                                GradingScale = request.GradingScale ?? assignment.GradingScale,
+                                PassThreshold = request.PassThreshold ?? assignment.PassThreshold,
+                                PeerWeight = request.PeerWeight ?? assignment.PeerWeight,
+                                NumPeerReviewsRequired = request.NumPeerReviewsRequired ?? assignment.NumPeerReviewsRequired,
+                                MissingReviewPenalty = request.MissingReviewPenalty ?? assignment.MissingReviewPenalty
+                            });
+
+                        if (compatibility != null)
+                            return compatibility;
+
+                        // Hợp lệ → update
+                        assignment.AllowCrossClass = true;
                         assignment.CrossClassTag = normalizedTag;
                     }
                     else
                     {
+                        // Disable cross-class
+                        assignment.AllowCrossClass = false;
                         assignment.CrossClassTag = null;
                     }
-                    assignment.AllowCrossClass = request.AllowCrossClass.Value;
                 }
+
 
                 // 🧩 Validate file upload
                 if (request.File != null)
