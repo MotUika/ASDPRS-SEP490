@@ -8,7 +8,8 @@ namespace Service.RequestAndResponse.Request.Notification
 {
     public class SendAnnouncementToUsersRequest
     {
-        public SendAnnouncementRequest AnnouncementRequest { get; set; }
+        public string Title { get; set; }
+        public string Message { get; set; }
         public List<int> UserIds { get; set; }
     }
 }

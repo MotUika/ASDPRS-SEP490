@@ -369,33 +369,5 @@ namespace ASDPRS_SEP490.Controllers
                 ));
             }
         }
-
-        [HttpPost("send-to-users")]
-        [SwaggerOperation(
-            Summary = "Gửi thông báo đến danh sách người dùng",
-            Description = "Gửi thông báo đến danh sách người dùng cụ thể theo ID"
-        )]
-        [SwaggerResponse(200, "Thành công", typeof(BaseResponse<bool>))]
-        [SwaggerResponse(400, "Dữ liệu không hợp lệ")]
-        [SwaggerResponse(401, "Unauthorized - Token không hợp lệ")]
-        [SwaggerResponse(403, "Forbidden - Không có quyền truy cập")]
-        [SwaggerResponse(404, "Không tìm thấy người dùng")]
-        [SwaggerResponse(500, "Lỗi server")]
-        public async Task<IActionResult> SendToUsers([FromBody] SendAnnouncementToUsersRequest request)
-        {
-            try
-            {
-                var result = await _announcementService.SendAnnouncementToUsersAsync(request.AnnouncementRequest, request.UserIds);
-                return StatusCode((int)result.StatusCode, result);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new BaseResponse<bool>(
-                    $"Lỗi server: {ex.Message}",
-                    StatusCodeEnum.InternalServerError_500,
-                    false
-                ));
-            }
-        }
     }
 }
