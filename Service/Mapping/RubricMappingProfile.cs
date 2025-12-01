@@ -19,7 +19,12 @@ namespace Service.Mapping
             CreateMap<Rubric, RubricResponse>()
                 .ForMember(dest => dest.TemplateTitle, opt => opt.MapFrom(src => src.Template.Title))
                 .ForMember(dest => dest.AssignmentTitle, opt => opt.MapFrom(src => src.Assignment.Title))
-                .ForMember(dest => dest.CriteriaCount, opt => opt.MapFrom(src => src.Criteria.Count));
+                .ForMember(dest => dest.CriteriaCount, opt => opt.MapFrom(src => src.Criteria.Count))
+                .ForMember(dest => dest.CourseName,
+                             opt => opt.MapFrom(src => src.Assignment.CourseInstance.Course.CourseName))
+                .ForMember(dest => dest.ClassName,
+                            opt => opt.MapFrom(src =>
+                        $"{src.Assignment.CourseInstance.Course.CourseName} - {src.Assignment.CourseInstance.SectionCode}"));
         }
     }
 }

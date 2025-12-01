@@ -35,11 +35,15 @@ namespace Service.Service
             try
             {
                 var rubric = await _context.Rubrics
-                    .Include(r => r.Template)
-                    .Include(r => r.Assignment)
-                    .Include(r => r.Criteria)
-                    .FirstOrDefaultAsync(r => r.RubricId == id);
-
+                .Include(r => r.Template)
+                .Include(r => r.Assignment)
+                    .ThenInclude(a => a.CourseInstance)
+                        .ThenInclude(ci => ci.Course)
+                .Include(r => r.Assignment)
+                    .ThenInclude(a => a.CourseInstance)
+                        .ThenInclude(ci => ci.Campus)
+                .Include(r => r.Criteria)
+                .FirstOrDefaultAsync(r => r.RubricId == id);
                 if (rubric == null)
                 {
                     return new BaseResponse<RubricResponse>("Rubric not found", StatusCodeEnum.NotFound_404, null);
