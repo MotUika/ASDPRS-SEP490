@@ -14,6 +14,7 @@
         public int AssignmentId { get; set; }
         public string Title { get; set; }
         public string CourseName { get; set; }
+        public int CourseId { get; set; }
         public string DescriptionSnippet { get; set; }
         public string Type { get; set; }
     }
@@ -22,6 +23,7 @@
     {
         public int ReviewId { get; set; }
         public string AssignmentTitle { get; set; }
+        public int CourseId { get; set; }
         public string OverallFeedback { get; set; }
         public string ReviewerType { get; set; }
         public string Type { get; set; }
@@ -31,6 +33,7 @@
     {
         public int SummaryId { get; set; }
         public string AssignmentTitle { get; set; }
+        public int CourseId { get; set; }
         public string ContentSnippet { get; set; }
         public string SummaryType { get; set; }
         public DateTime GeneratedAt { get; set; }
@@ -41,6 +44,7 @@
     {
         public int SubmissionId { get; set; }
         public string AssignmentTitle { get; set; }
+        public int CourseId { get; set; }
         public string FileName { get; set; }
         public string Keywords { get; set; }
         public DateTime SubmittedAt { get; set; }
@@ -55,6 +59,7 @@
         public string Description { get; set; }
         public string RubricTitle { get; set; }
         public string AssignmentTitle { get; set; }
+        public int CourseId { get; set; }
         public string CourseName { get; set; }
         public decimal MaxScore { get; set; }
         public int Weight { get; set; }

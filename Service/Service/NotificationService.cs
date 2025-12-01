@@ -2,7 +2,6 @@
 using BussinessObject.Models;
 using Microsoft.AspNetCore.SignalR;
 using Repository.IRepository;
-using Repository.Repository;
 using Service.Hubs;
 using Service.IService;
 using Service.RequestAndResponse.BaseResponse;
@@ -13,7 +12,6 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 namespace Service.Service
 {
@@ -70,10 +68,12 @@ namespace Service.Service
                 var created = await _notificationRepository.AddAsync(notification);
                 var response = _mapper.Map<NotificationResponse>(created);
 
-                //LUÔN GỬI REAL-TIME NOTIFICATION
-                await SendRealTimeNotification(created);
+                response.CourseId = await GetCourseIdForNotification(created);
 
-                //CHỈ GỬI EMAIL CHO CÁC TRƯỜNG HỢP QUAN TRỌNG
+                // GỬI REAL-TIME NOTIFICATION
+                await SendRealTimeNotification(created, response.CourseId);
+
+                // CHỈ GỬI EMAIL CHO CÁC TRƯỜNG HỢP QUAN TRỌNG
                 if (ShouldSendEmail(created))
                 {
                     await SendNotificationEmail(created);
@@ -86,23 +86,75 @@ namespace Service.Service
                 return new BaseResponse<NotificationResponse>($"Error creating notification: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
-        // PHƯƠNG THỨC XÁC ĐỊNH CÓ GỬI EMAIL HAY KHÔNG
+
+        // Helper private để lấy CourseId logic phức tạp mà không đổi DB
+        private async Task<int?> GetCourseIdForNotification(Notification notification)
+        {
+            try
+            {
+                if (notification.AssignmentId.HasValue)
+                {
+                    var assign = await _assignmentRepository.GetByIdAsync(notification.AssignmentId.Value);
+                    if (assign != null)
+                    {
+                        var ci = await _courseInstanceRepository.GetByIdAsync(assign.CourseInstanceId);
+                        return ci?.CourseId;
+                    }
+                }
+                else if (notification.SubmissionId.HasValue)
+                {
+                    var sub = await _submissionRepository.GetByIdAsync(notification.SubmissionId.Value);
+                    if (sub != null)
+                    {
+                        var assign = await _assignmentRepository.GetByIdAsync(sub.AssignmentId);
+                        if (assign != null)
+                        {
+                            var ci = await _courseInstanceRepository.GetByIdAsync(assign.CourseInstanceId);
+                            return ci?.CourseId;
+                        }
+                    }
+                }
+                else if (notification.ReviewAssignmentId.HasValue)
+                {
+                    var review = await _reviewAssignmentRepository.GetByIdAsync(notification.ReviewAssignmentId.Value);
+                    if (review != null)
+                    {
+                        var sub = await _submissionRepository.GetByIdAsync(review.SubmissionId);
+                        if (sub != null)
+                        {
+                            var assign = await _assignmentRepository.GetByIdAsync(sub.AssignmentId);
+                            if (assign != null)
+                            {
+                                var ci = await _courseInstanceRepository.GetByIdAsync(assign.CourseInstanceId);
+                                return ci?.CourseId;
+                            }
+                        }
+                    }
+                }
+                return null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         private bool ShouldSendEmail(Notification notification)
         {
             return notification.Type switch
             {
-                "DeadlineReminder" => true,           // Assignment sắp hết deadline
-                "GradesPublished" => true,            // Điểm đã được publish
-                "AssignmentActive" => true,           // Bài tập vừa active
-                "InstructorAssigned" => true,        // Được gán làm giảng viên
-                "RegradeRequest" => true,             // Có yêu cầu chấm lại
-                "RegradeStatusUpdate" => true,        // Trạng thái regrade thay đổi
-                _ => false                           // Các loại khác chỉ gửi in-app
+                "DeadlineReminder" => true,
+                "GradesPublished" => true,
+                "AssignmentActive" => true,
+                "InstructorAssigned" => true,
+                "RegradeRequest" => true,
+                "RegradeStatusUpdate" => true,
+                _ => false
             };
         }
 
-        // GỬI REAL-TIME NOTIFICATION
-        private async Task SendRealTimeNotification(Notification notification)
+        // Cập nhật để gửi cả CourseId qua SignalR
+        private async Task SendRealTimeNotification(Notification notification, int? courseId)
         {
             try
             {
@@ -116,12 +168,12 @@ namespace Service.Service
                         notification.CreatedAt,
                         notification.IsRead,
                         notification.AssignmentId,
-                        notification.SubmissionId
+                        notification.SubmissionId,
+                        CourseId = courseId
                     });
             }
             catch (Exception ex)
             {
-                // Log lỗi nhưng không làm fail operation chính
                 Console.WriteLine($"Error sending real-time notification: {ex.Message}");
             }
         }
@@ -167,7 +219,19 @@ namespace Service.Service
 
                 notifications = notifications.OrderByDescending(n => n.CreatedAt);
 
-                var response = _mapper.Map<IEnumerable<NotificationResponse>>(notifications);
+                var response = _mapper.Map<IEnumerable<NotificationResponse>>(notifications).ToList();
+
+                foreach (var item in response)
+                {
+                    var tempNotif = new Notification
+                    {
+                        AssignmentId = item.AssignmentId,
+                        SubmissionId = item.SubmissionId,
+                        ReviewAssignmentId = item.ReviewAssignmentId
+                    };
+
+                    item.CourseId = await GetCourseIdForNotification(tempNotif);
+                }
 
                 return new BaseResponse<IEnumerable<NotificationResponse>>("Notifications retrieved successfully", StatusCodeEnum.OK_200, response);
             }
@@ -225,11 +289,9 @@ namespace Service.Service
             var assignment = await _assignmentRepository.GetByIdAsync(assignmentId);
             if (assignment == null) return;
 
-            // ✅ Chỉ gửi notification nếu assignment đang Upcoming hoặc Active
             if (assignment.Status != AssignmentStatusEnum.Upcoming.ToString() &&
                 assignment.Status != AssignmentStatusEnum.Active.ToString())
             {
-                // Không gửi notification nếu Draft hoặc trạng thái khác
                 return;
             }
 
@@ -359,11 +421,9 @@ namespace Service.Service
         {
             try
             {
-                // Lấy tất cả students trong course
                 var students = await _courseStudentRepository.GetByCourseInstanceIdAsync(courseInstanceId);
                 var studentIds = students.Select(s => s.UserId).ToList();
 
-                // Lấy tất cả instructors trong course
                 var instructors = await _courseInstructorRepository.GetByCourseInstanceIdAsync(courseInstanceId);
                 var instructorIds = instructors.Select(i => i.UserId).ToList();
 
