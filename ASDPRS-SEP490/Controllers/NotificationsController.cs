@@ -166,6 +166,95 @@ public class NotificationsController : ControllerBase
         }
     }
 
+    [HttpPost("announcement/all")]
+    [Authorize(Roles = "Admin")]
+    [SwaggerOperation(
+        Summary = "Gửi announcement đến tất cả users (Admin only)",
+        Description = "Gửi một announcement đến tất cả người dùng trong hệ thống"
+    )]
+    [SwaggerResponse(200, "Thành công", typeof(BaseResponse<bool>))]
+    [SwaggerResponse(400, "Yêu cầu không hợp lệ")]
+    [SwaggerResponse(403, "Forbidden - Không có quyền Admin")]
+    [SwaggerResponse(500, "Lỗi server")]
+    public async Task<IActionResult> SendAnnouncementToAll([FromBody] SendAnnouncementRequest request)
+    {
+        try
+        {
+            request.SenderUserId = GetCurrentUserId();
+            var result = await _notificationService.SendAnnouncementToAllAsync(request);
+            return StatusCode((int)result.StatusCode, result);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new BaseResponse<bool>(
+                $"Lỗi server: {ex.Message}",
+                StatusCodeEnum.InternalServerError_500,
+                false
+            ));
+        }
+    }
+
+    [HttpPost("announcement/users")]
+    [Authorize(Roles = "Admin,Instructor")]
+    [SwaggerOperation(
+        Summary = "Gửi announcement đến các users cụ thể",
+        Description = "Gửi một announcement đến danh sách người dùng được chỉ định"
+    )]
+    [SwaggerResponse(200, "Thành công", typeof(BaseResponse<bool>))]
+    [SwaggerResponse(400, "Yêu cầu không hợp lệ")]
+    [SwaggerResponse(403, "Forbidden - Không có quyền")]
+    [SwaggerResponse(500, "Lỗi server")]
+    public async Task<IActionResult> SendAnnouncementToUsers([FromBody] SendAnnouncementToUsersRequest request)
+    {
+        try
+        {
+            var announcementRequest = new SendAnnouncementRequest
+            {
+                Title = request.Title,
+                Message = request.Message,
+                SenderUserId = GetCurrentUserId()
+            };
+            var result = await _notificationService.SendAnnouncementToUsersAsync(announcementRequest, request.UserIds);
+            return StatusCode((int)result.StatusCode, result);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new BaseResponse<bool>(
+                $"Lỗi server: {ex.Message}",
+                StatusCodeEnum.InternalServerError_500,
+                false
+            ));
+        }
+    }
+
+    [HttpPost("announcement/course/{courseInstanceId}")]
+    [Authorize(Roles = "Admin,Instructor")]
+    [SwaggerOperation(
+        Summary = "Gửi announcement đến một course cụ thể",
+        Description = "Gửi một announcement đến tất cả sinh viên và giảng viên trong một course instance"
+    )]
+    [SwaggerResponse(200, "Thành công", typeof(BaseResponse<bool>))]
+    [SwaggerResponse(400, "Yêu cầu không hợp lệ")]
+    [SwaggerResponse(403, "Forbidden - Không có quyền")]
+    [SwaggerResponse(404, "Không tìm thấy course")]
+    [SwaggerResponse(500, "Lỗi server")]
+    public async Task<IActionResult> SendAnnouncementToCourse(int courseInstanceId, [FromBody] SendAnnouncementRequest request)
+    {
+        try
+        {
+            request.SenderUserId = GetCurrentUserId();
+            var result = await _notificationService.SendAnnouncementToCourseAsync(request, courseInstanceId);
+            return StatusCode((int)result.StatusCode, result);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new BaseResponse<bool>(
+                $"Lỗi server: {ex.Message}",
+                StatusCodeEnum.InternalServerError_500,
+                false
+            ));
+        }
+    }
     private int GetCurrentUserId()
     {
         var userIdClaim = User.FindFirst("userId");
