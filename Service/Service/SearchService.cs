@@ -60,9 +60,9 @@ namespace Service.Service
 
                 assignmentQuery = assignmentQuery.Where(a =>
                     searchTerms.Any(term =>
-                        Microsoft.EntityFrameworkCore.EF.Functions.Contains(a.Title, term) ||
-                        Microsoft.EntityFrameworkCore.EF.Functions.Contains(a.Description, term) ||
-                        Microsoft.EntityFrameworkCore.EF.Functions.Contains(a.CourseInstance.Course.CourseName, term)
+                        EF.Functions.Contains(a.Title, term) ||
+                        EF.Functions.Contains(a.Description, term) ||
+                        EF.Functions.Contains(a.CourseInstance.Course.CourseName, term)
                     ));
 
                 results.Assignments = await assignmentQuery
@@ -70,6 +70,7 @@ namespace Service.Service
                     {
                         AssignmentId = a.AssignmentId,
                         Title = a.Title,
+                        CourseId = a.CourseInstance.CourseId,
                         CourseName = a.CourseInstance.Course.CourseName,
                         DescriptionSnippet = a.Description != null && a.Description.Length > 100
                             ? a.Description.Substring(0, 100) + "..."
@@ -83,17 +84,16 @@ namespace Service.Service
                     .Include(r => r.ReviewAssignment)
                         .ThenInclude(ra => ra.Submission)
                             .ThenInclude(s => s.Assignment)
+                                .ThenInclude(a => a.CourseInstance)
                     .Include(r => r.CriteriaFeedbacks)
                     .AsQueryable();
 
                 if (role == "Student")
                 {
-                    // Students can only search reviews THEY CREATED
                     reviewQuery = reviewQuery.Where(r => r.ReviewAssignment.ReviewerUserId == userId);
                 }
                 else if (role == "Instructor")
                 {
-                    // Instructors can search reviews in their courses
                     reviewQuery = reviewQuery.Where(r =>
                         r.ReviewAssignment.Submission.Assignment.CourseInstance.CourseInstructors
                             .Any(ci => ci.UserId == userId));
@@ -101,8 +101,8 @@ namespace Service.Service
 
                 reviewQuery = reviewQuery.Where(r =>
                     searchTerms.Any(term =>
-                        Microsoft.EntityFrameworkCore.EF.Functions.Contains(r.GeneralFeedback, term) ||
-                        r.CriteriaFeedbacks.Any(cf => Microsoft.EntityFrameworkCore.EF.Functions.Contains(cf.Feedback, term))
+                        EF.Functions.Contains(r.GeneralFeedback, term) ||
+                        r.CriteriaFeedbacks.Any(cf => EF.Functions.Contains(cf.Feedback, term))
                     ));
 
                 results.Feedback = await reviewQuery
@@ -110,6 +110,7 @@ namespace Service.Service
                     {
                         ReviewId = r.ReviewId,
                         AssignmentTitle = r.ReviewAssignment.Submission.Assignment.Title,
+                        CourseId = r.ReviewAssignment.Submission.Assignment.CourseInstance.CourseId,
                         OverallFeedback = r.GeneralFeedback,
                         ReviewerType = r.ReviewType,
                         Type = "Feedback"
@@ -122,6 +123,7 @@ namespace Service.Service
                     var summaryQuery = _context.AISummaries
                         .Include(ais => ais.Submission)
                             .ThenInclude(s => s.Assignment)
+                                .ThenInclude(a => a.CourseInstance)
                         .AsQueryable();
 
                     if (role == "Instructor")
@@ -133,8 +135,8 @@ namespace Service.Service
 
                     summaryQuery = summaryQuery.Where(ais =>
                         searchTerms.Any(term =>
-                            Microsoft.EntityFrameworkCore.EF.Functions.Contains(ais.Content, term) ||
-                            Microsoft.EntityFrameworkCore.EF.Functions.Contains(ais.SummaryType, term)
+                            EF.Functions.Contains(ais.Content, term) ||
+                            EF.Functions.Contains(ais.SummaryType, term)
                         ));
 
                     results.Summaries = await summaryQuery
@@ -142,6 +144,7 @@ namespace Service.Service
                         {
                             SummaryId = ais.SummaryId,
                             AssignmentTitle = ais.Submission.Assignment.Title,
+                            CourseId = ais.Submission.Assignment.CourseInstance.CourseId,
                             ContentSnippet = ais.Content.Length > 100
                                 ? ais.Content.Substring(0, 100) + "..."
                                 : ais.Content,
@@ -155,6 +158,7 @@ namespace Service.Service
                 // 4. Search Submissions
                 var submissionQuery = _context.Submissions
                     .Include(s => s.Assignment)
+                        .ThenInclude(a => a.CourseInstance)
                     .Include(s => s.User)
                     .AsQueryable();
 
@@ -170,8 +174,8 @@ namespace Service.Service
 
                 submissionQuery = submissionQuery.Where(s =>
                     searchTerms.Any(term =>
-                        Microsoft.EntityFrameworkCore.EF.Functions.Contains(s.Keywords, term) ||
-                        Microsoft.EntityFrameworkCore.EF.Functions.Contains(s.OriginalFileName, term)
+                        EF.Functions.Contains(s.Keywords, term) ||
+                        EF.Functions.Contains(s.OriginalFileName, term)
                     ));
 
                 results.Submissions = await submissionQuery
@@ -179,6 +183,7 @@ namespace Service.Service
                     {
                         SubmissionId = s.SubmissionId,
                         AssignmentTitle = s.Assignment.Title,
+                        CourseId = s.Assignment.CourseInstance.CourseId,
                         FileName = s.OriginalFileName,
                         Keywords = s.Keywords,
                         SubmittedAt = s.SubmittedAt,
@@ -206,8 +211,8 @@ namespace Service.Service
 
                     criteriaQuery = criteriaQuery.Where(c =>
                         searchTerms.Any(term =>
-                            Microsoft.EntityFrameworkCore.EF.Functions.Contains(c.Title, term) ||
-                            Microsoft.EntityFrameworkCore.EF.Functions.Contains(c.Description, term)
+                            EF.Functions.Contains(c.Title, term) ||
+                            EF.Functions.Contains(c.Description, term)
                         ));
 
                     results.Criteria = await criteriaQuery
@@ -218,6 +223,7 @@ namespace Service.Service
                             Description = c.Description,
                             RubricTitle = c.Rubric.Title,
                             AssignmentTitle = c.Rubric.Assignment.Title,
+                            CourseId = c.Rubric.Assignment.CourseInstance.CourseId,
                             CourseName = c.Rubric.Assignment.CourseInstance.Course.CourseName,
                             MaxScore = c.MaxScore,
                             Weight = c.Weight,
@@ -234,6 +240,7 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
+                // Fallback to basic search if FTS fails
                 return await BasicSearchAsync(keyword, userId, role);
             }
         }
@@ -254,95 +261,83 @@ namespace Service.Service
                 .Where(a => EF.Functions.Like(a.Title, $"%{keyword}%") || EF.Functions.Like(a.Description, $"%{keyword}%") || EF.Functions.Like(a.CourseInstance.Course.CourseName, $"%{keyword}%"));
 
             if (role == "Student")
-            {
                 assignmentQuery = assignmentQuery.Where(a => a.CourseInstance.CourseStudents.Any(cs => cs.UserId == userId));
-            }
             else if (role == "Instructor")
-            {
                 assignmentQuery = assignmentQuery.Where(a => a.CourseInstance.CourseInstructors.Any(ci => ci.UserId == userId));
-            }
             results.Assignments = await assignmentQuery.Select(a => new AssignmentSearchResult
             {
                 AssignmentId = a.AssignmentId,
                 Title = a.Title,
+                CourseId = a.CourseInstance.CourseId,
                 CourseName = a.CourseInstance.Course.CourseName,
                 Type = "Assignment"
             }).ToListAsync();
 
-            // Search Feedback (Reviews)
+            // Search Feedback
             var reviewQuery = _context.Reviews
                 .Include(r => r.ReviewAssignment)
                     .ThenInclude(ra => ra.Submission)
                         .ThenInclude(s => s.Assignment)
+                            .ThenInclude(a => a.CourseInstance) // Added Include
                 .Where(r => EF.Functions.Like(r.GeneralFeedback, $"%{keyword}%"));
             if (role == "Student")
-            {
                 reviewQuery = reviewQuery.Where(r => r.ReviewAssignment.ReviewerUserId == userId);
-            }
             else if (role == "Instructor")
-            {
-                reviewQuery = reviewQuery.Where(r =>
-                    r.ReviewAssignment.Submission.Assignment.CourseInstance.CourseInstructors
-                        .Any(ci => ci.UserId == userId));
-            }
+                reviewQuery = reviewQuery.Where(r => r.ReviewAssignment.Submission.Assignment.CourseInstance.CourseInstructors.Any(ci => ci.UserId == userId));
+
             results.Feedback = await reviewQuery.Select(r => new FeedbackSearchResult
             {
                 ReviewId = r.ReviewId,
                 AssignmentTitle = r.ReviewAssignment.Submission.Assignment.Title,
+                CourseId = r.ReviewAssignment.Submission.Assignment.CourseInstance.CourseId,
                 OverallFeedback = r.GeneralFeedback,
                 Type = "Feedback"
             }).ToListAsync();
 
-            // Search LLM Summaries
+            // Search Summaries
             var summaryQuery = _context.AISummaries
                 .Include(ais => ais.Submission)
                     .ThenInclude(s => s.Assignment)
+                        .ThenInclude(a => a.CourseInstance)
                 .Where(ais => EF.Functions.Like(ais.Content, $"%{keyword}%"));
 
             if (role == "Student")
-            {
                 summaryQuery = summaryQuery.Where(ais => ais.Submission.UserId == userId);
-            }
             else if (role == "Instructor")
-            {
-                summaryQuery = summaryQuery.Where(ais =>
-                    ais.Submission.Assignment.CourseInstance.CourseInstructors
-                        .Any(ci => ci.UserId == userId));
-            }
+                summaryQuery = summaryQuery.Where(ais => ais.Submission.Assignment.CourseInstance.CourseInstructors.Any(ci => ci.UserId == userId));
+
             results.Summaries = await summaryQuery.Select(ais => new SummarySearchResult
             {
                 SummaryId = ais.SummaryId,
                 AssignmentTitle = ais.Submission.Assignment.Title,
+                CourseId = ais.Submission.Assignment.CourseInstance.CourseId,
                 ContentSnippet = ais.Content.Substring(0, Math.Min(100, ais.Content.Length)) + "...",
                 Type = "Summary"
             }).ToListAsync();
             // Search Submissions
             var submissionQuery = _context.Submissions
                 .Include(s => s.Assignment)
+                     .ThenInclude(a => a.CourseInstance)
                 .Include(s => s.User)
                 .Where(s => EF.Functions.Like(s.Keywords, $"%{keyword}%") || EF.Functions.Like(s.OriginalFileName, $"%{keyword}%"));
             if (role == "Student")
-            {
                 submissionQuery = submissionQuery.Where(s => s.UserId == userId);
-            }
             else if (role == "Instructor")
+                submissionQuery = submissionQuery.Where(s => s.Assignment.CourseInstance.CourseInstructors.Any(ci => ci.UserId == userId));
+
+            results.Submissions = await submissionQuery.Select(s => new SubmissionSearchResult
             {
-                submissionQuery = submissionQuery.Where(s =>
-                    s.Assignment.CourseInstance.CourseInstructors.Any(ci => ci.UserId == userId));
-            }
-            results.Submissions = await submissionQuery
-                .Select(s => new SubmissionSearchResult
-                {
-                    SubmissionId = s.SubmissionId,
-                    AssignmentTitle = s.Assignment.Title,
-                    FileName = s.OriginalFileName,
-                    Keywords = s.Keywords,
-                    SubmittedAt = s.SubmittedAt,
-                    StudentName = $"{s.User.FirstName} {s.User.LastName}".Trim(),
-                    Type = "Submission"
-                })
+                SubmissionId = s.SubmissionId,
+                AssignmentTitle = s.Assignment.Title,
+                CourseId = s.Assignment.CourseInstance.CourseId,
+                FileName = s.OriginalFileName,
+                Keywords = s.Keywords,
+                SubmittedAt = s.SubmittedAt,
+                StudentName = $"{s.User.FirstName} {s.User.LastName}".Trim(),
+                Type = "Submission"
+            })
                 .ToListAsync();
-            // Search Rubric Criteria (Only for Instructors/Admin)
+            // Search Criteria
             if (role != "Student")
             {
                 var criteriaQuery = _context.Criteria
@@ -352,24 +347,21 @@ namespace Service.Service
                                 .ThenInclude(ci => ci.Course)
                     .Where(c => EF.Functions.Like(c.Title, $"%{keyword}%") || EF.Functions.Like(c.Description, $"%{keyword}%"));
                 if (role == "Instructor")
+                    criteriaQuery = criteriaQuery.Where(c => c.Rubric.Assignment.CourseInstance.CourseInstructors.Any(ci => ci.UserId == userId));
+
+                results.Criteria = await criteriaQuery.Select(c => new CriteriaSearchResult
                 {
-                    criteriaQuery = criteriaQuery.Where(c =>
-                        c.Rubric.Assignment.CourseInstance.CourseInstructors
-                            .Any(ci => ci.UserId == userId));
-                }
-                results.Criteria = await criteriaQuery
-                    .Select(c => new CriteriaSearchResult
-                    {
-                        CriteriaId = c.CriteriaId,
-                        Title = c.Title,
-                        Description = c.Description,
-                        RubricTitle = c.Rubric.Title,
-                        AssignmentTitle = c.Rubric.Assignment.Title,
-                        CourseName = c.Rubric.Assignment.CourseInstance.Course.CourseName,
-                        MaxScore = c.MaxScore,
-                        Weight = c.Weight,
-                        Type = "Criteria"
-                    })
+                    CriteriaId = c.CriteriaId,
+                    Title = c.Title,
+                    Description = c.Description,
+                    RubricTitle = c.Rubric.Title,
+                    AssignmentTitle = c.Rubric.Assignment.Title,
+                    CourseId = c.Rubric.Assignment.CourseInstance.CourseId,
+                    CourseName = c.Rubric.Assignment.CourseInstance.Course.CourseName,
+                    MaxScore = c.MaxScore,
+                    Weight = c.Weight,
+                    Type = "Criteria"
+                })
                     .ToListAsync();
             }
             return new BaseResponse<SearchResultEFResponse>(
