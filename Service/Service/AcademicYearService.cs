@@ -83,15 +83,38 @@ namespace Service.Service
         {
             try
             {
+                // Kiểm tra ngày bắt đầu phải trước ngày kết thúc
                 if (request.StartDate >= request.EndDate)
                 {
                     return new BaseResponse<AcademicYearResponse>("Start date must be before end date", StatusCodeEnum.BadRequest_400, null);
                 }
 
+                // Kiểm tra không được tạo năm học trong quá khứ
+                var currentDate = DateTime.Now.Date;
+                if (request.StartDate.Date < currentDate)
+                {
+                    return new BaseResponse<AcademicYearResponse>("Cannot create academic year with start date in the past", StatusCodeEnum.BadRequest_400, null);
+                }
+
+                // Kiểm tra tên năm học đã tồn tại
                 var nameExists = await _context.AcademicYears.AnyAsync(ay => ay.Name == request.Name);
                 if (nameExists)
                 {
                     return new BaseResponse<AcademicYearResponse>("Academic year name already exists", StatusCodeEnum.Conflict_409, null);
+                }
+
+                // Kiểm tra năm học có trùng thời gian với năm học khác không
+                var overlappingYear = await _context.AcademicYears
+                    .Where(ay => ay.CampusId == request.CampusId)
+                    .AnyAsync(ay =>
+                        (request.StartDate >= ay.StartDate && request.StartDate < ay.EndDate) ||
+                        (request.EndDate > ay.StartDate && request.EndDate <= ay.EndDate) ||
+                        (request.StartDate <= ay.StartDate && request.EndDate >= ay.EndDate)
+                    );
+
+                if (overlappingYear)
+                {
+                    return new BaseResponse<AcademicYearResponse>("Academic year period overlaps with an existing academic year", StatusCodeEnum.Conflict_409, null);
                 }
 
                 var academicYear = _mapper.Map<AcademicYear>(request);
@@ -128,6 +151,20 @@ namespace Service.Service
                     {
                         return new BaseResponse<AcademicYearResponse>("Academic year name already exists", StatusCodeEnum.Conflict_409, null);
                     }
+                }
+
+                // Kiểm tra năm học có trùng thời gian với năm học khác không (trừ chính nó)
+                var overlappingYear = await _context.AcademicYears
+                    .Where(ay => ay.CampusId == request.CampusId && ay.AcademicYearId != request.AcademicYearId)
+                    .AnyAsync(ay =>
+                        (request.StartDate >= ay.StartDate && request.StartDate < ay.EndDate) ||
+                        (request.EndDate > ay.StartDate && request.EndDate <= ay.EndDate) ||
+                        (request.StartDate <= ay.StartDate && request.EndDate >= ay.EndDate)
+                    );
+
+                if (overlappingYear)
+                {
+                    return new BaseResponse<AcademicYearResponse>("Academic year period overlaps with an existing academic year", StatusCodeEnum.Conflict_409, null);
                 }
 
                 _mapper.Map(request, existingAcademicYear);
