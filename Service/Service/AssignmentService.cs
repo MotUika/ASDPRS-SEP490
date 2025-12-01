@@ -180,6 +180,15 @@ namespace Service.Service
                 var warnings = new List<ErrorDetail>();
                 if (request.AllowCrossClass)
                 {
+                    // ❗ REQUIRED VALIDATION
+                    if (string.IsNullOrWhiteSpace(request.CrossClassTag))
+                    {
+                        return new BaseResponse<AssignmentResponse>(
+                            "CrossClassTag is required when AllowCrossClass = true",
+                            StatusCodeEnum.BadRequest_400,
+                            null
+                        );
+                    }
                     var validationResult = await ValidateCrossClassAsync(request.CrossClassTag, request.CourseInstanceId);
                     if (validationResult != null) return validationResult;
 
