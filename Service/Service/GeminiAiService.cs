@@ -14,7 +14,7 @@ namespace Service.Service
     {
         private readonly HttpClient _httpClient;
         private readonly ILogger<GeminiAiService> _logger;
-        private readonly string _apiKey = "AIzaSyBfzfx2RpGUOiFduvSDFNiw_tqh2ttjqX0";
+        private readonly string _apiKey = "AIzaSyCjPB0vROznYBu7ffFqdaBVR58zhcUgRwc";
         private readonly string _baseUrl = "https://generativelanguage.googleapis.com/v1beta/models/";
 
         public GeminiAiService(HttpClient httpClient, ILogger<GeminiAiService> logger)
