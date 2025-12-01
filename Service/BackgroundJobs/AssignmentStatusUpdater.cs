@@ -24,7 +24,7 @@ namespace Service.BackgroundJobs
 
         public Task StartAsync(CancellationToken cancellationToken)
         {
-            _timer = new Timer(UpdateStatuses, null, TimeSpan.Zero, TimeSpan.FromMinutes(1));
+            _timer = new Timer(UpdateStatuses, null, TimeSpan.Zero, TimeSpan.FromMinutes(10));
             return Task.CompletedTask;
         }
 

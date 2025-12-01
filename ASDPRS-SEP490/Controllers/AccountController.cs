@@ -125,16 +125,17 @@ namespace ASDPRS_SEP490.Controllers
         [SwaggerResponse(400, "Xác thực Google thất bại")]
         public async Task<IActionResult> GoogleCallback()
         {
+            string returnUrl = "http://localhost:5173/";
+
             try
             {
                 var info = await _signInManager.GetExternalLoginInfoAsync();
                 if (info == null)
                 {
-                    return BadRequest(new { message = "Google authentication info is null (correlation/state failed)." });
+                    return Redirect($"{returnUrl}?error=authentication_failed&message={Uri.EscapeDataString("Google authentication info is null (correlation/state failed).")}");
                 }
 
                 // Read returnUrl
-                string returnUrl = "http://localhost:5173/";
                 if (info.AuthenticationProperties != null && info.AuthenticationProperties.Items.ContainsKey("returnUrl"))
                 {
                     returnUrl = info.AuthenticationProperties.Items["returnUrl"];
