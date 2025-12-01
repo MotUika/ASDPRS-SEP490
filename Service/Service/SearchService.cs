@@ -71,6 +71,7 @@ namespace Service.Service
                         AssignmentId = a.AssignmentId,
                         Title = a.Title,
                         CourseId = a.CourseInstance.CourseId,
+                        CourseInstanceId = a.CourseInstanceId,
                         CourseName = a.CourseInstance.Course.CourseName,
                         DescriptionSnippet = a.Description != null && a.Description.Length > 100
                             ? a.Description.Substring(0, 100) + "..."
@@ -145,6 +146,7 @@ namespace Service.Service
                             SummaryId = ais.SummaryId,
                             AssignmentTitle = ais.Submission.Assignment.Title,
                             CourseId = ais.Submission.Assignment.CourseInstance.CourseId,
+                            CourseInstanceId = ais.Submission.Assignment.CourseInstanceId,
                             ContentSnippet = ais.Content.Length > 100
                                 ? ais.Content.Substring(0, 100) + "..."
                                 : ais.Content,
@@ -184,6 +186,7 @@ namespace Service.Service
                         SubmissionId = s.SubmissionId,
                         AssignmentTitle = s.Assignment.Title,
                         CourseId = s.Assignment.CourseInstance.CourseId,
+                        CourseInstanceId = s.Assignment.CourseInstanceId,
                         FileName = s.OriginalFileName,
                         Keywords = s.Keywords,
                         SubmittedAt = s.SubmittedAt,
@@ -224,6 +227,7 @@ namespace Service.Service
                             RubricTitle = c.Rubric.Title,
                             AssignmentTitle = c.Rubric.Assignment.Title,
                             CourseId = c.Rubric.Assignment.CourseInstance.CourseId,
+                            CourseInstanceId = c.Rubric.Assignment.CourseInstanceId,
                             CourseName = c.Rubric.Assignment.CourseInstance.Course.CourseName,
                             MaxScore = c.MaxScore,
                             Weight = c.Weight,
@@ -269,6 +273,7 @@ namespace Service.Service
                 AssignmentId = a.AssignmentId,
                 Title = a.Title,
                 CourseId = a.CourseInstance.CourseId,
+                CourseInstanceId = a.CourseInstanceId,
                 CourseName = a.CourseInstance.Course.CourseName,
                 Type = "Assignment"
             }).ToListAsync();
@@ -290,6 +295,7 @@ namespace Service.Service
                 ReviewId = r.ReviewId,
                 AssignmentTitle = r.ReviewAssignment.Submission.Assignment.Title,
                 CourseId = r.ReviewAssignment.Submission.Assignment.CourseInstance.CourseId,
+                CourseInstanceId = r.ReviewAssignment.Submission.Assignment.CourseInstanceId,
                 OverallFeedback = r.GeneralFeedback,
                 Type = "Feedback"
             }).ToListAsync();
@@ -311,6 +317,7 @@ namespace Service.Service
                 SummaryId = ais.SummaryId,
                 AssignmentTitle = ais.Submission.Assignment.Title,
                 CourseId = ais.Submission.Assignment.CourseInstance.CourseId,
+                CourseInstanceId = ais.Submission.Assignment.CourseInstanceId,
                 ContentSnippet = ais.Content.Substring(0, Math.Min(100, ais.Content.Length)) + "...",
                 Type = "Summary"
             }).ToListAsync();
@@ -330,6 +337,7 @@ namespace Service.Service
                 SubmissionId = s.SubmissionId,
                 AssignmentTitle = s.Assignment.Title,
                 CourseId = s.Assignment.CourseInstance.CourseId,
+                CourseInstanceId = s.Assignment.CourseInstanceId,
                 FileName = s.OriginalFileName,
                 Keywords = s.Keywords,
                 SubmittedAt = s.SubmittedAt,
@@ -357,6 +365,7 @@ namespace Service.Service
                     RubricTitle = c.Rubric.Title,
                     AssignmentTitle = c.Rubric.Assignment.Title,
                     CourseId = c.Rubric.Assignment.CourseInstance.CourseId,
+                    CourseInstanceId = c.Rubric.Assignment.CourseInstanceId,
                     CourseName = c.Rubric.Assignment.CourseInstance.Course.CourseName,
                     MaxScore = c.MaxScore,
                     Weight = c.Weight,
