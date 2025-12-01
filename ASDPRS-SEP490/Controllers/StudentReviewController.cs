@@ -275,6 +275,24 @@ public class StudentReviewController : ControllerBase
         return StatusCode((int)result.StatusCode, result);
     }
 
+    [HttpGet("assignment/{assignmentId}/random-cross-class-review")]
+    [SwaggerOperation(
+    Summary = "Get random cross-class submission to review",
+    Description = "Get a random submission only from cross-class (other sections) for review, if eligible"
+)]
+    [SwaggerResponse(200, "Success", typeof(BaseResponse<ReviewAssignmentDetailResponse>))]
+    [SwaggerResponse(404, "No available cross-class submissions")]
+    [SwaggerResponse(400, "Not eligible for cross-class (e.g., not completed min in-class reviews)")]
+    public async Task<IActionResult> GetRandomCrossClassReview(int assignmentId)
+    {
+        var studentId = GetCurrentStudentId();
+        return await CheckEnrollmentByAssignmentAndExecute(assignmentId, async () =>
+        {
+            var result = await _reviewAssignmentService.GetRandomCrossClassReviewAssignmentAsync(assignmentId, studentId);
+            return StatusCode((int)result.StatusCode, result);
+        });
+    }
+
     [HttpGet("assignment/{assignmentId}/available-reviews")]
     [SwaggerOperation(
         Summary = "Get all available submissions to review",

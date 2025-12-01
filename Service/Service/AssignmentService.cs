@@ -1276,7 +1276,9 @@ namespace Service.Service
                         CompletedReviewsCount = tracking.CompletedCount,
                         Instructors = instructors,
                         CourseInstanceStartDate = assignment.CourseInstance?.StartDate ?? DateTime.MinValue,
-                        CourseInstanceEndDate = assignment.CourseInstance?.EndDate ?? DateTime.MinValue
+                        CourseInstanceEndDate = assignment.CourseInstance?.EndDate ?? DateTime.MinValue,
+                        AllowCrossClass = assignment.AllowCrossClass,
+                        CrossClassTag = assignment.CrossClassTag
                     });
                 }
 
@@ -1360,6 +1362,8 @@ namespace Service.Service
                     HasMetMinimumReviews = hasMetMinimum,
                     RemainingReviewsRequired = remaining,
                     ReviewStatus = reviewStatus,
+                    AllowCrossClass = assignment.AllowCrossClass,
+                    CrossClassTag = assignment.CrossClassTag,
                     ReviewCompletionPercentage = Math.Round(completionPercentage, 1)
                 };
 

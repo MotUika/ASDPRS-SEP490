@@ -25,5 +25,7 @@ namespace Service.RequestAndResponse.Response.Assignment
         public int RemainingReviewsRequired { get; set; }
         public string ReviewStatus { get; set; }
         public decimal ReviewCompletionPercentage { get; set; }
+        public bool AllowCrossClass { get; set; }
+        public string CrossClassTag { get; set; }
     }
 }

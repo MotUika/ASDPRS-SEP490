@@ -21,6 +21,8 @@ namespace Service.RequestAndResponse.Response.Assignment
         public int NumPeerReviewsRequired { get; set; }
         public int PendingReviewsCount { get; set; }
         public int CompletedReviewsCount { get; set; }
+        public bool AllowCrossClass { get; set; }
+        public string CrossClassTag { get; set; }
 
         public List<InstructorInfoBasic> Instructors { get; set; }
 
