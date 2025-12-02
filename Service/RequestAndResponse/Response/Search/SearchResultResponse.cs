@@ -61,6 +61,7 @@
         public int CriteriaId { get; set; }
         public string Title { get; set; }
         public string Description { get; set; }
+        public int RubricId { get; set; }
         public string RubricTitle { get; set; }
         public string AssignmentTitle { get; set; }
         public int CourseId { get; set; }

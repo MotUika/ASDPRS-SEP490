@@ -118,30 +118,35 @@ namespace ASDPRS_SEP490.Controllers
 
         [HttpGet("google-callback")]
         [SwaggerOperation(
-    Summary = "Callback xác thực Google",
-    Description = "Endpoint callback từ Google OAuth sau khi xác thực thành công, tạo token và trả về frontend"
-)]
-        [SwaggerResponse(302, "Chuyển hướng về frontend với token trong URL hoặc cookie")]
-        [SwaggerResponse(400, "Xác thực Google thất bại")]
+            Summary = "Callback xác thực Google",
+            Description = "Endpoint callback từ Google OAuth sau khi xác thực thành công, tạo token và trả về frontend"
+        )]
+        [SwaggerResponse(302, "Chuyển hướng về frontend với token hoặc lỗi trong URL")]
         public async Task<IActionResult> GoogleCallback()
         {
             string returnUrl = "http://localhost:5173/";
+
+            IActionResult RedirectError(string errCode, string msg)
+            {
+                var safeMessage = Uri.EscapeDataString(msg ?? "Unknown error");
+                return Redirect($"{returnUrl}?error={errCode}&message={safeMessage}");
+            }
 
             try
             {
                 var info = await _signInManager.GetExternalLoginInfoAsync();
                 if (info == null)
                 {
-                    return Redirect($"{returnUrl}?error=authentication_failed&message={Uri.EscapeDataString("Google authentication info is null (correlation/state failed).")}");
+                    return RedirectError("auth_info_null", "Google authentication info is null (correlation/state failed)");
                 }
 
-                // Read returnUrl
+                // Restore returnUrl
                 if (info.AuthenticationProperties != null && info.AuthenticationProperties.Items.ContainsKey("returnUrl"))
                 {
                     returnUrl = info.AuthenticationProperties.Items["returnUrl"];
                 }
 
-                // Check origin whitelist
+                // Validate returnUrl
                 var allowedOrigins = new[]
                 {
             "http://localhost:5173", // FE
@@ -161,33 +166,31 @@ namespace ASDPRS_SEP490.Controllers
                     returnUrl = "http://localhost:5173/";
                 }
 
-                // Extract Google info
+                // Get email
                 var googleEmail = info.Principal.FindFirst(ClaimTypes.Email)?.Value;
                 if (string.IsNullOrEmpty(googleEmail))
-                    return BadRequest(new { message = "Could not get email from Google" });
+                    return RedirectError("no_email", "Could not get email from Google");
 
                 var user = await _userManager.FindByEmailAsync(googleEmail);
                 if (user == null)
-                {
-                    return BadRequest(new { message = "Tài khoản Google này chưa được đăng ký trong hệ thống." });
-                }
+                    return RedirectError("user_not_found", "This Google account is not registered in the system.");
 
                 if (!user.IsActive)
-                    return BadRequest(new { message = "Account is deactivated" });
+                    return RedirectError("inactive", "Account is deactivated");
 
                 var roles = await _userManager.GetRolesAsync(user);
                 if (!roles.Contains("Instructor"))
-                    return BadRequest(new { message = "Only instructors can login with Google" });
+                    return RedirectError("unauthorized_role", "Only instructors can login with Google");
 
                 // Generate tokens
                 var tokenResponse = await _tokenService.CreateToken(user);
                 if (tokenResponse == null)
-                    return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Failed to create tokens" });
+                    return RedirectError("token_failed", "Failed to create authentication token");
 
                 await _signInManager.SignInAsync(user, new AuthenticationProperties { IsPersistent = true });
                 await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
 
-                // (optional) cookie for browser session
+                // Cookies
                 var cookieOptions = new CookieOptions
                 {
                     HttpOnly = true,
@@ -199,13 +202,16 @@ namespace ASDPRS_SEP490.Controllers
                 Response.Cookies.Append("ASDPRS_Access", tokenResponse.AccessToken, cookieOptions);
                 Response.Cookies.Append("ASDPRS_Refresh", tokenResponse.RefreshToken, cookieOptions);
 
-                // Redirect to FE with token query params
-                var redirectUrl = $"{returnUrl}?accessToken={Uri.EscapeDataString(tokenResponse.AccessToken)}&refreshToken={Uri.EscapeDataString(tokenResponse.RefreshToken)}";
+                // Success redirect to FE
+                var redirectUrl =
+                    $"{returnUrl}?accessToken={Uri.EscapeDataString(tokenResponse.AccessToken)}" +
+                    $"&refreshToken={Uri.EscapeDataString(tokenResponse.RefreshToken)}";
+
                 return Redirect(redirectUrl);
             }
             catch (Exception ex)
             {
-                return BadRequest(new { message = $"Error during Google login: {ex.Message}" });
+                return RedirectError("exception", $"Error during Google login: {ex.Message}");
             }
         }
 
