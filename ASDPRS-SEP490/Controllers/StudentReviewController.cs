@@ -124,33 +124,6 @@ public class StudentReviewController : ControllerBase
         return StatusCode((int)result.StatusCode, result);
     }
 
-    [HttpGet("assignment/{assignmentId}/random-pending")]
-    [SwaggerOperation(
-    Summary = "Lấy bài cần review ngẫu nhiên trong assignment",
-    Description = "Trả về một bài nộp ngẫu nhiên trong assignment mà sinh viên có thể review"
-)]
-    [SwaggerResponse(200, "Thành công", typeof(BaseResponse<ReviewAssignmentDetailResponse>))]
-    [SwaggerResponse(404, "Không có bài nào để review")]
-    public async Task<IActionResult> GetRandomPendingReview(int assignmentId)
-    {
-        var studentId = GetCurrentStudentId();
-        var result = await _reviewAssignmentService.GetRandomPendingReviewByAssignmentAsync(assignmentId, studentId);
-        return StatusCode((int)result.StatusCode, result);
-    }
-
-    [HttpGet("assignment/{assignmentId}/pending-reviews")]
-    [SwaggerOperation(
-        Summary = "Lấy danh sách bài cần review trong assignment",
-        Description = "Trả về tất cả bài nộp trong assignment mà sinh viên cần review"
-    )]
-    [SwaggerResponse(200, "Thành công", typeof(BaseResponse<List<ReviewAssignmentResponse>>))]
-    public async Task<IActionResult> GetPendingReviewsByAssignment(int assignmentId)
-    {
-        var studentId = GetCurrentStudentId();
-        var result = await _reviewAssignmentService.GetPendingReviewsByAssignmentAsync(assignmentId, studentId);
-        return StatusCode((int)result.StatusCode, result);
-    }
-
     [HttpGet("assignment/{assignmentId}/rubric")]
     [SwaggerOperation(
             Summary = "Lấy rubric của bài tập",
@@ -233,6 +206,37 @@ public class StudentReviewController : ControllerBase
         ));
     }
 
+    [HttpGet("assignment/{assignmentId}/completed-reviews")]
+    [SwaggerOperation(
+        Summary = "Lấy list peer review đã hoàn thành của student trong assignment cụ thể",
+        Description = "Trả về các review assignment đã hoàn thành (Completed) của student hiện tại trong assignment, bao gồm feedback per criteria"
+    )]
+    [SwaggerResponse(200, "Thành công", typeof(BaseResponse<List<ReviewAssignmentResponse>>))]
+    [SwaggerResponse(404, "Không tìm thấy review")]
+    [SwaggerResponse(500, "Lỗi server")]
+    public async Task<IActionResult> GetCompletedReviewsByAssignment(int assignmentId)
+    {
+        var studentId = GetCurrentStudentId();
+        var result = await _reviewAssignmentService.GetCompletedReviewsByAssignmentAsync(assignmentId, studentId);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpGet("review/{reviewId}/details")]
+    [SwaggerOperation(
+    Summary = "Lấy chi tiết peer review đã hoàn thành theo ID",
+    Description = "Trả về chi tiết review (bao gồm feedback per criteria) của student hiện tại, để edit hoặc xem"
+)]
+    [SwaggerResponse(200, "Thành công", typeof(BaseResponse<ReviewResponse>))]
+    [SwaggerResponse(403, "Access denied")]
+    [SwaggerResponse(404, "Không tìm thấy review")]
+    [SwaggerResponse(500, "Lỗi server")]
+    public async Task<IActionResult> GetReviewDetails(int reviewId)
+    {
+        var studentId = GetCurrentStudentId();
+        var result = await _reviewService.GetReviewDetailsAsync(reviewId, studentId);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
     [HttpGet("all-classes/pending-reviews/{studentId}")]
     [SwaggerOperation(
     Summary = "Lấy tất cả bài cần review từ mọi lớp",
@@ -247,20 +251,6 @@ public class StudentReviewController : ControllerBase
         return StatusCode((int)result.StatusCode, result);
     }
 
-    [HttpGet("review-assignment/{reviewAssignmentId}/status")]
-    [SwaggerOperation(
-    Summary = "Kiểm tra trạng thái review assignment",
-    Description = "Kiểm tra xem review assignment đã được hoàn thành chưa và thông tin cơ bản"
-)]
-    [SwaggerResponse(200, "Thành công", typeof(BaseResponse<ReviewAssignmentResponse>))]
-    [SwaggerResponse(404, "Không tìm thấy review assignment")]
-    [SwaggerResponse(500, "Lỗi server")]
-    public async Task<IActionResult> GetReviewAssignmentStatus(int reviewAssignmentId)
-    {
-        var studentId = GetCurrentStudentId();
-        var result = await _reviewAssignmentService.GetReviewAssignmentByIdAsync(reviewAssignmentId);
-        return StatusCode((int)result.StatusCode, result);
-    }
     [HttpGet("assignment/{assignmentId}/random-review")]
     [SwaggerOperation(
         Summary = "Get random submission to review",

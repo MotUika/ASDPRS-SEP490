@@ -23,6 +23,6 @@ namespace Service.IService
         Task<BaseResponse<List<ReviewResponse>>> GetCompletedReviewsByReviewerAsync(int reviewerId);
         Task<BaseResponse<List<ReviewResponse>>> GetCompletedReviewsByAssignmentAsync(int assignmentId, int reviewerId);
         Task<IEnumerable<ReviewResponse>> GetPeerReviewsBySubmissionIdAsync(int submissionId);
-
+        Task<BaseResponse<ReviewResponse>> GetReviewDetailsAsync(int reviewId, int studentId);
     }
 }
