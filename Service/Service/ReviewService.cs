@@ -1,4 +1,5 @@
-﻿using BussinessObject.Models;
+﻿using AutoMapper;
+using BussinessObject.Models;
 using DataAccessLayer;
 using Microsoft.EntityFrameworkCore;
 using Repository.IRepository;
@@ -27,6 +28,7 @@ namespace Service.Service
         private readonly IAssignmentRepository _assignmentRepository;
         private readonly ICourseStudentRepository _courseStudentRepository;
         private readonly ASDPRSContext _context;
+        private readonly IMapper _mapper;
 
         public ReviewService(
             IReviewRepository reviewRepository,
@@ -924,6 +926,48 @@ namespace Service.Service
             }
         }
 
+        public async Task<BaseResponse<ReviewResponse>> GetReviewDetailsAsync(int reviewId, int studentId)
+        {
+            try
+            {
+                var review = await _reviewRepository.GetByIdAsync(reviewId);
+                if (review == null)
+                    return new BaseResponse<ReviewResponse>("Review not found", StatusCodeEnum.NotFound_404, null);
 
+                var reviewAssignment = await _reviewAssignmentRepository.GetByIdAsync(review.ReviewAssignmentId);
+                if (reviewAssignment.ReviewerUserId != studentId)
+                    return new BaseResponse<ReviewResponse>("Access denied: Not your review", StatusCodeEnum.Forbidden_403, null);
+
+                var submission = await _submissionRepository.GetByIdAsync(reviewAssignment.SubmissionId);
+                var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
+
+                var response = _mapper.Map<ReviewResponse>(review);
+
+                // Populate CriteriaFeedbacks
+                var feedbacks = await _context.CriteriaFeedbacks
+                    .Where(cf => cf.ReviewId == reviewId)
+                    .Include(cf => cf.Criteria)
+                    .Select(cf => new CriteriaFeedbackResponse
+                    {
+                        CriteriaFeedbackId = cf.CriteriaFeedbackId,
+                        ReviewId = cf.ReviewId,
+                        CriteriaId = cf.CriteriaId,
+                        CriteriaTitle = cf.Criteria.Title,
+                        ScoreAwarded = cf.ScoreAwarded,
+                        Feedback = cf.Feedback,
+                        FeedbackSource = cf.FeedbackSource
+                    })
+                    .ToListAsync();
+
+                response.CriteriaFeedbacks = feedbacks;
+                response.SetDisplayScore(assignment.GradingScale);
+
+                return new BaseResponse<ReviewResponse>("Review details retrieved", StatusCodeEnum.OK_200, response);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<ReviewResponse>($"Error: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
+            }
+        }
     }
 }

@@ -9,6 +9,7 @@ using Service.RequestAndResponse.Enums;
 using Service.RequestAndResponse.Request.Notification;
 using Service.RequestAndResponse.Request.ReviewAssignment;
 using Service.RequestAndResponse.Response.Criteria;
+using Service.RequestAndResponse.Response.CriteriaFeedback;
 using Service.RequestAndResponse.Response.Review;
 using Service.RequestAndResponse.Response.ReviewAssignment;
 using Service.RequestAndResponse.Response.Rubric;
@@ -1493,6 +1494,58 @@ namespace Service.Service
                 _logger.LogError(ex, "Error getting available reviews");
                 return new BaseResponse<List<ReviewAssignmentResponse>>(
                     $"Error getting available reviews: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
+            }
+        }
+
+        public async Task<BaseResponse<List<ReviewAssignmentResponse>>> GetCompletedReviewsByAssignmentAsync(int assignmentId, int studentId)
+        {
+            try
+            {
+                var studentReviewAssignments = await _reviewAssignmentRepository.GetByReviewerIdAsync(studentId);
+                var completedInAssignment = new List<ReviewAssignment>();
+                foreach (var ra in studentReviewAssignments.Where(ra => ra.Status == "Completed"))
+                {
+                    var submission = await _submissionRepository.GetByIdAsync(ra.SubmissionId);
+                    if (submission?.AssignmentId == assignmentId)
+                    {
+                        completedInAssignment.Add(ra);
+                    }
+                }
+                var responses = new List<ReviewAssignmentResponse>();
+                foreach (var ra in completedInAssignment)
+                {
+                    var response = await MapToResponseAsync(ra, true);
+                    foreach (var review in response.Reviews)
+                    {
+                        var feedbacks = await _context.CriteriaFeedbacks
+                            .Where(cf => cf.ReviewId == review.ReviewId)
+                            .Select(cf => new CriteriaFeedbackResponse
+                            {
+                                CriteriaFeedbackId = cf.CriteriaFeedbackId,
+                                ReviewId = cf.ReviewId,
+                                CriteriaId = cf.CriteriaId,
+                                CriteriaTitle = cf.Criteria.Title,
+                                ScoreAwarded = cf.ScoreAwarded,
+                                Feedback = cf.Feedback,
+                                FeedbackSource = cf.FeedbackSource
+                            })
+                            .ToListAsync();
+                        review.CriteriaFeedbacks = feedbacks;
+                    }
+                    responses.Add(response);
+                }
+                return new BaseResponse<List<ReviewAssignmentResponse>>(
+                    $"Found {responses.Count} completed reviews in assignment",
+                    StatusCodeEnum.OK_200,
+                    responses);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting completed reviews by assignment {AssignmentId} for reviewer {ReviewerId}", assignmentId, studentId);
+                return new BaseResponse<List<ReviewAssignmentResponse>>(
+                    $"Error retrieving completed reviews: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
                     null);
             }
