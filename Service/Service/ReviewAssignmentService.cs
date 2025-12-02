@@ -1196,7 +1196,7 @@ namespace Service.Service
                     return new BaseResponse<ReviewAssignmentDetailResponse>(
                         "Assignment is not in review phase yet", StatusCodeEnum.BadRequest_400, null);
                 }
-                // Ưu tiên: Tìm review assignment đang in progress hoặc assigned (như gốc)
+                // Ưu tiên: Tìm review assignment đang in progress hoặc assigned
                 var existingInProgressAssignment = await _context.ReviewAssignments
                     .Include(ra => ra.Submission)
                     .ThenInclude(s => s.Assignment)

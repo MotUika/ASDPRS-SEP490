@@ -123,6 +123,19 @@ public class StudentReviewController : ControllerBase
         var result = await _reviewAssignmentService.GetReviewAssignmentDetailsAsync(reviewAssignmentId, studentId);
         return StatusCode((int)result.StatusCode, result);
     }
+    [HttpGet("assignment/{assignmentId}/random-pending")]
+    [SwaggerOperation(
+    Summary = "Lấy bài cần review ngẫu nhiên trong assignment",
+    Description = "Trả về một bài nộp ngẫu nhiên trong assignment mà sinh viên có thể review"
+)]
+    [SwaggerResponse(200, "Thành công", typeof(BaseResponse<ReviewAssignmentDetailResponse>))]
+    [SwaggerResponse(404, "Không có bài nào để review")]
+    public async Task<IActionResult> GetRandomPendingReview(int assignmentId)
+    {
+        var studentId = GetCurrentStudentId();
+        var result = await _reviewAssignmentService.GetRandomPendingReviewByAssignmentAsync(assignmentId, studentId);
+        return StatusCode((int)result.StatusCode, result);
+    }
 
     [HttpGet("assignment/{assignmentId}/rubric")]
     [SwaggerOperation(
@@ -207,33 +220,34 @@ public class StudentReviewController : ControllerBase
     }
 
     [HttpGet("assignment/{assignmentId}/completed-reviews")]
+    [Authorize]
     [SwaggerOperation(
-        Summary = "Lấy list peer review đã hoàn thành của student trong assignment cụ thể",
-        Description = "Trả về các review assignment đã hoàn thành (Completed) của student hiện tại trong assignment, bao gồm feedback per criteria"
+        Summary = "Lấy danh sách bài đã chấm xong trong một assignment cụ thể",
+        Description = "Trả về danh sách các bài review mà sinh viên hiện tại (từ Token) đã chấm xong (Completed) trong assignment này. Dùng để hiển thị list bài đã chấm."
     )]
     [SwaggerResponse(200, "Thành công", typeof(BaseResponse<List<ReviewAssignmentResponse>>))]
     [SwaggerResponse(404, "Không tìm thấy review")]
     [SwaggerResponse(500, "Lỗi server")]
     public async Task<IActionResult> GetCompletedReviewsByAssignment(int assignmentId)
     {
-        var studentId = GetCurrentStudentId();
+        var studentId = GetCurrentStudentId(); 
         var result = await _reviewAssignmentService.GetCompletedReviewsByAssignmentAsync(assignmentId, studentId);
         return StatusCode((int)result.StatusCode, result);
     }
 
-    [HttpGet("review/{reviewId}/details")]
+    [HttpGet("review-assignment/{reviewAssignmentId}/review-details")]
+    [Authorize]
     [SwaggerOperation(
-    Summary = "Lấy chi tiết peer review đã hoàn thành theo ID",
-    Description = "Trả về chi tiết review (bao gồm feedback per criteria) của student hiện tại, để edit hoặc xem"
-)]
+        Summary = "Lấy chi tiết bài review để xem hoặc sửa (theo ReviewAssignmentId)",
+        Description = "Lấy toàn bộ thông tin điểm, feedback chung, và feedback chi tiết từng criteria của một bài review dựa trên ReviewAssignmentId. Hệ thống tự check token để đảm bảo chính chủ."
+    )]
     [SwaggerResponse(200, "Thành công", typeof(BaseResponse<ReviewResponse>))]
     [SwaggerResponse(403, "Access denied")]
-    [SwaggerResponse(404, "Không tìm thấy review")]
-    [SwaggerResponse(500, "Lỗi server")]
-    public async Task<IActionResult> GetReviewDetails(int reviewId)
+    [SwaggerResponse(404, "Không tìm thấy bài review")]
+    public async Task<IActionResult> GetReviewDetailsByAssignmentId(int reviewAssignmentId)
     {
         var studentId = GetCurrentStudentId();
-        var result = await _reviewService.GetReviewDetailsAsync(reviewId, studentId);
+        var result = await _reviewService.GetReviewDetailsByReviewAssignmentIdAsync(reviewAssignmentId, studentId);
         return StatusCode((int)result.StatusCode, result);
     }
 

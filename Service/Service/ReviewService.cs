@@ -926,47 +926,51 @@ namespace Service.Service
             }
         }
 
-        public async Task<BaseResponse<ReviewResponse>> GetReviewDetailsAsync(int reviewId, int studentId)
+        public async Task<BaseResponse<ReviewResponse>> GetReviewDetailsByReviewAssignmentIdAsync(int reviewAssignmentId, int studentId)
         {
             try
             {
-                var review = await _reviewRepository.GetByIdAsync(reviewId);
-                if (review == null)
-                    return new BaseResponse<ReviewResponse>("Review not found", StatusCodeEnum.NotFound_404, null);
+                // 1. Validate ReviewAssignment và Owner
+                var reviewAssignment = await _reviewAssignmentRepository.GetByIdAsync(reviewAssignmentId);
+                if (reviewAssignment == null)
+                {
+                    return new BaseResponse<ReviewResponse>("Review assignment not found", StatusCodeEnum.NotFound_404, null);
+                }
 
-                var reviewAssignment = await _reviewAssignmentRepository.GetByIdAsync(review.ReviewAssignmentId);
                 if (reviewAssignment.ReviewerUserId != studentId)
-                    return new BaseResponse<ReviewResponse>("Access denied: Not your review", StatusCodeEnum.Forbidden_403, null);
+                {
+                    return new BaseResponse<ReviewResponse>("Access denied: This review assignment does not belong to you", StatusCodeEnum.Forbidden_403, null);
+                }
 
+                // 2. Lấy thông tin Submission và Assignment để map dữ liệu hiển thị (ví dụ GradingScale)
                 var submission = await _submissionRepository.GetByIdAsync(reviewAssignment.SubmissionId);
                 var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
 
-                var response = _mapper.Map<ReviewResponse>(review);
+                // 3. Lấy Review entity dựa trên ReviewAssignmentId
+                // Giả định 1 ReviewAssignment chỉ có 1 Review active (hoặc lấy cái mới nhất)
+                var reviews = await _reviewRepository.GetByReviewAssignmentIdAsync(reviewAssignmentId);
+                var review = reviews.OrderByDescending(r => r.ReviewedAt).FirstOrDefault();
 
-                // Populate CriteriaFeedbacks
-                var feedbacks = await _context.CriteriaFeedbacks
-                    .Where(cf => cf.ReviewId == reviewId)
-                    .Include(cf => cf.Criteria)
-                    .Select(cf => new CriteriaFeedbackResponse
-                    {
-                        CriteriaFeedbackId = cf.CriteriaFeedbackId,
-                        ReviewId = cf.ReviewId,
-                        CriteriaId = cf.CriteriaId,
-                        CriteriaTitle = cf.Criteria.Title,
-                        ScoreAwarded = cf.ScoreAwarded,
-                        Feedback = cf.Feedback,
-                        FeedbackSource = cf.FeedbackSource
-                    })
-                    .ToListAsync();
+                if (review == null)
+                {
+                    return new BaseResponse<ReviewResponse>("No review found for this assignment yet.", StatusCodeEnum.NotFound_404, null);
+                }
 
-                response.CriteriaFeedbacks = feedbacks;
+                // 4. Map sang ReviewResponse
+                var response = await MapToResponseAsync(review);
+
+                // 5. Populate CriteriaFeedbacks
+
                 response.SetDisplayScore(assignment.GradingScale);
 
-                return new BaseResponse<ReviewResponse>("Review details retrieved", StatusCodeEnum.OK_200, response);
+                response.CanEdit = assignment.ReviewDeadline.HasValue && DateTime.UtcNow <= assignment.ReviewDeadline.Value;
+                response.EditDeadline = assignment.ReviewDeadline;
+
+                return new BaseResponse<ReviewResponse>("Review details retrieved successfully", StatusCodeEnum.OK_200, response);
             }
             catch (Exception ex)
             {
-                return new BaseResponse<ReviewResponse>($"Error: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
+                return new BaseResponse<ReviewResponse>($"Error retrieving review details: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
     }
