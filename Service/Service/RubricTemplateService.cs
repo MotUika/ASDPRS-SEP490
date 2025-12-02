@@ -112,6 +112,7 @@ namespace Service.Service
                     .Include(rt => rt.CreatedByUser)
                     .Include(rt => rt.Rubrics)
                     .Include(rt => rt.CriteriaTemplates)
+                    .Include(rt => rt.Major)
                     .ToListAsync();
 
                 var response = _mapper.Map<IEnumerable<RubricTemplateResponse>>(rubricTemplates);
