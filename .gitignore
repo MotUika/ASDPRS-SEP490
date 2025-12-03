@@ -361,3 +361,22 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+# Deployment secrets and sensitive files
+deploy/docker-compose.yml
+deploy/docker-compose-fe-be.yml
+deploy/appsettings.Production.json
+deploy/scripts/
+deploy/*.ps1
+deploy/*.bat
+deploy/SQL_PASSWORD_INFO.md
+
+# Allow these safe files
+!deploy/Dockerfile
+!deploy/nginx.conf
+!deploy/nginx-fe-be.conf
+!deploy/README.md
+!deploy/DEPLOY_GUIDE.md
+!deploy/QUICK_DEPLOY_GUIDE.md
+!deploy/DNS_SSL_SETUP.md
+!deploy/SQL_SERVER_CONNECTION_GUIDE.md
+
