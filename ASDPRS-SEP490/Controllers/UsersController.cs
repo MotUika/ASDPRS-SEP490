@@ -301,6 +301,26 @@ namespace ASDPRS_SEP490.Controllers
             return StatusCode((int)result.StatusCode, result);
         }
 
+        [HttpPost("import")]
+        [Authorize(Roles = "Admin")]
+        [SwaggerOperation(
+            Summary = "Import users from Excel",
+            Description = "Import multiple users (Students and Instructors) from an Excel file. Duplicate emails will be skipped."
+        )]
+        [SwaggerResponse(201, "Import successful", typeof(BaseResponse<List<UserResponse>>))]
+        [SwaggerResponse(400, "Invalid file")]
+        [SwaggerResponse(500, "Server error")]
+        public async Task<IActionResult> ImportUsers(IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest(new { message = "File is required" });
+
+            using var stream = file.OpenReadStream();
+            var result = await _userService.ImportUsersFromExcelAsync(stream);
+
+            return StatusCode((int)result.StatusCode, result);
+        }
+
         [HttpGet("{id}/roles")]
         [Authorize]
         [SwaggerOperation(

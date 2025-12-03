@@ -418,6 +418,7 @@ namespace DataAccessLayer.Migrations
                     EnrollmentPassword = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
                     StartDate = table.Column<DateTime>(type: "datetime2", nullable: false),
                     EndDate = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    IsActive = table.Column<bool>(type: "bit", nullable: false),
                     RequiresApproval = table.Column<bool>(type: "bit", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
                 },
@@ -893,7 +894,7 @@ namespace DataAccessLayer.Migrations
             migrationBuilder.InsertData(
                 table: "AspNetUsers",
                 columns: new[] { "Id", "AccessFailedCount", "AvatarUrl", "CampusId", "ConcurrencyStamp", "CreatedAt", "Email", "EmailConfirmed", "FirstName", "IsActive", "LastName", "LockoutEnabled", "LockoutEnd", "MajorId", "NormalizedEmail", "NormalizedUserName", "PasswordHash", "PhoneNumber", "PhoneNumberConfirmed", "SecurityStamp", "StudentCode", "TwoFactorEnabled", "UserName" },
-                values: new object[] { 1, 0, null, 1, "932d575a-5140-41b4-bb96-9085af75c510", new DateTime(2025, 11, 24, 13, 4, 11, 199, DateTimeKind.Utc).AddTicks(1912), "admin@example.com", true, "Admin", true, "User", true, null, null, "ADMIN@EXAMPLE.COM", "ADMIN", "AQAAAAIAAYagAAAAEK95SlxvEPzqxJyTxIof0ufhmHVKdEGcuw7MxCBj92JUehpXlaMI0F4RrX3mzLDNzA==", null, false, "ebedf431-d435-4ac9-b3dc-24a20d452722", "ADMIN001", false, "admin" });
+                values: new object[] { 1, 0, null, 1, "745e917c-ad0a-4e62-adf6-0a8b0c495992", new DateTime(2025, 12, 3, 10, 53, 47, 533, DateTimeKind.Utc).AddTicks(283), "admin@example.com", true, "Admin", true, "User", true, null, null, "ADMIN@EXAMPLE.COM", "ADMIN", "AQAAAAIAAYagAAAAEK95SlxvEPzqxJyTxIof0ufhmHVKdEGcuw7MxCBj92JUehpXlaMI0F4RrX3mzLDNzA==", null, false, "7fa51900-fb06-4694-94b5-0199d872ea2a", "ADMIN001", false, "admin" });
 
             migrationBuilder.InsertData(
                 table: "AspNetUserRoles",
@@ -905,12 +906,13 @@ namespace DataAccessLayer.Migrations
                 columns: new[] { "ConfigId", "ConfigKey", "ConfigValue", "Description", "UpdatedAt", "UpdatedByUserId" },
                 values: new object[,]
                 {
-                    { 100, "ScorePrecision", "0.5", "Number accuracy (0.25, 0.5, 1.0)", new DateTime(2025, 11, 24, 13, 4, 11, 199, DateTimeKind.Utc).AddTicks(1975), 1 },
-                    { 101, "AISummaryMaxTokens", "1000", "Maximum number of tokens for AI summary", new DateTime(2025, 11, 24, 13, 4, 11, 199, DateTimeKind.Utc).AddTicks(1976), 1 },
-                    { 102, "AISummaryMaxWords", "200", "Maximum word count for AI summary", new DateTime(2025, 11, 24, 13, 4, 11, 199, DateTimeKind.Utc).AddTicks(1977), 1 },
-                    { 103, "DefaultPassThreshold", "50", "Ngưỡng điểm mặc định để Pass", new DateTime(2025, 11, 24, 13, 4, 11, 199, DateTimeKind.Utc).AddTicks(1978), 1 },
-                    { 104, "PlagiarismThreshold", "80", "Maximum allowed plagiarism percentage before blocking submission (0-100)", new DateTime(2025, 11, 24, 13, 4, 11, 199, DateTimeKind.Utc).AddTicks(1978), 1 },
-                    { 105, "RegradeProcessingDeadlineDays", "7", "Number of days for instructors to process regrade requests", new DateTime(2025, 11, 24, 13, 4, 11, 199, DateTimeKind.Utc).AddTicks(1979), 1 }
+                    { 100, "ScorePrecision", "0.5", "Number accuracy (0.25, 0.5, 1.0)", new DateTime(2025, 12, 3, 10, 53, 47, 533, DateTimeKind.Utc).AddTicks(350), 1 },
+                    { 101, "AISummaryMaxTokens", "1000", "Maximum number of tokens for AI summary", new DateTime(2025, 12, 3, 10, 53, 47, 533, DateTimeKind.Utc).AddTicks(352), 1 },
+                    { 102, "AISummaryMaxWords", "200", "Maximum word count for AI summary", new DateTime(2025, 12, 3, 10, 53, 47, 533, DateTimeKind.Utc).AddTicks(353), 1 },
+                    { 103, "DefaultPassThreshold", "50", "Ngưỡng điểm mặc định để Pass", new DateTime(2025, 12, 3, 10, 53, 47, 533, DateTimeKind.Utc).AddTicks(354), 1 },
+                    { 104, "PlagiarismThreshold", "80", "Maximum allowed plagiarism percentage before blocking submission (0-100)", new DateTime(2025, 12, 3, 10, 53, 47, 533, DateTimeKind.Utc).AddTicks(355), 1 },
+                    { 105, "RegradeProcessingDeadlineDays", "7", "Number of days for instructors to process regrade requests", new DateTime(2025, 12, 3, 10, 53, 47, 533, DateTimeKind.Utc).AddTicks(355), 1 },
+                    { 106, "RegradeRequestDeadlineDays", "3", "Number of days after grades are published for students to submit regrade requests", new DateTime(2025, 12, 3, 10, 53, 47, 533, DateTimeKind.Utc).AddTicks(356), 1 }
                 });
 
             migrationBuilder.CreateIndex(

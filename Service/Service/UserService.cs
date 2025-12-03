@@ -9,6 +9,7 @@ using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Enums;
 using Service.RequestAndResponse.Request.User;
 using Service.RequestAndResponse.Response.User;
+using OfficeOpenXml;
 using Service.RequestAndResponse.Response.User.Service.RequestAndResponse.Response.User;
 using System;
 using System.Collections.Generic;
@@ -183,7 +184,6 @@ namespace Service.Service
                         return new BaseResponse<UserResponse>("Another user with this username already exists", StatusCodeEnum.Conflict_409, null);
                     }
                 }
-                // New: Check for duplicate StudentCode if changed
                 if (!string.IsNullOrEmpty(request.StudentCode) && existingUser.StudentCode != request.StudentCode)
                 {
                     var userWithSameCode = await _context.Users.FirstOrDefaultAsync(u => u.StudentCode == request.StudentCode);
@@ -210,14 +210,22 @@ namespace Service.Service
         {
             try
             {
-                var user = await _userRepository.GetByIdAsync(id);
+                var user = await _context.Users
+                    .Include(u => u.CourseStudents)
+                    .Include(u => u.CourseInstructors)
+                    .Include(u => u.Submissions)
+                    .FirstOrDefaultAsync(u => u.Id == id);
+
                 if (user == null)
-                {
                     return new BaseResponse<bool>("User not found", StatusCodeEnum.NotFound_404, false);
+
+                if (user.CourseStudents.Any() || user.CourseInstructors.Any() || user.Submissions.Any())
+                {
+                    return new BaseResponse<bool>("Cannot delete user who has enrolled courses, teaching assignments, or submissions. Please deactivate the user instead.", StatusCodeEnum.Conflict_409, false);
                 }
 
                 var result = await _userManager.DeleteAsync(user);
-                if (!result.Succeeded)
+                if (!result.Succeeded) 
                 {
                     return new BaseResponse<bool>($"Error deleting user: {string.Join(", ", result.Errors.Select(e => e.Description))}", StatusCodeEnum.BadRequest_400, false);
                 }
@@ -717,6 +725,89 @@ namespace Service.Service
             }
 
             return new string(chars);
+        }
+
+        public async Task<BaseResponse<List<UserResponse>>> ImportUsersFromExcelAsync(Stream fileStream)
+        {
+            try
+            {
+                var importedUsers = new List<UserResponse>();
+                using (var package = new ExcelPackage(fileStream))
+                {
+                    var worksheet = package.Workbook.Worksheets[0];
+                    var rowCount = worksheet.Dimension?.Rows ?? 0;
+
+                    if (rowCount < 2)
+                        return new BaseResponse<List<UserResponse>>("File is empty or missing headers", StatusCodeEnum.BadRequest_400, null);
+
+                    for (int row = 2; row <= rowCount; row++)
+                    {
+                        // Mapping based on your file: Index(1), Code(2), Surname(3), Middle(4), Given(5), Email(6), Major(7), Role(8), Campus(9)
+                        var code = worksheet.Cells[row, 2].Value?.ToString()?.Trim();
+                        var surname = worksheet.Cells[row, 3].Value?.ToString()?.Trim();
+                        var middleName = worksheet.Cells[row, 4].Value?.ToString()?.Trim();
+                        var givenName = worksheet.Cells[row, 5].Value?.ToString()?.Trim();
+                        var email = worksheet.Cells[row, 6].Value?.ToString()?.Trim();
+                        var majorCode = worksheet.Cells[row, 7].Value?.ToString()?.Trim();
+                        var roleName = worksheet.Cells[row, 8].Value?.ToString()?.Trim();
+                        var campusVal = worksheet.Cells[row, 9].Value?.ToString()?.Trim();
+
+                        if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(roleName)) continue;
+
+                        // Check if user exists
+                        var existingUser = await _userManager.FindByEmailAsync(email);
+                        if (existingUser != null) continue;
+
+                        if (!int.TryParse(campusVal, out int campusId)) campusId = 1;
+
+                        int? majorId = null;
+                        if (!string.IsNullOrEmpty(majorCode))
+                        {
+                            var major = await _context.Majors.FirstOrDefaultAsync(m => m.MajorCode == majorCode);
+                            if (major != null) majorId = major.MajorId;
+                        }
+
+                        var newUser = new User
+                        {
+                            UserName = email.Split('@')[0],
+                            Email = email,
+                            StudentCode = code,
+                            FirstName = givenName,
+                            LastName = $"{surname} {middleName}".Trim(),
+                            CampusId = campusId,
+                            MajorId = majorId,
+                            IsActive = true,
+                            CreatedAt = DateTime.UtcNow
+                        };
+
+                        string password = GenerateRandomPassword();
+                        var result = await _userManager.CreateAsync(newUser, password);
+
+                        if (result.Succeeded)
+                        {
+                            // Assign Role
+                            if (await _roleManager.RoleExistsAsync(roleName))
+                            {
+                                await _userManager.AddToRoleAsync(newUser, roleName);
+                            }
+                            else
+                            {
+                                await _userManager.AddToRoleAsync(newUser, "Student");
+                            }
+
+                            _ = SendWelcomeEmail(newUser, password, roleName);
+
+                            importedUsers.Add(_mapper.Map<UserResponse>(newUser));
+                        }
+                    }
+                }
+
+                return new BaseResponse<List<UserResponse>>($"Successfully imported {importedUsers.Count} users", StatusCodeEnum.Created_201, importedUsers);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<List<UserResponse>>($"Error importing users: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
+            }
         }
     }
 }

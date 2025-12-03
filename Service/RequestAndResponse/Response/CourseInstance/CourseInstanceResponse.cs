@@ -16,6 +16,9 @@ namespace Service.RequestAndResponse.Response.CourseInstance
         public string EnrollmentPassword { get; set; }
         public bool RequiresApproval { get; set; }
         public DateTime CreatedAt { get; set; }
+        public DateTime StartDate { get; set; }
+        public DateTime EndDate { get; set; }
+        public bool IsActive { get; set; }
         public int InstructorCount { get; set; }
         public int StudentCount { get; set; }
         public int AssignmentCount { get; set; }
