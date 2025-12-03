@@ -221,6 +221,21 @@ namespace ASDPRS_SEP490.Controllers
             return StatusCode((int)result.StatusCode, result);
         }
 
-
+        [HttpPatch("{id}/toggle-status")]
+        [SwaggerOperation(
+    Summary = "Bật/Tắt trạng thái lớp học (Active/Deactive)",
+    Description = "Chỉ cho phép thực hiện khi lớp chưa bắt đầu HOẶC đã kết thúc. Không được đổi khi đang diễn ra."
+)]
+        public async Task<IActionResult> ToggleCourseStatus(int id)
+        {
+            var result = await _courseInstanceService.ToggleCourseStatusAsync(id);
+            return result.StatusCode switch
+            {
+                StatusCodeEnum.OK_200 => Ok(result),
+                StatusCodeEnum.BadRequest_400 => BadRequest(result),
+                StatusCodeEnum.NotFound_404 => NotFound(result),
+                _ => StatusCode(500, result)
+            };
+        }
     }
 }

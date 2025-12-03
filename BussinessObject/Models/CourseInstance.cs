@@ -32,6 +32,8 @@ namespace BussinessObject.Models
         [Required]
         public DateTime EndDate { get; set; }
 
+        public bool IsActive { get; set; } = true;
+
 
         // REMOVED: MaxStudents field
         [Required]

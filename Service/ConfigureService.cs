@@ -79,6 +79,7 @@ namespace Service
             services.AddScoped<IStatisticsService, StatisticsService>();
             services.AddScoped<ITokenService, TokenService>();
             services.AddHostedService<DeadlineReminderBackgroundService>();
+            services.AddHostedService<CourseStatusWorker>();
 
 
             return services;
