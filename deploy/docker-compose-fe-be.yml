@@ -2,20 +2,23 @@ version: '3.8'
 
 services:
   sqlserver:
-    image: mcr.microsoft.com/mssql/server:2022-latest
+    build:
+      context: .
+      dockerfile: Dockerfile.sql
+    image: asdprs-sqlserver-custom:latest
     container_name: asdprs-sqlserver
     environment:
       - ACCEPT_EULA=Y
       - MSSQL_SA_PASSWORD=Asd2025!PrSqlSecure890
       - MSSQL_PID=Express
     ports:
-      - "1433:1433"
+      - '1433:1433'
     volumes:
       - sqlserver_data:/var/opt/mssql
       - sqlserver_backup:/var/opt/mssql/backup
     restart: unless-stopped
     healthcheck:
-      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "Asd2025!PrSqlSecure890" -C -Q "SELECT 1" || exit 1
+      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'Asd2025!PrSqlSecure890' -C -Q 'SELECT 1' || exit 1
       interval: 10s
       timeout: 3s
       retries: 10
@@ -37,7 +40,7 @@ services:
       - JWT__Issuer=http://160.25.232.199
       - JWT__Audience=http://160.25.232.199
     ports:
-      - "5000:80"
+      - '5000:80'
     volumes:
       - api_logs:/app/logs
     depends_on:
@@ -53,8 +56,8 @@ services:
     image: nginx:alpine
     container_name: asdprs-nginx
     ports:
-      - "80:80"
-      - "443:443"
+      - '80:80'
+      - '443:443'
     volumes:
       - ./nginx-fe-be.conf:/etc/nginx/nginx.conf:ro
       - ./frontend/dist:/usr/share/nginx/html:ro
@@ -67,3 +70,4 @@ volumes:
   sqlserver_data:
   sqlserver_backup:
   api_logs:
+

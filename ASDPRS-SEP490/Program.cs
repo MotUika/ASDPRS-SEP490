@@ -279,4 +279,26 @@ app.MapGet("/", () => "ASDPRS API is running! Visit /swagger for API documentati
 
 ExcelPackage.License.SetNonCommercialOrganization("ASDPRS Project");
 
+
+// Auto-migrate database
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    try
+    {
+        var context = services.GetRequiredService<ASDPRSContext>();
+        // Check if there are any pending migrations
+        if (context.Database.GetPendingMigrations().Any())
+        {
+            context.Database.Migrate();
+            Console.WriteLine("Database migrated successfully.");
+        }
+    }
+    catch (Exception ex)
+    {
+        var logger = services.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "An error occurred while migrating the database.");
+    }
+}
+
 app.Run();

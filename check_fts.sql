@@ -1,0 +1,2 @@
+SELECT FULLTEXTSERVICEPROPERTY('IsFullTextInstalled') AS IsInstalled;
+GO
