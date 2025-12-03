@@ -207,7 +207,15 @@ namespace Service.Service
                 {
                     return new BaseResponse<CourseInstanceResponse>("Course instance not found", StatusCodeEnum.NotFound_404, null);
                 }
-
+                // Prevent changing CourseId or SemesterId if there are enrolled students
+                if (existingCourseInstance.CourseStudents.Any())
+                {
+                    if ((request.CourseId > 0 && request.CourseId != existingCourseInstance.CourseId) ||
+                        (request.SemesterId > 0 && request.SemesterId != existingCourseInstance.SemesterId))
+                    {
+                        return new BaseResponse<CourseInstanceResponse>("Cannot change Course or Semester for a class that already has enrolled students", StatusCodeEnum.Conflict_409, null);
+                    }
+                }
                 // Validate course if provided
                 if (request.CourseId > 0 && request.CourseId != existingCourseInstance.CourseId)
                 {
@@ -278,20 +286,25 @@ namespace Service.Service
             try
             {
                 var courseInstance = await _context.CourseInstances
+                    // Include các bảng liên quan để check constraint
                     .Include(ci => ci.CourseInstructors)
                     .Include(ci => ci.CourseStudents)
                     .Include(ci => ci.Assignments)
                     .FirstOrDefaultAsync(ci => ci.CourseInstanceId == id);
 
                 if (courseInstance == null)
-                {
                     return new BaseResponse<bool>("Course instance not found", StatusCodeEnum.NotFound_404, false);
+
+                var now = DateTime.UtcNow;
+
+                if (courseInstance.StartDate <= now && now <= courseInstance.EndDate)
+                {
+                    return new BaseResponse<bool>("Cannot delete a course that is currently in progress.", StatusCodeEnum.Forbidden_403, false);
                 }
 
-                // Check if there are any related records that would prevent deletion
                 if (courseInstance.CourseInstructors.Any() || courseInstance.CourseStudents.Any() || courseInstance.Assignments.Any())
                 {
-                    return new BaseResponse<bool>("Cannot delete course instance that has instructors, students, or assignments", StatusCodeEnum.BadRequest_400, false);
+                    return new BaseResponse<bool>("Cannot delete course instance that has linked data. Consider Deactivating it instead.", StatusCodeEnum.BadRequest_400, false);
                 }
 
                 await _courseInstanceRepository.DeleteAsync(courseInstance);
@@ -299,7 +312,7 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
-                return new BaseResponse<bool>($"Error deleting course instance: {ex.Message}", StatusCodeEnum.InternalServerError_500, false);
+                return new BaseResponse<bool>($"Error deleting: {ex.Message}", StatusCodeEnum.InternalServerError_500, false);
             }
         }
 
@@ -431,6 +444,34 @@ namespace Service.Service
             }
         }
 
+        public async Task<BaseResponse<bool>> ToggleCourseStatusAsync(int id)
+        {
+            try
+            {
+                var courseInstance = await _context.CourseInstances.FindAsync(id);
+                if (courseInstance == null)
+                {
+                    return new BaseResponse<bool>("Course instance not found", StatusCodeEnum.NotFound_404, false);
+                }
 
+                var now = DateTime.UtcNow;
+
+                if (courseInstance.StartDate <= now && now <= courseInstance.EndDate)
+                {
+                    return new BaseResponse<bool>("Cannot change status while the course is in progress (Ongoing).", StatusCodeEnum.BadRequest_400, false);
+                }
+
+                courseInstance.IsActive = !courseInstance.IsActive;
+
+                await _courseInstanceRepository.UpdateAsync(courseInstance);
+
+                var statusMsg = courseInstance.IsActive ? "Activated" : "Deactivated";
+                return new BaseResponse<bool>($"Course instance {statusMsg} successfully", StatusCodeEnum.OK_200, true);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<bool>($"Error changing status: {ex.Message}", StatusCodeEnum.InternalServerError_500, false);
+            }
+        }
     }
 }

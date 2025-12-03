@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DataAccessLayer.Migrations
 {
     [DbContext(typeof(ASDPRSContext))]
-    [Migration("20251124130411_InitialCreate")]
+    [Migration("20251203105349_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -271,6 +271,9 @@ namespace DataAccessLayer.Migrations
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
 
                     b.Property<bool>("RequiresApproval")
                         .HasColumnType("bit");
@@ -944,7 +947,7 @@ namespace DataAccessLayer.Migrations
                             ConfigKey = "ScorePrecision",
                             ConfigValue = "0.5",
                             Description = "Number accuracy (0.25, 0.5, 1.0)",
-                            UpdatedAt = new DateTime(2025, 11, 24, 13, 4, 11, 199, DateTimeKind.Utc).AddTicks(1975),
+                            UpdatedAt = new DateTime(2025, 12, 3, 10, 53, 47, 533, DateTimeKind.Utc).AddTicks(350),
                             UpdatedByUserId = 1
                         },
                         new
@@ -953,7 +956,7 @@ namespace DataAccessLayer.Migrations
                             ConfigKey = "AISummaryMaxTokens",
                             ConfigValue = "1000",
                             Description = "Maximum number of tokens for AI summary",
-                            UpdatedAt = new DateTime(2025, 11, 24, 13, 4, 11, 199, DateTimeKind.Utc).AddTicks(1976),
+                            UpdatedAt = new DateTime(2025, 12, 3, 10, 53, 47, 533, DateTimeKind.Utc).AddTicks(352),
                             UpdatedByUserId = 1
                         },
                         new
@@ -962,7 +965,7 @@ namespace DataAccessLayer.Migrations
                             ConfigKey = "AISummaryMaxWords",
                             ConfigValue = "200",
                             Description = "Maximum word count for AI summary",
-                            UpdatedAt = new DateTime(2025, 11, 24, 13, 4, 11, 199, DateTimeKind.Utc).AddTicks(1977),
+                            UpdatedAt = new DateTime(2025, 12, 3, 10, 53, 47, 533, DateTimeKind.Utc).AddTicks(353),
                             UpdatedByUserId = 1
                         },
                         new
@@ -971,7 +974,7 @@ namespace DataAccessLayer.Migrations
                             ConfigKey = "DefaultPassThreshold",
                             ConfigValue = "50",
                             Description = "Ngưỡng điểm mặc định để Pass",
-                            UpdatedAt = new DateTime(2025, 11, 24, 13, 4, 11, 199, DateTimeKind.Utc).AddTicks(1978),
+                            UpdatedAt = new DateTime(2025, 12, 3, 10, 53, 47, 533, DateTimeKind.Utc).AddTicks(354),
                             UpdatedByUserId = 1
                         },
                         new
@@ -980,7 +983,7 @@ namespace DataAccessLayer.Migrations
                             ConfigKey = "PlagiarismThreshold",
                             ConfigValue = "80",
                             Description = "Maximum allowed plagiarism percentage before blocking submission (0-100)",
-                            UpdatedAt = new DateTime(2025, 11, 24, 13, 4, 11, 199, DateTimeKind.Utc).AddTicks(1978),
+                            UpdatedAt = new DateTime(2025, 12, 3, 10, 53, 47, 533, DateTimeKind.Utc).AddTicks(355),
                             UpdatedByUserId = 1
                         },
                         new
@@ -989,7 +992,16 @@ namespace DataAccessLayer.Migrations
                             ConfigKey = "RegradeProcessingDeadlineDays",
                             ConfigValue = "7",
                             Description = "Number of days for instructors to process regrade requests",
-                            UpdatedAt = new DateTime(2025, 11, 24, 13, 4, 11, 199, DateTimeKind.Utc).AddTicks(1979),
+                            UpdatedAt = new DateTime(2025, 12, 3, 10, 53, 47, 533, DateTimeKind.Utc).AddTicks(355),
+                            UpdatedByUserId = 1
+                        },
+                        new
+                        {
+                            ConfigId = 106,
+                            ConfigKey = "RegradeRequestDeadlineDays",
+                            ConfigValue = "3",
+                            Description = "Number of days after grades are published for students to submit regrade requests",
+                            UpdatedAt = new DateTime(2025, 12, 3, 10, 53, 47, 533, DateTimeKind.Utc).AddTicks(356),
                             UpdatedByUserId = 1
                         });
                 });
@@ -1100,8 +1112,8 @@ namespace DataAccessLayer.Migrations
                             Id = 1,
                             AccessFailedCount = 0,
                             CampusId = 1,
-                            ConcurrencyStamp = "932d575a-5140-41b4-bb96-9085af75c510",
-                            CreatedAt = new DateTime(2025, 11, 24, 13, 4, 11, 199, DateTimeKind.Utc).AddTicks(1912),
+                            ConcurrencyStamp = "745e917c-ad0a-4e62-adf6-0a8b0c495992",
+                            CreatedAt = new DateTime(2025, 12, 3, 10, 53, 47, 533, DateTimeKind.Utc).AddTicks(283),
                             Email = "admin@example.com",
                             EmailConfirmed = true,
                             FirstName = "Admin",
@@ -1112,7 +1124,7 @@ namespace DataAccessLayer.Migrations
                             NormalizedUserName = "ADMIN",
                             PasswordHash = "AQAAAAIAAYagAAAAEK95SlxvEPzqxJyTxIof0ufhmHVKdEGcuw7MxCBj92JUehpXlaMI0F4RrX3mzLDNzA==",
                             PhoneNumberConfirmed = false,
-                            SecurityStamp = "ebedf431-d435-4ac9-b3dc-24a20d452722",
+                            SecurityStamp = "7fa51900-fb06-4694-94b5-0199d872ea2a",
                             StudentCode = "ADMIN001",
                             TwoFactorEnabled = false,
                             UserName = "admin"

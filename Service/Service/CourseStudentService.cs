@@ -31,6 +31,7 @@ namespace Service.Service
         private readonly IReviewAssignmentRepository _reviewAssignmentRepository;
         private readonly IMapper _mapper;
         private readonly UserManager<User> _userManager;
+        private readonly IEmailService _emailService;
 
 
         public CourseStudentService(
@@ -43,7 +44,8 @@ namespace Service.Service
             IReviewRepository reviewRepository,
             IReviewAssignmentRepository reviewAssignmentRepository,
             IMapper mapper,
-            UserManager<User> userManager)
+            UserManager<User> userManager,
+            IEmailService emailService)
         {
             _courseStudentRepository = courseStudentRepository;
             _courseInstanceRepository = courseInstanceRepository;
@@ -55,10 +57,9 @@ namespace Service.Service
             _reviewAssignmentRepository = reviewAssignmentRepository;
             _mapper = mapper;
             _userManager = userManager;
+            _emailService = emailService;
         }
 
-        // Method import Excel: Đọc file, thêm sinh viên, kiểm tra đơn giản
-        // Method import Excel: Đọc file, thêm sinh viên, kiểm tra đơn giản
         public async Task<BaseResponse<List<CourseStudentResponse>>> ImportStudentsFromExcelAsync(int courseInstanceId, Stream fileStream, int? changedByUserId)
         {
             try
@@ -66,50 +67,58 @@ namespace Service.Service
                 var courseInstance = await _context.CourseInstances
                     .Include(ci => ci.Course)
                     .FirstOrDefaultAsync(ci => ci.CourseInstanceId == courseInstanceId);
+
                 if (courseInstance == null)
+                    return new BaseResponse<List<CourseStudentResponse>>("Course instance not found", StatusCodeEnum.NotFound_404, null);
+
+                var deadline = courseInstance.StartDate.AddDays(45);
+                if (DateTime.UtcNow > deadline)
                 {
-                    return new BaseResponse<List<CourseStudentResponse>>("Không tìm thấy lớp học", StatusCodeEnum.NotFound_404, null);
+                    return new BaseResponse<List<CourseStudentResponse>>("Import failed: Cannot add students after 45 days from start date.", StatusCodeEnum.Forbidden_403, null);
                 }
+
                 var results = new List<CourseStudentResponse>();
-                var createdUsers = new List<User>();
-                // Fetch changedByUser once
+                var skippedStudents = new List<string>();
+
                 User changedBy = null;
-                if (changedByUserId.HasValue)
-                {
-                    changedBy = await _userManager.FindByIdAsync(changedByUserId.Value.ToString());
-                }
+                if (changedByUserId.HasValue) changedBy = await _userManager.FindByIdAsync(changedByUserId.Value.ToString());
+
                 using (var package = new ExcelPackage(fileStream))
                 {
-                    var worksheet = package.Workbook.Worksheets[0]; // Sheet đầu tiên
-                    var rowCount = worksheet.Dimension.Rows;
-                    for (int row = 2; row <= rowCount; row++) // Bắt đầu từ dòng 2 (bỏ header)
+                    var worksheet = package.Workbook.Worksheets[0];
+                    var rowCount = worksheet.Dimension?.Rows ?? 0;
+
+                    for (int row = 2; row <= rowCount; row++)
                     {
-                        var code = worksheet.Cells[row, 2].Value?.ToString().Trim(); // Cột B: Code
-                        var surname = worksheet.Cells[row, 3].Value?.ToString().Trim(); // Cột C: Surname
-                        var middleName = worksheet.Cells[row, 4].Value?.ToString().Trim(); // Cột D: Middle name
-                        var givenName = worksheet.Cells[row, 5].Value?.ToString().Trim(); // Cột E: Given name
-                        var email = worksheet.Cells[row, 6].Value?.ToString().Trim(); // Cột F: Email
-                        var majorCode = worksheet.Cells[row, 7].Value?.ToString().Trim(); // Cột G: Major (thêm để import Major)
-                        if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(email))
-                            continue;
-                        // Tìm hoặc tạo user
+                        var code = worksheet.Cells[row, 2].Value?.ToString().Trim();
+                        var email = worksheet.Cells[row, 6].Value?.ToString().Trim();
+                        var surname = worksheet.Cells[row, 3].Value?.ToString().Trim();
+                        var middle = worksheet.Cells[row, 4].Value?.ToString().Trim();
+                        var given = worksheet.Cells[row, 5].Value?.ToString().Trim();
+                        var majorCode = worksheet.Cells[row, 7].Value?.ToString().Trim();
+
+                        if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(email)) continue;
+
                         var user = await _userManager.FindByEmailAsync(email);
                         if (user == null)
                         {
-                            user = await CreateStudentUserAsync(code, surname, middleName, givenName, email, courseInstance.CampusId, majorCode);
-                            if (user != null)
-                            {
-                                createdUsers.Add(user);
-                            }
+                            user = await CreateStudentUserAsync(code, surname, middle, given, email, courseInstance.CampusId, majorCode);
                         }
+
                         if (user != null)
                         {
-                            // Kiểm tra xem sinh viên đã trong lớp chưa
-                            var existingCourseStudent = await _context.CourseStudents
-                                .FirstOrDefaultAsync(cs => cs.CourseInstanceId == courseInstanceId && cs.UserId == user.Id);
-                            if (existingCourseStudent == null)
+                            if (user.CampusId != courseInstance.CampusId)
                             {
-                                var courseStudent = new CourseStudent
+                                skippedStudents.Add($"{email} (Campus mismatch)");
+                                continue;
+                            }
+
+                            var existing = await _context.CourseStudents
+                                .FirstOrDefaultAsync(cs => cs.CourseInstanceId == courseInstanceId && cs.UserId == user.Id);
+
+                            if (existing == null)
+                            {
+                                var cs = new CourseStudent
                                 {
                                     CourseInstanceId = courseInstanceId,
                                     UserId = user.Id,
@@ -117,19 +126,29 @@ namespace Service.Service
                                     Status = "Enrolled",
                                     ChangedByUserId = changedByUserId
                                 };
-                                var created = await _courseStudentRepository.AddAsync(courseStudent);
-                                // Sử dụng MapToResponse thay vì _mapper.Map
-                                var response = MapToResponse(created, courseInstance, user, changedBy);
-                                results.Add(response);
+                                var created = await _courseStudentRepository.AddAsync(cs);
+                                results.Add(MapToResponse(created, courseInstance, user, changedBy));
                             }
                         }
                     }
                 }
-                return new BaseResponse<List<CourseStudentResponse>>($"Import thành công {results.Count} sinh viên", StatusCodeEnum.Created_201, results);
+
+                string message = $"Successfully imported {results.Count} students.";
+                if (skippedStudents.Any())
+                {
+                    message += $" Skipped {skippedStudents.Count} students due to campus mismatch: {string.Join(", ", skippedStudents)}.";
+                }
+
+                if (results.Count == 0 && skippedStudents.Any())
+                {
+                    return new BaseResponse<List<CourseStudentResponse>>(message, StatusCodeEnum.OK_200, results);
+                }
+
+                return new BaseResponse<List<CourseStudentResponse>>(message, StatusCodeEnum.Created_201, results);
             }
             catch (Exception ex)
             {
-                return new BaseResponse<List<CourseStudentResponse>>($"Lỗi khi import: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
+                return new BaseResponse<List<CourseStudentResponse>>($"Error importing: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
         public async Task<BaseResponse<MultipleCourseImportResponse>> ImportStudentsFromMultipleSheetsAsync(int campusId, Stream fileStream, int? changedByUserId)
@@ -140,12 +159,10 @@ namespace Service.Service
                 {
                     SheetResults = new List<SheetImportResult>()
                 };
-                // Fetch changedByUser once
+
                 User changedBy = null;
-                if (changedByUserId.HasValue)
-                {
-                    changedBy = await _userManager.FindByIdAsync(changedByUserId.Value.ToString());
-                }
+                if (changedByUserId.HasValue) changedBy = await _userManager.FindByIdAsync(changedByUserId.Value.ToString());
+
                 using (var package = new ExcelPackage(fileStream))
                 {
                     foreach (var worksheet in package.Workbook.Worksheets)
@@ -155,43 +172,64 @@ namespace Service.Service
                             SheetName = worksheet.Name,
                             ImportedStudents = new List<CourseStudentResponse>()
                         };
-                        // Tìm CourseInstance dựa trên sheet name (section code) và campus
+
                         var courseInstance = await _context.CourseInstances
                             .Include(ci => ci.Course)
                             .FirstOrDefaultAsync(ci => ci.SectionCode == worksheet.Name && ci.CampusId == campusId);
+
                         if (courseInstance == null)
                         {
-                            sheetResult.Message = $"Không tìm thấy lớp học với mã section: {worksheet.Name} trong campus {campusId}";
+                            sheetResult.Message = $"Course instance not found for section: {worksheet.Name} in campus {campusId}";
                             results.SheetResults.Add(sheetResult);
                             continue;
                         }
+
+                        var deadline = courseInstance.StartDate.AddDays(45);
+                        if (DateTime.UtcNow > deadline)
+                        {
+                            sheetResult.Message = "Import failed: Time limit (45 days) exceeded.";
+                            results.SheetResults.Add(sheetResult);
+                            continue;
+                        }
+
                         sheetResult.CourseInstanceId = courseInstance.CourseInstanceId;
                         sheetResult.CourseName = courseInstance.Course?.CourseName;
+
                         var rowCount = worksheet.Dimension?.Rows ?? 0;
                         int successCount = 0;
+                        var skippedStudents = new List<string>();
+
                         for (int row = 2; row <= rowCount; row++)
                         {
                             var code = worksheet.Cells[row, 2].Value?.ToString().Trim();
                             var surname = worksheet.Cells[row, 3].Value?.ToString().Trim();
-                            var middleName = worksheet.Cells[row, 4].Value?.ToString().Trim();
-                            var givenName = worksheet.Cells[row, 5].Value?.ToString().Trim();
+                            var middle = worksheet.Cells[row, 4].Value?.ToString().Trim();
+                            var given = worksheet.Cells[row, 5].Value?.ToString().Trim();
                             var email = worksheet.Cells[row, 6].Value?.ToString().Trim();
-                            var majorCode = worksheet.Cells[row, 7].Value?.ToString().Trim(); // Thêm để import Major
-                            if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(email))
-                                continue;
+                            var majorCode = worksheet.Cells[row, 7].Value?.ToString().Trim();
+
+                            if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(email)) continue;
+
                             try
                             {
-                                // Tìm hoặc tạo user
                                 var user = await _userManager.FindByEmailAsync(email);
                                 if (user == null)
                                 {
-                                    user = await CreateStudentUserAsync(code, surname, middleName, givenName, email, campusId, majorCode);
+                                    user = await CreateStudentUserAsync(code, surname, middle, given, email, campusId, majorCode);
                                 }
+
                                 if (user != null)
                                 {
-                                    // Kiểm tra xem sinh viên đã trong lớp chưa
+                                    // VALIDATION: Campus Check
+                                    if (user.CampusId != courseInstance.CampusId)
+                                    {
+                                        skippedStudents.Add($"{email}");
+                                        continue;
+                                    }
+
                                     var existingCourseStudent = await _context.CourseStudents
                                         .FirstOrDefaultAsync(cs => cs.CourseInstanceId == courseInstance.CourseInstanceId && cs.UserId == user.Id);
+
                                     if (existingCourseStudent == null)
                                     {
                                         var courseStudent = new CourseStudent
@@ -203,7 +241,6 @@ namespace Service.Service
                                             ChangedByUserId = changedByUserId
                                         };
                                         var created = await _courseStudentRepository.AddAsync(courseStudent);
-                                        // Sử dụng MapToResponse thay vì _mapper.Map
                                         var response = MapToResponse(created, courseInstance, user, changedBy);
                                         sheetResult.ImportedStudents.Add(response);
                                         successCount++;
@@ -212,46 +249,39 @@ namespace Service.Service
                             }
                             catch (Exception ex)
                             {
-                                // Ghi log lỗi nhưng tiếp tục với các dòng khác
-                                Console.WriteLine($"Lỗi import sinh viên {code}: {ex.Message}");
+                                Console.WriteLine($"Error importing student {code}: {ex.Message}");
                             }
                         }
+
                         sheetResult.SuccessCount = successCount;
-                        sheetResult.Message = $"Import thành công {successCount} sinh viên";
+                        sheetResult.Message = $"Imported {successCount} students.";
+                        if (skippedStudents.Any())
+                        {
+                            sheetResult.Message += $" Skipped {skippedStudents.Count} due to campus mismatch: {string.Join(", ", skippedStudents)}.";
+                        }
+
                         results.SheetResults.Add(sheetResult);
                         results.TotalSuccessCount += successCount;
                     }
                 }
-                return new BaseResponse<MultipleCourseImportResponse>("Import hoàn tất", StatusCodeEnum.OK_200, results);
+                return new BaseResponse<MultipleCourseImportResponse>("Import completed with details in sheet results", StatusCodeEnum.OK_200, results);
             }
             catch (Exception ex)
             {
-                return new BaseResponse<MultipleCourseImportResponse>($"Lỗi khi import nhiều lớp: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
+                return new BaseResponse<MultipleCourseImportResponse>($"Error during multiple sheet import: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
-
         private async Task<User> CreateStudentUserAsync(string studentCode, string surname, string middleName, string givenName, string email, int campusId, string majorCode = null)
         {
             try
             {
-                // Tạo LastName từ Surname + Middle name
-                var lastName = $"{surname} {middleName}".Trim();
-                // Tạo username từ email (phần trước @)
-                var username = email.Split('@')[0];
-                // Kiểm tra xem username đã tồn tại chưa
-                var existingUser = await _userManager.FindByNameAsync(username);
-                if (existingUser != null)
-                {
-                    // Nếu đã tồn tại, thêm số ngẫu nhiên
-                    username = $"{username}_{new Random().Next(1000, 9999)}";
-                }
                 var user = new User
                 {
-                    UserName = username,
+                    UserName = email.Split('@')[0],
                     Email = email,
-                    FirstName = givenName,
-                    LastName = lastName,
                     StudentCode = studentCode,
+                    FirstName = givenName,
+                    LastName = $"{surname} {middleName}".Trim(),
                     CampusId = campusId,
                     IsActive = true,
                     CreatedAt = DateTime.UtcNow
@@ -259,47 +289,32 @@ namespace Service.Service
                 if (!string.IsNullOrEmpty(majorCode))
                 {
                     var major = await _context.Majors.FirstOrDefaultAsync(m => m.MajorCode == majorCode);
-                    if (major != null)
-                    {
-                        user.MajorId = major.MajorId;
-                    }
+                    if (major != null) user.MajorId = major.MajorId;
                 }
                 // Tạo mật khẩu ngẫu nhiên
                 var password = GenerateRandomPassword();
-                var result = await _userManager.CreateAsync(user, password);
+                var result = await _userManager.CreateAsync(user, password); 
                 if (result.Succeeded)
                 {
-                    // Gán role Student
                     await _userManager.AddToRoleAsync(user, "Student");
+                    await SendWelcomeEmailAsync(user, password);
                     return user;
                 }
-                else
-                {
-                    Console.WriteLine($"Lỗi tạo user {email}: {string.Join(", ", result.Errors.Select(e => e.Description))}");
-                    return null;
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Lỗi khi tạo user {email}: {ex.Message}");
                 return null;
             }
+            catch { return null; }
         }
         private string GenerateRandomPassword(int length = 12)
         {
             const string validChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_-+=[{]};:>|./?";
             var random = new Random();
             var chars = new char[length];
-
             for (int i = 0; i < length; i++)
             {
                 chars[i] = validChars[random.Next(validChars.Length)];
             }
-
             return new string(chars);
-        }
-        // Method enroll: Sinh viên nhập key để kích hoạt
-        public async Task<BaseResponse<CourseStudentResponse>> EnrollStudentAsync(int courseInstanceId, int studentUserId, string enrollKey)
+        }        public async Task<BaseResponse<CourseStudentResponse>> EnrollStudentAsync(int courseInstanceId, int studentUserId, string enrollKey)
         {
             try
             {
@@ -325,148 +340,90 @@ namespace Service.Service
         {
             try
             {
+                var courseInstance = await _courseInstanceRepository.GetByIdAsync(request.CourseInstanceId);
+                if (courseInstance == null)
+                    return new BaseResponse<CourseStudentResponse>("Course instance not found", StatusCodeEnum.NotFound_404, null);
+
+                var deadline = courseInstance.StartDate.AddDays(45);
+                if (DateTime.UtcNow > deadline)
+                {
+                    return new BaseResponse<CourseStudentResponse>("Cannot add students after 45 days from the course start date.", StatusCodeEnum.Forbidden_403, null);
+                }
+
                 if (!string.IsNullOrEmpty(request.StudentCode) && request.UserId == 0)
                 {
                     var userByCode = await _userRepository.GetByStudentCodeAsync(request.StudentCode);
                     if (userByCode == null)
-                    {
-                        return new BaseResponse<CourseStudentResponse>(
-                            "Student not found with the provided student code",
-                            StatusCodeEnum.NotFound_404,
-                            null);
-                    }
+                        return new BaseResponse<CourseStudentResponse>("Student not found with the provided student code", StatusCodeEnum.NotFound_404, null);
                     request.UserId = userByCode.Id;
                 }
-                // Validate course instance exists
-                var courseInstance = await _courseInstanceRepository.GetByIdAsync(request.CourseInstanceId);
-                if (courseInstance == null)
-                {
-                    return new BaseResponse<CourseStudentResponse>(
-                        "Course instance not found",
-                        StatusCodeEnum.NotFound_404,
-                        null);
-                }
-                // Validate user exists
                 var user = await _userRepository.GetByIdAsync(request.UserId);
                 if (user == null)
-                {
-                    return new BaseResponse<CourseStudentResponse>(
-                        "User not found",
-                        StatusCodeEnum.BadRequest_400,
-                        null);
-                }
+                    return new BaseResponse<CourseStudentResponse>("User not found", StatusCodeEnum.BadRequest_400, null);
+
                 if (!await _userManager.IsInRoleAsync(user, "Student"))
+                    return new BaseResponse<CourseStudentResponse>("User does not have the Student role", StatusCodeEnum.BadRequest_400, null);
+
+                if (user.CampusId != courseInstance.CampusId)
                 {
-                    return new BaseResponse<CourseStudentResponse>(
-                        "User does not have the Student role",
-                        StatusCodeEnum.BadRequest_400,
-                        null);
+                    return new BaseResponse<CourseStudentResponse>("Student belongs to a different campus than the course.", StatusCodeEnum.Conflict_409, null);
                 }
                 // Check if student is already enrolled
                 var existing = (await _courseStudentRepository.GetByCourseInstanceIdAsync(request.CourseInstanceId))
                     .FirstOrDefault(cs => cs.UserId == request.UserId);
                 if (existing != null)
-                {
-                    return new BaseResponse<CourseStudentResponse>(
-                        "Student is already enrolled in this course instance",
-                        StatusCodeEnum.Conflict_409,
-                        null);
-                }
+                    return new BaseResponse<CourseStudentResponse>("Student is already enrolled in this course instance", StatusCodeEnum.Conflict_409, null);
+
                 var courseStudent = new CourseStudent
                 {
                     CourseInstanceId = request.CourseInstanceId,
                     UserId = request.UserId,
                     EnrolledAt = DateTime.UtcNow,
-                    Status = request.Status,
-                    FinalGrade = null,
-                    IsPassed = false,
-                    StatusChangedAt = DateTime.UtcNow,
-                    ChangedByUserId = request.ChangedByUserId
+                    Status = request.Status ?? "Enrolled",
+                    ChangedByUserId = request.ChangedByUserId,
+                    StatusChangedAt = DateTime.UtcNow
                 };
                 await _courseStudentRepository.AddAsync(courseStudent);
                 User changedByUser = null;
-                if (request.ChangedByUserId.HasValue)
-                {
-                    changedByUser = await _userRepository.GetByIdAsync(request.ChangedByUserId.Value);
-                }
+                if (request.ChangedByUserId.HasValue) changedByUser = await _userRepository.GetByIdAsync(request.ChangedByUserId.Value);
+
                 var response = MapToResponse(courseStudent, courseInstance, user, changedByUser);
-                return new BaseResponse<CourseStudentResponse>(
-                    "Course student enrolled successfully",
-                    StatusCodeEnum.Created_201,
-                    response);
+                return new BaseResponse<CourseStudentResponse>("Student added successfully", StatusCodeEnum.Created_201, response);
             }
             catch (Exception ex)
             {
-                return new BaseResponse<CourseStudentResponse>(
-                    $"Error creating course student: {ex.Message}",
-                    StatusCodeEnum.InternalServerError_500,
-                    null);
+                return new BaseResponse<CourseStudentResponse>($"Error creating course student: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
         public async Task<BaseResponse<bool>> DeleteCourseStudentAsync(int courseStudentId, int courseInstanceId, int userId)
         {
             try
             {
-                // 1. Kiểm tra lớp có tồn tại không
                 var courseInstance = await _courseInstanceRepository.GetByIdAsync(courseInstanceId);
                 if (courseInstance == null)
+                    return new BaseResponse<bool>("Course instance not found", StatusCodeEnum.NotFound_404, false);
+
+                var deadline = courseInstance.StartDate.AddDays(45);
+                if (DateTime.UtcNow > deadline)
                 {
-                    return new BaseResponse<bool>(
-                        "Course instance not found",
-                        StatusCodeEnum.NotFound_404,
-                        false);
+                    return new BaseResponse<bool>("Cannot remove students after 45 days from the course start date.", StatusCodeEnum.Forbidden_403, false);
                 }
-                // Check if course is ongoing
-                var now = DateTime.UtcNow;
-                if (courseInstance.StartDate <= now && now <= courseInstance.EndDate)
-                {
-                    return new BaseResponse<bool>(
-                        "Cannot remove student from an ongoing course",
-                        StatusCodeEnum.BadRequest_400,
-                        false);
-                }
-                // 2. Kiểm tra user có tồn tại không
-                var user = await _userRepository.GetByIdAsync(userId);
-                if (user == null)
-                {
-                    return new BaseResponse<bool>(
-                        "User not found",
-                        StatusCodeEnum.NotFound_404,
-                        false);
-                }
-                // 3. Tìm courseStudent theo id
+
                 var courseStudent = await _courseStudentRepository.GetByIdAsync(courseStudentId);
                 if (courseStudent == null)
-                {
-                    return new BaseResponse<bool>(
-                        "Course student not found",
-                        StatusCodeEnum.NotFound_404,
-                        false);
-                }
-                // 4. Kiểm tra xem có khớp cả 3 field không
+                    return new BaseResponse<bool>("Record not found", StatusCodeEnum.NotFound_404, false);
+
                 if (courseStudent.UserId != userId || courseStudent.CourseInstanceId != courseInstanceId)
-                {
-                    return new BaseResponse<bool>(
-                        "Mismatch detected: student does not belong to this course instance",
-                        StatusCodeEnum.BadRequest_400,
-                        false);
-                }
-                // 5. Tiến hành xóa
+                    return new BaseResponse<bool>("Mismatch information", StatusCodeEnum.BadRequest_400, false);
+
                 await _courseStudentRepository.DeleteAsync(courseStudent);
-                return new BaseResponse<bool>(
-                    "Student removed from course successfully",
-                    StatusCodeEnum.OK_200,
-                    true);
+                return new BaseResponse<bool>("Student removed successfully", StatusCodeEnum.OK_200, true);
             }
             catch (Exception ex)
             {
-                return new BaseResponse<bool>(
-                    $"Error removing student from course: {ex.Message}",
-                    StatusCodeEnum.InternalServerError_500,
-                    false);
+                return new BaseResponse<bool>($"Error removing student: {ex.Message}", StatusCodeEnum.InternalServerError_500, false);
             }
         }
-
         public async Task<BaseResponse<CourseStudentResponse>> GetCourseStudentByIdAsync(int id)
         {
             try
@@ -966,23 +923,47 @@ namespace Service.Service
             {
                 CourseStudentId = courseStudent.CourseStudentId,
                 CourseInstanceId = courseStudent.CourseInstanceId,
-                CourseInstanceName = courseInstance?.SectionCode ?? string.Empty,
-                CourseCode = courseInstance?.Course?.CourseCode ?? string.Empty,
-                CourseName = courseInstance?.Course?.CourseName ?? string.Empty,
+                CourseInstanceName = courseInstance?.SectionCode ?? "",
+                CourseCode = courseInstance?.Course?.CourseCode ?? "",
+                CourseName = courseInstance?.Course?.CourseName ?? "",
                 UserId = courseStudent.UserId,
-                StudentName = user?.FirstName ?? string.Empty,
-                StudentEmail = user?.Email ?? string.Empty,
-                StudentCode = user?.StudentCode ?? string.Empty,
+                StudentName = user?.FirstName + " " + user?.LastName,
+                StudentEmail = user?.Email,
+                StudentCode = user?.StudentCode,
                 EnrolledAt = courseStudent.EnrolledAt,
                 Status = courseStudent.Status,
                 FinalGrade = courseStudent.FinalGrade,
                 IsPassed = courseStudent.IsPassed,
                 StatusChangedAt = courseStudent.StatusChangedAt,
                 ChangedByUserId = courseStudent.ChangedByUserId,
-                ChangedByUserName = changedByUser?.UserName ?? string.Empty,
-                StudentCount = 0,
-                InstructorNames = new List<string>()
+                ChangedByUserName = changedByUser?.UserName
             };
+        }
+
+        private async Task SendWelcomeEmailAsync(User user, string password)
+        {
+            try
+            {
+                string subject = "Welcome to ASDPRS System - Your Account Credentials";
+                string htmlContent = $@"
+                    <html>
+                    <body>
+                        <h2>Welcome to ASDPRS System</h2>
+                        <p>Dear {user.FirstName} {user.LastName},</p>
+                        <p>Your account has been automatically created via course enrollment.</p>
+                        <p><strong>Username:</strong> {user.UserName}</p>
+                        <p><strong>Password:</strong> {password}</p>
+                        <p>Please log in and change your password as soon as possible.</p>
+                        <br>
+                        <p>Best regards,<br>ASDPRS Team</p>
+                    </body>
+                    </html>";
+                await _emailService.SendEmail(user.Email, subject, htmlContent);
+            }
+            catch
+            {
+                // Log error but don't stop the process
+            }
         }
     }
 }

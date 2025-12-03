@@ -28,5 +28,6 @@ namespace Service.IService
         Task<BaseResponse<LoginResponse>> LoginAsync(LoginRequest request);
         Task<BaseResponse<bool>> AssignRolesAsync(AssignRoleRequest request);
         Task<BaseResponse<IEnumerable<string>>> GetUserRolesAsync(int userId);
+        Task<BaseResponse<List<UserResponse>>> ImportUsersFromExcelAsync(Stream fileStream);
     }
 }
