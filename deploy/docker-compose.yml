@@ -6,7 +6,7 @@ services:
     container_name: asdprs-sqlserver
     environment:
       - ACCEPT_EULA=Y
-      - MSSQL_SA_PASSWORD=Asd#2024!Pr@Secure890
+      - MSSQL_SA_PASSWORD=Asd2025!PrSqlSecure890
       - MSSQL_PID=Express
     ports:
       - "1433:1433"
@@ -15,7 +15,7 @@ services:
       - sqlserver_backup:/var/opt/mssql/backup
     restart: unless-stopped
     healthcheck:
-      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "Asd#2024!Pr@Secure890" -C -Q "SELECT 1" || exit 1
+      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "Asd2025!PrSqlSecure890" -C -Q "SELECT 1" || exit 1
       interval: 10s
       timeout: 3s
       retries: 10
@@ -33,7 +33,7 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://+:80
-      - ConnectionStrings__DbConnection=Server=sqlserver;Database=LMS_ASDPRS;User Id=sa;Password=Asd#2024!Pr@Secure890;TrustServerCertificate=True;MultipleActiveResultSets=True;
+      - ConnectionStrings__DbConnection=Server=sqlserver;Database=LMS_ASDPRS;User Id=sa;Password=Asd2025!PrSqlSecure890;TrustServerCertificate=True;MultipleActiveResultSets=True;
       - JWT__Issuer=http://160.25.232.199
       - JWT__Audience=http://160.25.232.199
     ports:

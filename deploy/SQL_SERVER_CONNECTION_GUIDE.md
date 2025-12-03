@@ -10,13 +10,13 @@ Port **1433** đã được mở trên VPS! Bạn có thể connect từ máy lo
 ```
 Server: 160.25.232.199,1433
 User: sa
-Password: YourStrong@Passw0rd123
+Password: <YOUR_PASSWORD>
 Database: LMS_ASDPRS
 ```
 
 ### Connection String:
 ```
-Server=160.25.232.199,1433;Database=LMS_ASDPRS;User Id=sa;Password=YourStrong@Passw0rd123;TrustServerCertificate=True;MultipleActiveResultSets=True;
+Server=160.25.232.199,1433;Database=LMS_ASDPRS;User Id=sa;Password=<YOUR_PASSWORD>;TrustServerCertificate=True;MultipleActiveResultSets=True;
 ```
 
 ---
@@ -31,7 +31,7 @@ Server=160.25.232.199,1433;Database=LMS_ASDPRS;User Id=sa;Password=YourStrong@Pa
    - **Server name:** `160.25.232.199,1433`
    - **Authentication:** SQL Server Authentication
    - **Login:** `sa`
-   - **Password:** `YourStrong@Passw0rd123`
+   - **Password:** `<YOUR_PASSWORD>`
 3. Click **Connect**
 
 ### Option 2: Azure Data Studio
@@ -42,7 +42,7 @@ Server=160.25.232.199,1433;Database=LMS_ASDPRS;User Id=sa;Password=YourStrong@Pa
    - **Server:** `160.25.232.199,1433`
    - **Authentication type:** SQL Login
    - **User name:** `sa`
-   - **Password:** `YourStrong@Passw0rd123`
+   - **Password:** `<YOUR_PASSWORD>`
    - **Database:** `LMS_ASDPRS` (optional)
    - **Trust server certificate:** Yes
 3. Click **Connect**
@@ -51,7 +51,7 @@ Server=160.25.232.199,1433;Database=LMS_ASDPRS;User Id=sa;Password=YourStrong@Pa
 
 **Connection String:**
 ```
-Server=160.25.232.199,1433;Database=LMS_ASDPRS;User Id=sa;Password=YourStrong@Passw0rd123;TrustServerCertificate=True;
+Server=160.25.232.199,1433;Database=LMS_ASDPRS;User Id=sa;Password=<YOUR_PASSWORD>;TrustServerCertificate=True;
 ```
 
 Paste vào Server Explorer hoặc Database tool.

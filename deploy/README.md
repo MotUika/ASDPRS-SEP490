@@ -64,11 +64,11 @@ docker logs -f asdprs-api
 |------|-------|
 | **VPS IP** | 160.25.232.199 |
 | **User** | root |
-| **Password** | Gm4Gp8mYJGpQ20Jt |
+| **Password** | <YOUR_VPS_PASSWORD> |
 | **Domain** | api.fasm.site |
 | **SQL Port** | 1433 |
 | **SQL User** | sa |
-| **SQL Password** | Asd#2024!Pr$Sql@Secure890 |
+| **SQL Password** | <YOUR_SQL_PASSWORD> |
 
 ---
 
