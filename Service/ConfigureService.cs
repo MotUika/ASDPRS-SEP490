@@ -70,6 +70,7 @@ namespace Service
             services.AddSingleton<IDocumentTextExtractor, DocumentTextExtractor>();
             services.AddScoped<ISystemConfigService, SystemConfigService>();
             services.AddScoped<IKeywordSearchService, KeywordSearchService>();
+            services.AddScoped<IDashboardService, DashboardService>();
 
 
 
