@@ -226,9 +226,32 @@ namespace Service.Service
             try
             {
                 var semesters = await _semesterRepository.GetByAcademicYearIdAsync(academicYearId);
-                var response = _mapper.Map<IEnumerable<SemesterResponse>>(semesters);
 
-                return new BaseResponse<IEnumerable<SemesterResponse>>("Semesters retrieved successfully", StatusCodeEnum.OK_200, response);
+                if (semesters == null || !semesters.Any())
+                {
+                    return new BaseResponse<IEnumerable<SemesterResponse>>("No semesters found for this academic year", StatusCodeEnum.NotFound_404, null);
+                }
+
+                var now = DateTime.UtcNow;
+
+                var currentSemester = semesters.FirstOrDefault(s => s.StartDate <= now && s.EndDate >= now);
+
+                var semesterResponses = _mapper.Map<List<SemesterResponse>>(semesters.ToList());
+
+                IEnumerable<SemesterResponse> sortedResponses;
+                if (currentSemester != null)
+                {
+                    var currentResponse = semesterResponses.First(r => r.SemesterId == currentSemester.SemesterId);
+                    var remaining = semesterResponses.Where(r => r.SemesterId != currentSemester.SemesterId)
+                                                     .OrderBy(r => r.StartDate);
+                    sortedResponses = new List<SemesterResponse> { currentResponse }.Concat(remaining);
+                }
+                else
+                {
+                    sortedResponses = semesterResponses.OrderBy(r => r.StartDate);
+                }
+
+                return new BaseResponse<IEnumerable<SemesterResponse>>("Semesters retrieved successfully", StatusCodeEnum.OK_200, sortedResponses);
             }
             catch (Exception ex)
             {
