@@ -21,5 +21,7 @@ namespace Service.RequestAndResponse.Request.CourseInstance
         public string EnrollmentPassword { get; set; }
 
         public bool RequiresApproval { get; set; }
+        public DateTime? StartDate { get; set; }
+        public DateTime? EndDate { get; set; }
     }
 }
