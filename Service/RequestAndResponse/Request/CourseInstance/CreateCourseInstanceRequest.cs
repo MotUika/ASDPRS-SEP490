@@ -23,5 +23,9 @@ namespace Service.RequestAndResponse.Request.CourseInstance
 
         [Required]
         public bool RequiresApproval { get; set; } = false;
+        [Required]
+        public DateTime StartDate { get; set; }
+        [Required]
+        public DateTime EndDate { get; set; }
     }
 }

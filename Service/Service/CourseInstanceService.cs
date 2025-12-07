@@ -81,28 +81,40 @@ namespace Service.Service
         {
             try
             {
-                // Validate if course exists
                 var courseExists = await _context.Courses.AnyAsync(c => c.CourseId == request.CourseId);
                 if (!courseExists)
                 {
                     return new BaseResponse<CourseInstanceResponse>("Course not found", StatusCodeEnum.NotFound_404, null);
                 }
 
-                // Validate if semester exists
-                var semesterExists = await _context.Semesters.AnyAsync(s => s.SemesterId == request.SemesterId);
-                if (!semesterExists)
+                var semester = await _context.Semesters.FirstOrDefaultAsync(s => s.SemesterId == request.SemesterId);
+                if (semester == null)
                 {
                     return new BaseResponse<CourseInstanceResponse>("Semester not found", StatusCodeEnum.NotFound_404, null);
                 }
 
-                // Validate if campus exists
                 var campusExists = await _context.Campuses.AnyAsync(c => c.CampusId == request.CampusId);
                 if (!campusExists)
                 {
                     return new BaseResponse<CourseInstanceResponse>("Campus not found", StatusCodeEnum.NotFound_404, null);
                 }
-
-                // Check for duplicate section code in the same course and semester
+                var now = DateTime.UtcNow;
+                if (request.StartDate < semester.StartDate)
+                {
+                    return new BaseResponse<CourseInstanceResponse>("Start date cannot be before semester start date", StatusCodeEnum.BadRequest_400, null);
+                }
+                if (request.StartDate <= now)
+                {
+                    return new BaseResponse<CourseInstanceResponse>("Start date cannot be in the past or present", StatusCodeEnum.BadRequest_400, null);
+                }
+                if (request.EndDate <= request.StartDate)
+                {
+                    return new BaseResponse<CourseInstanceResponse>("End date must be after start date", StatusCodeEnum.BadRequest_400, null);
+                }
+                if (request.EndDate > semester.EndDate)
+                {
+                    return new BaseResponse<CourseInstanceResponse>("End date cannot be after semester end date", StatusCodeEnum.BadRequest_400, null);
+                }
                 var duplicateSection = await _context.CourseInstances
                     .AnyAsync(ci => ci.CourseId == request.CourseId &&
                                    ci.SemesterId == request.SemesterId &&
@@ -114,8 +126,9 @@ namespace Service.Service
                 }
 
                 var courseInstance = _mapper.Map<CourseInstance>(request);
+                courseInstance.StartDate = request.StartDate;
+                courseInstance.EndDate = request.EndDate;
 
-                // Generate enrollment password if not provided
                 if (string.IsNullOrEmpty(courseInstance.EnrollmentPassword))
                 {
                     courseInstance.EnrollmentPassword = GenerateEnrollKey();
@@ -216,6 +229,34 @@ namespace Service.Service
                         return new BaseResponse<CourseInstanceResponse>("Cannot change Course or Semester for a class that already has enrolled students", StatusCodeEnum.Conflict_409, null);
                     }
                 }
+                var semesterId = request.SemesterId > 0 ? request.SemesterId : existingCourseInstance.SemesterId;
+                var semester = await _context.Semesters.FirstOrDefaultAsync(s => s.SemesterId == semesterId);
+                if (semester == null)
+                {
+                    return new BaseResponse<CourseInstanceResponse>("Semester not found", StatusCodeEnum.NotFound_404, null);
+                }
+                var now = DateTime.UtcNow;
+                DateTime newStartDate = request.StartDate ?? existingCourseInstance.StartDate;
+                DateTime newEndDate = request.EndDate ?? existingCourseInstance.EndDate;
+                if (request.StartDate.HasValue || request.EndDate.HasValue)
+                {
+                    if (newStartDate < semester.StartDate)
+                    {
+                        return new BaseResponse<CourseInstanceResponse>("Start date cannot be before semester start date", StatusCodeEnum.BadRequest_400, null);
+                    }
+                    if (newStartDate <= now)
+                    {
+                        return new BaseResponse<CourseInstanceResponse>("Start date cannot be in the past or present", StatusCodeEnum.BadRequest_400, null);
+                    }
+                    if (newEndDate <= newStartDate)
+                    {
+                        return new BaseResponse<CourseInstanceResponse>("End date must be after start date", StatusCodeEnum.BadRequest_400, null);
+                    }
+                    if (newEndDate > semester.EndDate)
+                    {
+                        return new BaseResponse<CourseInstanceResponse>("End date cannot be after semester end date", StatusCodeEnum.BadRequest_400, null);
+                    }
+                }
                 // Validate course if provided
                 if (request.CourseId > 0 && request.CourseId != existingCourseInstance.CourseId)
                 {
@@ -226,7 +267,6 @@ namespace Service.Service
                     }
                 }
 
-                // Validate semester if provided
                 if (request.SemesterId > 0 && request.SemesterId != existingCourseInstance.SemesterId)
                 {
                     var semesterExists = await _context.Semesters.AnyAsync(s => s.SemesterId == request.SemesterId);
@@ -236,7 +276,6 @@ namespace Service.Service
                     }
                 }
 
-                // Validate campus if provided
                 if (request.CampusId > 0 && request.CampusId != existingCourseInstance.CampusId)
                 {
                     var campusExists = await _context.Campuses.AnyAsync(c => c.CampusId == request.CampusId);
@@ -246,7 +285,6 @@ namespace Service.Service
                     }
                 }
 
-                // Check for duplicate section code if provided
                 if (!string.IsNullOrEmpty(request.SectionCode) && request.SectionCode != existingCourseInstance.SectionCode)
                 {
                     var duplicateSection = await _context.CourseInstances
@@ -269,7 +307,8 @@ namespace Service.Service
                 if (!string.IsNullOrEmpty(request.EnrollmentPassword)) existingCourseInstance.EnrollmentPassword = request.EnrollmentPassword;
 
                 existingCourseInstance.RequiresApproval = request.RequiresApproval;
-
+                if (request.StartDate.HasValue) existingCourseInstance.StartDate = request.StartDate.Value;
+                if (request.EndDate.HasValue) existingCourseInstance.EndDate = request.EndDate.Value;
                 var updatedCourseInstance = await _courseInstanceRepository.UpdateAsync(existingCourseInstance);
                 var response = _mapper.Map<CourseInstanceResponse>(updatedCourseInstance);
 
