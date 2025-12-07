@@ -1189,33 +1189,23 @@ namespace Service.Service
                 var submission = await _submissionRepository.GetByIdAsync(request.SubmissionId);
                 if (submission == null)
                     return new BaseResponse<GradeSubmissionResponse>("Submission not found", StatusCodeEnum.NotFound_404, null);
-                    
+                //  Không cho chấm thủ công nếu bài này đã AutoGradeZero
+                if (submission.FileUrl == "Not Submitted"
+                    && submission.FinalScore == 0
+                    && submission.Feedback != null
+                    && submission.Feedback.Contains("auto grade zero"))
+                {
+                    return new BaseResponse<GradeSubmissionResponse>(
+                        "This submission was automatically graded with zero and cannot be manually graded.",
+                        StatusCodeEnum.BadRequest_400,
+                        null
+                    );
+                }
                 submission.Feedback = request.Feedback;
                 // 2️⃣ Lấy assignment
                 var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
                 if (assignment == null)
                     return new BaseResponse<GradeSubmissionResponse>("Assignment not found", StatusCodeEnum.NotFound_404, null);
-                //  NEW LOGIC: Kiểm tra nếu submission là auto-zero do không nộp bài
-                var hasInstructorReview = await _context.Reviews
-                    .AnyAsync(r => r.ReviewAssignment.SubmissionId == submission.SubmissionId &&
-                   r.ReviewType == "Instructor");
-
-                bool isAutoZero =
-                    submission.FinalScore == 0 &&
-                    submission.InstructorScore == 0 &&
-                    submission.PeerAverageScore == 0 &&
-                    submission.Status == "Graded" &&
-                    !hasInstructorReview;
-
-                if (isAutoZero)
-                {
-                    return new BaseResponse<GradeSubmissionResponse>(
-                        "This submission was automatically graded zero due to non-submission. Manual grading is not allowed.",
-                        StatusCodeEnum.Forbidden_403,
-                        null
-                    );
-                }
-
                 // 🔥 NEW LOGIC: Nếu assignment đã publish điểm → chỉ cho chấm nếu regrade đã được approved
                 if (assignment.Status == "GradesPublished")
                 {
