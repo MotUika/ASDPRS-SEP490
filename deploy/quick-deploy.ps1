@@ -55,6 +55,10 @@ Write-Host "[3/4] Rebuilding API..." -ForegroundColor Yellow
 Write-Host "Password: $VPS_PASS" -ForegroundColor DarkGray
 Write-Host ""
 
+# Clean up Docker garbage before rebuilding to prevent disk full issues
+$cleanupCmd = "echo 'Cleaning Docker garbage...' && docker builder prune -a -f && docker system prune -f && echo 'Disk usage:' && df -h / | tail -1"
+ssh "$VPS_USER@$VPS_IP" $cleanupCmd
+
 # Rebuild and restart API container
 # Using single line command to avoid CRLF issues over SSH
 $remoteCmd = "cd $VPS_PATH && echo 'Rebuilding API...' && docker compose -f deploy/docker-compose.yml up -d --build --no-deps api && echo 'Waiting for API...' && sleep 10 && docker compose -f deploy/docker-compose.yml ps"
