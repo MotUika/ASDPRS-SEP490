@@ -1,5 +1,6 @@
 ﻿using BussinessObject.Models;
 using DataAccessLayer;
+using Google.Apis.Auth;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
@@ -95,6 +96,56 @@ namespace ASDPRS_SEP490.Controllers
             var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
             await _tokenService.RevokeRefreshToken(userId);
             return Ok("Logged out successfully");
+        }
+
+        [HttpPost("google-login-mobile")]
+        [SwaggerOperation(
+    Summary = "Đăng nhập Google cho mobile",
+    Description = "Nhận ID Token từ Google Sign-In SDK trên mobile, verify và trả access/refresh token trong response body"
+)]
+        [SwaggerResponse(200, "Đăng nhập thành công", typeof(BaseResponse<LoginResponse>))]
+        [SwaggerResponse(400, "ID Token không hợp lệ")]
+        public async Task<IActionResult> GoogleLoginMobile([FromBody] GoogleMobileLoginRequest request)
+        {
+            try
+            {
+                var payload = await GoogleJsonWebSignature.ValidateAsync(request.IdToken);
+                if (payload == null)
+                    return BadRequest(new BaseResponse<string>("Invalid Google ID Token", StatusCodeEnum.BadRequest_400, null));
+
+                var googleEmail = payload.Email;
+                if (string.IsNullOrEmpty(googleEmail))
+                    return BadRequest(new BaseResponse<string>("No email from Google", StatusCodeEnum.BadRequest_400, null));
+
+                var user = await _userManager.FindByEmailAsync(googleEmail);
+                if (user == null)
+                    return BadRequest(new BaseResponse<string>("User not found", StatusCodeEnum.BadRequest_400, null));
+
+                if (!user.IsActive)
+                    return BadRequest(new BaseResponse<string>("Account inactive", StatusCodeEnum.BadRequest_400, null));
+
+                var roles = await _userManager.GetRolesAsync(user);
+                if (!roles.Contains("Instructor"))
+                    return BadRequest(new BaseResponse<string>("Only instructors allowed", StatusCodeEnum.BadRequest_400, null));
+
+                var tokenResponse = await _tokenService.CreateToken(user);
+                if (tokenResponse == null)
+                    return BadRequest(new BaseResponse<string>("Failed to create token", StatusCodeEnum.BadRequest_400, null));
+
+                return Ok(new BaseResponse<LoginResponse>(
+                    "Login successful",
+                    StatusCodeEnum.OK_200,
+                    new LoginResponse
+                    {
+                        AccessToken = tokenResponse.AccessToken,
+                        RefreshToken = tokenResponse.RefreshToken,
+                    }
+                ));
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new BaseResponse<string>($"Error: {ex.Message}", StatusCodeEnum.BadRequest_400, null));
+            }
         }
 
         [HttpGet("google-login")]

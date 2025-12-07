@@ -153,10 +153,10 @@ namespace Service.Service
                     var assignment = await _context.Assignments.FirstOrDefaultAsync(a => a.AssignmentId == existingRubric.AssignmentId);
                     if (assignment != null)
                     {
-                        if (assignment.Status != "Upcoming" && assignment.Status != "Draft")
+                        if (assignment.Status != "Draft")
                         {
                             return new BaseResponse<RubricResponse>(
-                                "Rubric can only be edited when the related assignment is in 'Draft' or 'Upcoming' status",
+                                "Rubric can only be edited when the related assignment is in 'Draft' status",
                                 StatusCodeEnum.BadRequest_400,
                                 null);
                         }
@@ -184,23 +184,23 @@ namespace Service.Service
                 }
 
                 // Check for duplicate title if provided
-                if (!string.IsNullOrEmpty(request.Title) && request.Title != existingRubric.Title)
-                {
-                    var templateIdToCheck = request.TemplateId ?? existingRubric.TemplateId;
-                    var assignmentIdToCheck = request.AssignmentId ?? existingRubric.AssignmentId;
+                //if (!string.IsNullOrEmpty(request.Title) && request.Title != existingRubric.Title)
+                //{
+                //    var templateIdToCheck = request.TemplateId ?? existingRubric.TemplateId;
+                //    var assignmentIdToCheck = request.AssignmentId ?? existingRubric.AssignmentId;
 
-                    var duplicateRubric = await _context.Rubrics
-                        .AnyAsync(r =>
-                            (r.TemplateId == templateIdToCheck ||
-                             r.AssignmentId == assignmentIdToCheck) &&
-                            r.Title == request.Title &&
-                            r.RubricId != request.RubricId);
+                //    var duplicateRubric = await _context.Rubrics
+                //        .AnyAsync(r =>
+                //            (r.TemplateId == templateIdToCheck ||
+                //             r.AssignmentId == assignmentIdToCheck) &&
+                //            r.Title == request.Title &&
+                //            r.RubricId != request.RubricId);
 
-                    if (duplicateRubric)
-                    {
-                        return new BaseResponse<RubricResponse>("Rubric with the same title already exists for this template or assignment", StatusCodeEnum.BadRequest_400, null);
-                    }
-                }
+                //    if (duplicateRubric)
+                //    {
+                //        return new BaseResponse<RubricResponse>("Rubric with the same title already exists for this template or assignment", StatusCodeEnum.BadRequest_400, null);
+                //    }
+                //}
 
                 // Update only provided fields
                 if (request.TemplateId.HasValue) existingRubric.TemplateId = request.TemplateId;

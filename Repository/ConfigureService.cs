@@ -65,6 +65,7 @@ namespace Repository
             services.AddScoped<ICourseInstanceRepository, CourseInstanceRepository>();
             services.AddScoped<INotificationRepository, NotificationRepository>();
             services.AddScoped<IMajorRepository, MajorRepository>();
+            services.AddScoped<IDashboardRepository, DashboardRepository>();
 
 
 

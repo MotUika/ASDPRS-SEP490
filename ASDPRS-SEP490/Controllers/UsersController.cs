@@ -7,6 +7,7 @@ using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Enums;
 using Service.RequestAndResponse.Request.Notification;
 using Service.RequestAndResponse.Request.User;
+using Service.RequestAndResponse.Response.Dashboard;
 using Service.RequestAndResponse.Response.User;
 using Service.RequestAndResponse.Response.User.Service.RequestAndResponse.Response.User;
 using Swashbuckle.AspNetCore.Annotations;
@@ -24,11 +25,12 @@ namespace ASDPRS_SEP490.Controllers
         private readonly IUserService _userService;
         private readonly UserManager<User> _userManager;
         private readonly INotificationService _announcementService;
-
-        public UsersController(IUserService userService, UserManager<User> userManager)
+        private readonly IDashboardService _dashboardService;
+        public UsersController(IUserService userService, UserManager<User> userManager, IDashboardService dashboardService)
         {
             _userService = userService;
             _userManager = userManager;
+            _dashboardService = dashboardService;
         }
 
         [HttpGet("{id}")]
@@ -388,6 +390,35 @@ namespace ASDPRS_SEP490.Controllers
                     false
                 ));
             }
+        }
+
+        [HttpGet("semester-statistics")]
+        [SwaggerOperation(
+            Summary = "Lấy thống kê học kỳ",
+            Description = "Lấy các số liệu thống kê tổng quan (sinh viên, giảng viên, trạng thái assignment, phân phối điểm, tỉ lệ nộp) cho một học kỳ cụ thể."
+        )]
+        [SwaggerResponse(200, "Thành công", typeof(BaseResponse<SemesterStatisticResponse>))]
+        [SwaggerResponse(400, "Dữ liệu đầu vào không hợp lệ hoặc học kỳ không thuộc năm học", typeof(BaseResponse<object>))]
+        [SwaggerResponse(404, "Không tìm thấy học kỳ", typeof(BaseResponse<object>))]
+        [SwaggerResponse(500, "Lỗi server", typeof(BaseResponse<object>))]
+        public async Task<IActionResult> GetSemesterStatistics([FromQuery] int academicYearId, [FromQuery] int semesterId)
+        {
+            if (academicYearId <= 0 || semesterId <= 0)
+            {
+                var badRequestResponse = new BaseResponse<object>("Invalid Academic Year ID or Semester ID.", StatusCodeEnum.BadRequest_400, null);
+                return BadRequest(badRequestResponse);
+            }
+
+            var result = await _dashboardService.GetSemesterStatisticsAsync(academicYearId, semesterId);
+
+            return result.StatusCode switch
+            {
+                StatusCodeEnum.OK_200 => Ok(result),
+                StatusCodeEnum.NotFound_404 => NotFound(result),
+                StatusCodeEnum.BadRequest_400 => BadRequest(result),
+                _
+                => StatusCode((int)result.StatusCode, result)
+            };
         }
     }
 }

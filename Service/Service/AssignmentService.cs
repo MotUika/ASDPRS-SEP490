@@ -510,10 +510,10 @@ namespace Service.Service
                     (!assignment.RubricTemplateId.HasValue ||
                      assignment.RubricTemplateId.Value != request.RubricTemplateId.Value))
                 {
-                    if (assignment.Status != "Draft" && assignment.Status != "Upcoming")
+                    if (assignment.Status != "Draft")
                     {
                         return new BaseResponse<AssignmentResponse>(
-                            "Cannot change rubric template unless assignment is in 'Draft' or 'Upcoming' status",
+                            "Cannot change rubric template unless assignment is in 'Draft' status",
                             StatusCodeEnum.BadRequest_400,
                             null);
                     }
@@ -1048,6 +1048,7 @@ namespace Service.Service
         {
             try
             {
+                // 1. Lấy assignment
                 var assignment = await _assignmentRepository.GetByIdAsync(assignmentId);
                 if (assignment == null)
                 {
@@ -1057,6 +1058,7 @@ namespace Service.Service
                         false);
                 }
 
+                // 2. Validate: Deadline mới phải lớn hơn deadline hiện tại
                 if (newDeadline <= assignment.Deadline)
                 {
                     return new BaseResponse<bool>(
@@ -1065,6 +1067,24 @@ namespace Service.Service
                         false);
                 }
 
+                // 3. Validate: Deadline mới phải hợp lệ với thứ tự ngày
+                // (StartDate < Deadline < ReviewDeadline < FinalDeadline)
+                var validateMsg = ValidateAssignmentDates(
+                    assignment.StartDate,
+                    newDeadline,
+                    assignment.ReviewDeadline,
+                    assignment.FinalDeadline
+                );
+
+                if (validateMsg != null)
+                {
+                    return new BaseResponse<bool>(
+                        validateMsg,               // Trả về đúng lỗi từ hàm validate
+                        StatusCodeEnum.BadRequest_400,
+                        false);
+                }
+
+                // 4. Update deadline
                 assignment.Deadline = newDeadline;
                 await _assignmentRepository.UpdateAsync(assignment);
 
@@ -1081,6 +1101,8 @@ namespace Service.Service
                     false);
             }
         }
+
+
 
         public async Task<BaseResponse<bool>> UpdateRubricAsync(int assignmentId, int rubricId)
         {
@@ -1936,7 +1958,82 @@ namespace Service.Service
                 responses);
         }
 
+        public async Task<BaseResponse<List<PublishedGradeAssignmentResponse>>> GetPublishedGradeAssignmentsForStudentAsync(int studentId)
+        {
+            try
+            {
+                var now = DateTime.UtcNow;
 
+                var assignments = await _context.Assignments
+                    .Include(a => a.CourseInstance)
+                        .ThenInclude(ci => ci.Course)
+                    .Include(a => a.CourseInstance)
+                        .ThenInclude(ci => ci.Campus)
+                    .Include(a => a.Submissions)
+                    .Where(a =>
+                        a.Status == "GradesPublished" &&
+                        a.ReviewDeadline.HasValue &&
+                        a.ReviewDeadline.Value < now &&
+                        a.CourseInstance.CourseStudents.Any(cs => cs.UserId == studentId && cs.Status == "Enrolled")
+                    )
+                    .OrderByDescending(a => a.ReviewDeadline)
+                    .ToListAsync();
+
+                var response = assignments.Select(a =>
+                {
+                    var submission = a.Submissions.FirstOrDefault(s => s.UserId == studentId);
+
+                    var finalScore = submission?.FinalScore ?? 0m;
+                    var publishedAt = submission?.GradedAt ?? now;
+
+                    string formattedScore;
+                    if (a.GradingScale == "PassFail")
+                    {
+                        var threshold = a.PassThreshold ?? 50m;
+                        formattedScore = finalScore >= threshold ? "Pass" : "Fail";
+                    }
+                    else
+                    {
+                        formattedScore = finalScore.ToString("F1");
+                    }
+
+                    return new PublishedGradeAssignmentResponse
+                    {
+                        AssignmentId = a.AssignmentId,
+                        CourseInstanceId = a.CourseInstanceId,           
+                        SubmissionId = submission?.SubmissionId,      
+
+                        Title = a.Title,
+                        CourseName = $"{a.CourseInstance?.Course?.CourseName} ({a.CourseInstance?.SectionCode})",
+                        SectionCode = a.CourseInstance?.SectionCode ?? "",
+                        CampusName = a.CourseInstance?.Campus?.CampusName ?? "",
+
+                        Deadline = a.Deadline,
+                        ReviewDeadline = a.ReviewDeadline,
+
+                        FinalScore = finalScore,
+                        FormattedScore = formattedScore,
+                        GradingScale = a.GradingScale,
+
+                        PublishedAt = publishedAt
+                    };
+                }).ToList();
+
+                return new BaseResponse<List<PublishedGradeAssignmentResponse>>(
+                    response.Any()
+                        ? "Published grades retrieved successfully"
+                        : "No published grades available",
+                    StatusCodeEnum.OK_200,
+                    response);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<List<PublishedGradeAssignmentResponse>>(
+                    $"Error retrieving published grades: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
+            }
+        }
 
         public async Task<BaseResponse<AssignmentResponse>> PublishAssignmentAsync(int assignmentId)
         {
