@@ -706,6 +706,20 @@ public class StudentReviewController : ControllerBase
         return StatusCode((int)result.StatusCode, result);
     }
 
+    [HttpGet("my-published-grades")]
+    [Authorize]
+    [SwaggerOperation(
+    Summary = "Student Dashboard – List all assignments with published grades",
+    Description = "Includes CourseInstanceId and SubmissionId for navigation"
+)]
+    [SwaggerResponse(200, "Success", typeof(BaseResponse<List<PublishedGradeAssignmentResponse>>))]
+    public async Task<IActionResult> GetMyPublishedGrades()
+    {
+        var studentId = GetCurrentStudentId();
+        var result = await _assignmentService.GetPublishedGradeAssignmentsForStudentAsync(studentId);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
     [HttpGet("my-regrade-history")]
     [SwaggerOperation(
         Summary = "Lấy lịch sử khiếu nại toàn bộ của sinh viên",
