@@ -95,10 +95,10 @@ namespace Service.Service
                 if (rubric?.Assignment != null)
                 {
                     var status = rubric.Assignment.Status;
-                    if (status != "Draft" && status != "Upcoming")
+                    if (status != "Draft")
                     {
                         return new BaseResponse<CriteriaResponse>(
-                            "Criteria can only be created when the related assignment is in 'Draft' or 'Upcoming' status",
+                            "Criteria can only be created when the related assignment is in 'Draft' status",
                             StatusCodeEnum.BadRequest_400,
                             null
                         );
@@ -113,7 +113,7 @@ namespace Service.Service
                 if (totalWeight + request.Weight > 100)
                 {
                     return new BaseResponse<CriteriaResponse>(
-                        $"❌ Cannot add criteria. Total weight would exceed 100%. Current total: {totalWeight}%",
+                        $"Cannot add criteria. Total weight would exceed 100%. Current total: {totalWeight}%",
                         StatusCodeEnum.BadRequest_400,
                         null
                     );
@@ -128,7 +128,7 @@ namespace Service.Service
                 if (existingMaxScore != 0 && existingMaxScore != request.MaxScore)
                 {
                     return new BaseResponse<CriteriaResponse>(
-                        $"❌ MaxScore must be consistent with existing criteria. Current MaxScore: {existingMaxScore}",
+                        $"MaxScore must be consistent with existing criteria. Current MaxScore: {existingMaxScore}",
                         StatusCodeEnum.BadRequest_400,
                         null
                     );
@@ -140,8 +140,8 @@ namespace Service.Service
                 // Validate total weight after creation
                 var validateResult = await ValidateTotalWeightAsync(createdCriteria.RubricId);
                 var message = validateResult.Data == 100
-                    ? "✅ Criteria created successfully. Total weight = 100%"
-                    : $"⚠️ Criteria created successfully. Current total weight = {validateResult.Data}% (should be 100%)";
+                    ? "Criteria created successfully. Total weight = 100%"
+                    : $"Criteria created successfully. Current total weight = {validateResult.Data}% (should be 100%)";
                 return new BaseResponse<CriteriaResponse>("Criteria created successfully", StatusCodeEnum.Created_201, response);
             }
             catch (Exception ex)
@@ -170,10 +170,10 @@ namespace Service.Service
                     if (rubric?.Assignment != null)
                     {
                         var status = rubric.Assignment.Status;
-                        if (status != "Draft" && status != "Upcoming")
+                        if (status != "Draft")
                         {
                             return new BaseResponse<CriteriaResponse>(
-                                "Criteria can only be edited when the related assignment is in 'Draft' or 'Upcoming' status",
+                                "Criteria can only be edited when the related assignment is in 'Draft' status",
                                 StatusCodeEnum.BadRequest_400,
                                 null
                             );
@@ -190,7 +190,7 @@ namespace Service.Service
                 if (currentTotalWeight + request.Weight > 100)
                 {
                     return new BaseResponse<CriteriaResponse>(
-                        $"❌ Cannot update criteria. Total weight would exceed 100%. Current total (excluding this one): {currentTotalWeight}%",
+                        $"Cannot update criteria. Total weight would exceed 100%. Current total (excluding this one): {currentTotalWeight}%",
                         StatusCodeEnum.BadRequest_400,
                         null
                     );
@@ -204,7 +204,7 @@ namespace Service.Service
                 if (existingMaxScore != 0 && existingMaxScore != request.MaxScore)
                 {
                     return new BaseResponse<CriteriaResponse>(
-                        $"❌ MaxScore must be consistent with existing criteria. Current MaxScore: {existingMaxScore}",
+                        $"MaxScore must be consistent with existing criteria. Current MaxScore: {existingMaxScore}",
                         StatusCodeEnum.BadRequest_400,
                         null
                     );
@@ -217,8 +217,8 @@ namespace Service.Service
                 // Validate total weight after update
                 var validateResult = await ValidateTotalWeightAsync(updatedCriteria.RubricId);
                 var message = validateResult.Data == 100
-                    ? "✅ Criteria updated successfully. Total weight = 100%"
-                    : $"⚠️ Criteria updated successfully. Current total weight = {validateResult.Data}% (should be 100%)";
+                    ? "Criteria updated successfully. Total weight = 100%"
+                    : $"Criteria updated successfully. Current total weight = {validateResult.Data}% (should be 100%)";
 
                 return new BaseResponse<CriteriaResponse>("Criteria updated successfully", StatusCodeEnum.OK_200, response);
             }
@@ -245,10 +245,10 @@ namespace Service.Service
                 if (rubric?.Assignment != null)
                 {
                     var status = rubric.Assignment.Status;
-                    if (status != "Draft" && status != "Upcoming")
+                    if (status != "Draft")
                     {
                         return new BaseResponse<bool>(
-                            "Criteria can only be deleted when the related assignment is in 'Draft' or 'Upcoming' status",
+                            "Criteria can only be deleted when the related assignment is in 'Draft' status",
                             StatusCodeEnum.BadRequest_400,
                             false
                         );

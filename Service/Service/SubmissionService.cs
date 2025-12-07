@@ -1195,6 +1195,27 @@ namespace Service.Service
                 var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
                 if (assignment == null)
                     return new BaseResponse<GradeSubmissionResponse>("Assignment not found", StatusCodeEnum.NotFound_404, null);
+                //  NEW LOGIC: Kiểm tra nếu submission là auto-zero do không nộp bài
+                var hasInstructorReview = await _context.Reviews
+                    .AnyAsync(r => r.ReviewAssignment.SubmissionId == submission.SubmissionId &&
+                   r.ReviewType == "Instructor");
+
+                bool isAutoZero =
+                    submission.FinalScore == 0 &&
+                    submission.InstructorScore == 0 &&
+                    submission.PeerAverageScore == 0 &&
+                    submission.Status == "Graded" &&
+                    !hasInstructorReview;
+
+                if (isAutoZero)
+                {
+                    return new BaseResponse<GradeSubmissionResponse>(
+                        "This submission was automatically graded zero due to non-submission. Manual grading is not allowed.",
+                        StatusCodeEnum.Forbidden_403,
+                        null
+                    );
+                }
+
                 // 🔥 NEW LOGIC: Nếu assignment đã publish điểm → chỉ cho chấm nếu regrade đã được approved
                 if (assignment.Status == "GradesPublished")
                 {
@@ -1465,7 +1486,7 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "❌ Error grading submission");
+                _logger.LogError(ex, "Error grading submission");
                 return new BaseResponse<GradeSubmissionResponse>(
                     "An error occurred while grading submission",
                     StatusCodeEnum.InternalServerError_500,
@@ -1708,25 +1729,27 @@ namespace Service.Service
 
                 var blockingReasons = new List<string>();
 
-                // Kiểm tra điều kiện
+                // Check conditions
                 if (ungradedCount > 0 && !request.ForcePublish)
-                    blockingReasons.Add($"Còn {ungradedCount} bài chưa chấm.");
+                    blockingReasons.Add($"{ungradedCount} submissions are not graded.");
 
                 if (notSubmittedCount > 0 && !request.ForcePublish)
-                    blockingReasons.Add($"Còn {notSubmittedCount} sinh viên không nộp. Dùng auto-grade-zero.");
+                    blockingReasons.Add($"{notSubmittedCount} students did not submit. Use auto-grade-zero.");
 
                 if (!isPastDeadline && !request.ForcePublish)
-                    blockingReasons.Add("Chưa đến hạn cuối.");
+                    blockingReasons.Add("The deadline has not passed yet.");
 
-                // Không public → trả lỗi
+                // Cannot publish → return error
                 if (blockingReasons.Any() && !request.ForcePublish)
                 {
-                    response.Note = "Không thể công bố điểm.";
+                    response.Note = "Unable to publish grades.";
                     response.BlockingReasons = blockingReasons;
+
                     return new BaseResponse<PublishGradesResponse>(
                         string.Join(" ", blockingReasons),
                         StatusCodeEnum.BadRequest_400,
-                        response);
+                        response
+                    );
                 }
 
                 // === PUBLIC THÀNH CÔNG ===
@@ -1756,7 +1779,7 @@ namespace Service.Service
                         StudentName = $"{user.FirstName} {user.LastName}".Trim(),
                         StudentCode = user.StudentCode,
                         FinalScore = submission?.FinalScore,
-                        Feedback = submission?.Feedback ?? (submission == null ? "Không nộp bài" : null),
+                        Feedback = submission?.Feedback ?? (submission == null ? "Not Submitted" : null),
                         Status = submission?.Status ?? "Not Submitted",
                         PublicAt = submission?.GradedAt
                     });
@@ -1779,7 +1802,7 @@ namespace Service.Service
                 {
                     _logger.LogError(ex, $"Error sending grades published notifications for assignment {assignment.AssignmentId}");
                 }
-                _logger.LogInformation($"✅ Grades published for assignment {request.AssignmentId}, status set to GradesPublished.");
+                _logger.LogInformation($"Grades published for assignment {request.AssignmentId}, status set to GradesPublished.");
 
                 return new BaseResponse<PublishGradesResponse>(
                     response.Note,
@@ -2066,32 +2089,34 @@ namespace Service.Service
         {
             try
             {
-                // 1. Xác nhận confirm
+                // 1. Confirm
                 if (!request.ConfirmZeroGrade)
                     return new BaseResponse<AutoGradeZeroResponse>(
-                        "Bạn phải xác nhận (ConfirmZeroGrade = true) để chấm 0 điểm.",
+                        "You must confirm (ConfirmZeroGrade = true) to apply zero grades.",
                         StatusCodeEnum.BadRequest_400, null);
 
-                // 2. Lấy assignment
+                // 2. Get assignment
                 var assignment = await _assignmentRepository.GetByIdAsync(request.AssignmentId);
                 if (assignment == null)
-                    return new BaseResponse<AutoGradeZeroResponse>("Assignment not found", StatusCodeEnum.NotFound_404, null);
+                    return new BaseResponse<AutoGradeZeroResponse>(
+                        "Assignment not found",
+                        StatusCodeEnum.NotFound_404, null);
 
-                // 3. Chỉ cho phép khi status Closed hoặc Cancelled
+                // 3. Only allowed when status is Closed or Cancelled
                 if (assignment.Status != AssignmentStatusEnum.Closed.ToString() &&
                     assignment.Status != AssignmentStatusEnum.Cancelled.ToString())
                 {
                     return new BaseResponse<AutoGradeZeroResponse>(
-                        $"Assignment status là {assignment.Status}, không thể chấm 0 điểm.",
+                        $"Assignment status is {assignment.Status}, zero-grading is not allowed.",
                         StatusCodeEnum.BadRequest_400, null);
                 }
 
-                // 4. Chỉ chấm sau ReviewDeadline
+                // 4. Only grade zero after ReviewDeadline
                 var now = DateTime.UtcNow;
                 if (assignment.ReviewDeadline.HasValue && now <= assignment.ReviewDeadline.Value)
                 {
                     return new BaseResponse<AutoGradeZeroResponse>(
-                        $"Chưa đến ReviewDeadline ({assignment.ReviewDeadline:yyyy-MM-dd HH:mm}). Không thể chấm 0.",
+                        $"ReviewDeadline has not passed yet ({assignment.ReviewDeadline:yyyy-MM-dd HH:mm}). Zero grading is not allowed.",
                         StatusCodeEnum.BadRequest_400, null);
                 }
 
@@ -2109,7 +2134,7 @@ namespace Service.Service
                 var nonSubmitters = enrolledStudentIds.Except(submittedUserIds).ToList();
                 if (!nonSubmitters.Any())
                     return new BaseResponse<AutoGradeZeroResponse>(
-                        "Tất cả sinh viên đã nộp bài hoặc đã được chấm 0.",
+                        "All student have submitted or graded zero.",
                         StatusCodeEnum.OK_200,
                         new AutoGradeZeroResponse { Success = true, NonSubmittedCount = 0 });
 
@@ -2181,12 +2206,12 @@ namespace Service.Service
                     GradedZeroCount = newSubmissions.Count,
                     StudentCodes = studentCodes,
                     Success = true,
-                    Message = $"Đã chấm 0 điểm cho {newSubmissions.Count} sinh viên chưa nộp bài.",
+                    Message = $"Assigned zero grade to {newSubmissions.Count} students who did not submit.",
                     ProcessedAt = now
                 };
 
                 _logger.LogInformation(
-                    "AutoGradeZero SUCCESS | Assignment {AssignmentId} | Chấm 0 cho {Count} sinh viên",
+                    "AutoGradeZero SUCCESS | Assignment {AssignmentId} | Zero graded for {Count} students",
                     request.AssignmentId, newSubmissions.Count);
 
                 return new BaseResponse<AutoGradeZeroResponse>(
@@ -2201,7 +2226,7 @@ namespace Service.Service
                     request.AssignmentId, ex.StackTrace);
 
                 return new BaseResponse<AutoGradeZeroResponse>(
-                    $"Lỗi hệ thống: {ex.Message}",
+                    $"Server Error: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500, null);
             }
         }
