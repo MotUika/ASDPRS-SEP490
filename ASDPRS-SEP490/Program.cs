@@ -149,7 +149,8 @@ builder.Services.AddCors(options =>
                 "http://localhost:5173", 
                 "https://localhost:5173",
                 "http://160.25.232.199",
-                "https://160.25.232.199"
+                "https://160.25.232.199",
+                "https://fasm-fpt.site"
               )
               .AllowAnyHeader()
               .AllowAnyMethod()
