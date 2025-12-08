@@ -1079,7 +1079,6 @@ namespace Service.Service
                 if (extractedText.Length > 12000)
                     extractedText = extractedText.Substring(0, 12000) + "...";
 
-                // ===== KIỂM TRA RELEVANCE TRƯỚC KHI XỬ LÝ =====
                 var isRelevant = await CheckSubmissionRelevanceAsync(submission, assignment, extractedText);
 
                 if (!isRelevant)
@@ -1264,8 +1263,12 @@ namespace Service.Service
                     {
                         _logger.LogError(ex, $"Error generating feedback for criteria {criterion.CriteriaId}");
 
-                        // Thêm error feedback cho criteria này
                         var errorMessage = $"Error generating feedback: {ex.Message}";
+                        if (errorMessage.Length > 1950)
+                        {
+                            errorMessage = errorMessage.Substring(0, 1950) + "... [truncated]";
+                        }
+
                         feedbacks.Add(new AICriteriaFeedbackItem
                         {
                             CriteriaId = criterion.CriteriaId,
@@ -1276,11 +1279,11 @@ namespace Service.Service
                             MaxScore = criterion.MaxScore
                         });
 
-                        // Lưu error vào DB
+                        var fullContent = $"Score: 0 | Summary: {errorMessage}";
                         var errorSummary = new AISummary
                         {
                             SubmissionId = request.SubmissionId,
-                            Content = $"Score: 0 | Summary: {errorMessage}",
+                            Content = fullContent,
                             SummaryType = $"CriteriaFeedback_{criterion.CriteriaId}_Error",
                             GeneratedAt = DateTime.UtcNow
                         };

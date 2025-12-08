@@ -29,62 +29,55 @@ namespace Service.Service
 
         public async Task<string> SummarizeAsync(string text, string model = null, int maxOutputTokens = 800)
         {
-            model ??= "gemini-2.0-flash"; // Dùng model nhẹ hơn, nhanh hơn
+            model ??= "gemma-3-27b-it";
 
             var requestBody = new
             {
-                contents = new[]
-                {
-                    new
-                    {
-                        parts = new[]
-                        {
-                            new { text = text }
-                        }
-                    }
-                },
-                generationConfig = new
-                {
-                    maxOutputTokens = maxOutputTokens,
-                    temperature = 0.2
-                }
+                contents = new[] { new { parts = new[] { new { text = text } } } },
+                generationConfig = new { maxOutputTokens = maxOutputTokens, temperature = 0.2 }
             };
 
             var json = JsonSerializer.Serialize(requestBody);
             var url = $"{_baseUrl}{model}:generateContent?key={_apiKey}";
 
-            var response = await _httpClient.PostAsync(
-                url,
-                new StringContent(json, Encoding.UTF8, "application/json"));
+            int maxRetries = 3;
+            int currentRetry = 0;
 
-            if (!response.IsSuccessStatusCode)
+            while (currentRetry < maxRetries)
             {
-                var errorContent = await response.Content.ReadAsStringAsync();
-                throw new Exception($"Gemini API error: {response.StatusCode} - {errorContent}");
-            }
+                var response = await _httpClient.PostAsync(url, new StringContent(json, Encoding.UTF8, "application/json"));
 
-            var responseJson = await response.Content.ReadAsStringAsync();
-
-            // Parse response
-            using var doc = JsonDocument.Parse(responseJson);
-            if (doc.RootElement.TryGetProperty("candidates", out var candidates) &&
-                candidates.GetArrayLength() > 0)
-            {
-                var firstCandidate = candidates[0];
-                if (firstCandidate.TryGetProperty("content", out var content))
+                if (response.IsSuccessStatusCode)
                 {
-                    if (content.TryGetProperty("parts", out var parts) && parts.GetArrayLength() > 0)
+                    var responseJson = await response.Content.ReadAsStringAsync();
+                    using var doc = JsonDocument.Parse(responseJson);
+                    if (doc.RootElement.TryGetProperty("candidates", out var candidates) && candidates.GetArrayLength() > 0)
                     {
-                        var firstPart = parts[0];
-                        if (firstPart.TryGetProperty("text", out var textElement))
+                        var firstCandidate = candidates[0];
+                        if (firstCandidate.TryGetProperty("content", out var content))
                         {
-                            return textElement.GetString() ?? string.Empty;
+                            if (content.TryGetProperty("parts", out var parts) && parts.GetArrayLength() > 0)
+                            {
+                                return parts[0].GetProperty("text").GetString() ?? string.Empty;
+                            }
                         }
                     }
+                    return string.Empty;
+                }
+                else if ((int)response.StatusCode == 429)
+                {
+                    currentRetry++;
+                    _logger.LogWarning($"Gemini API Rate Limit hit. Retrying in 5 seconds... (Attempt {currentRetry}/{maxRetries})");
+                    await Task.Delay(5000);
+                }
+                else
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    throw new Exception($"Gemini API error: {response.StatusCode} - {errorContent}");
                 }
             }
 
-            throw new Exception("Failed to parse response from Gemini API");
+            throw new Exception("Gemini API Rate Limit exceeded after multiple retries.");
         }
         public async Task<string> AnalyzeDocumentWithContextAsync(string text, string analysisType, string context)
         {

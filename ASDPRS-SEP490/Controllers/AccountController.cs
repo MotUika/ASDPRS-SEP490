@@ -164,7 +164,7 @@ namespace ASDPRS_SEP490.Controllers
                 Description = "Chuyển hướng đến Google OAuth để xác thực người dùng"
             )]
         [SwaggerResponse(302, "Chuyển hướng đến trang đăng nhập Google")]
-        public IActionResult GoogleLogin([FromQuery] string returnUrl = "http://localhost:5173/")
+        public IActionResult GoogleLogin([FromQuery] string returnUrl = "https://fasm-fpt.site/")
         {
             // Force https for callback generation (ensure Google redirect_uri is registered)
             var redirectUri = Url.Action("GoogleCallback", "Account", null, "https");
@@ -172,7 +172,7 @@ namespace ASDPRS_SEP490.Controllers
             var props = _signInManager.ConfigureExternalAuthenticationProperties(GoogleDefaults.AuthenticationScheme, redirectUri);
 
             // store returnUrl so we'll redirect to it after completing external login
-            props.Items["returnUrl"] = returnUrl ?? "http://localhost:5173/";
+            props.Items["returnUrl"] = returnUrl ?? "https://fasm-fpt.site/";
 
             return Challenge(props, GoogleDefaults.AuthenticationScheme);
         }
@@ -185,7 +185,7 @@ namespace ASDPRS_SEP490.Controllers
         [SwaggerResponse(302, "Chuyển hướng về frontend với token hoặc lỗi trong URL")]
         public async Task<IActionResult> GoogleCallback()
         {
-            string returnUrl = "http://localhost:5173/";
+            string returnUrl = "https://fasm-fpt.site/";
 
             IActionResult RedirectError(string errCode, string msg)
             {
@@ -211,7 +211,10 @@ namespace ASDPRS_SEP490.Controllers
                 var allowedOrigins = new[]
                 {
             "http://localhost:5173", // FE
-            "https://localhost:7104" // BE test
+            "https://localhost:7104", // BE test
+            "https://fasm-fpt.site",
+            "http://160.25.232.199",
+            "https://160.25.232.199"
         };
                 try
                 {
@@ -219,12 +222,12 @@ namespace ASDPRS_SEP490.Controllers
                     var origin = $"{ruri.Scheme}://{ruri.Host}{(ruri.IsDefaultPort ? "" : ":" + ruri.Port)}";
                     if (!allowedOrigins.Contains(origin))
                     {
-                        returnUrl = "http://localhost:5173/";
+                        returnUrl = "https://fasm-fpt.site/";
                     }
                 }
                 catch
                 {
-                    returnUrl = "http://localhost:5173/";
+                    returnUrl = "https://fasm-fpt.site/";
                 }
 
                 // Get email
