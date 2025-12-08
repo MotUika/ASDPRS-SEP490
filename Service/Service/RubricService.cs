@@ -460,33 +460,56 @@ namespace Service.Service
         {
             try
             {
-                // 🔹 Lấy danh sách rubric có template do user này tạo
+                // 1️⃣ Lấy list CourseInstance mà user là Instructor
+                var instructorCourseInstanceIds = await _context.CourseInstructors
+                    .Where(ci => ci.UserId == userId)
+                    .Select(ci => ci.CourseInstanceId)
+                    .Distinct()
+                    .ToListAsync();
+
+                if (!instructorCourseInstanceIds.Any())
+                {
+                    return new BaseResponse<IEnumerable<RubricResponse>>(
+                        "User is not an instructor of any course instance",
+                        StatusCodeEnum.NotFound_404,
+                        null
+                    );
+                }
+
+                // 2️⃣ Lấy các assignment thuộc courseinstance đó
+                var rubricIds = await _context.Assignments
+                    .Where(a => instructorCourseInstanceIds.Contains(a.CourseInstanceId))
+                    .Where(a => a.RubricId != null)
+                    .Select(a => a.RubricId.Value)
+                    .Distinct()
+                    .ToListAsync();
+
+                if (!rubricIds.Any())
+                {
+                    return new BaseResponse<IEnumerable<RubricResponse>>(
+                        "No rubrics found for assignments created by this instructor",
+                        StatusCodeEnum.NotFound_404,
+                        null
+                    );
+                }
+
+                // 3️⃣ Lấy các rubric
                 var rubrics = await _context.Rubrics
                     .Include(r => r.Template)
-                        .ThenInclude(t => t.CreatedByUser)
+                    .Include(r => r.Criteria)
                     .Include(r => r.Assignment)
                         .ThenInclude(a => a.CourseInstance)
                             .ThenInclude(ci => ci.Course)
                     .Include(r => r.Assignment)
                         .ThenInclude(a => a.CourseInstance)
                             .ThenInclude(ci => ci.Campus)
-                    .Include(r => r.Criteria)
-                    .Where(r => r.Template.CreatedByUserId == userId)
+                    .Where(r => rubricIds.Contains(r.RubricId))
                     .ToListAsync();
 
-                if (rubrics == null || !rubrics.Any())
-                {
-                    return new BaseResponse<IEnumerable<RubricResponse>>(
-                        "No rubrics found for this user",
-                        StatusCodeEnum.NotFound_404,
-                        null
-                    );
-                }
-
-                // 🔹 Map sang response
+                // 4️⃣ Map sang response
                 var response = _mapper.Map<IEnumerable<RubricResponse>>(rubrics);
 
-                // 🔹 Gán danh sách assignment đang sử dụng rubric (giống bên RubricTemplateService)
+                // 5️⃣ Lấy danh sách assignment đang sử dụng rubric
                 foreach (var rubric in response)
                 {
                     var assignments = await _context.Assignments
@@ -497,17 +520,15 @@ namespace Service.Service
                         .Where(a => a.RubricId == rubric.RubricId)
                         .ToListAsync();
 
-                    rubric.AssignmentsUsingTemplate = (assignments != null && assignments.Any())
-                        ? assignments.Select(a => new AssignmentUsingTemplateResponse
-                        {
-                            AssignmentId = a.AssignmentId,
-                            Title = a.Title,
-                            CourseName = a.CourseInstance?.Course?.CourseName,
-                            ClassName = $"{a.CourseInstance?.Course?.CourseName} - {a.CourseInstance?.SectionCode}",
-                            CampusName = a.CourseInstance?.Campus?.CampusName,
-                            Deadline = a.Deadline
-                        }).ToList()
-                        : new List<AssignmentUsingTemplateResponse>();
+                    rubric.AssignmentsUsingTemplate = assignments.Select(a => new AssignmentUsingTemplateResponse
+                    {
+                        AssignmentId = a.AssignmentId,
+                        Title = a.Title,
+                        CourseName = a.CourseInstance?.Course?.CourseName,
+                        ClassName = $"{a.CourseInstance?.Course?.CourseName} - {a.CourseInstance?.SectionCode}",
+                        CampusName = a.CourseInstance?.Campus?.CampusName,
+                        Deadline = a.Deadline
+                    }).ToList();
                 }
 
                 return new BaseResponse<IEnumerable<RubricResponse>>(
@@ -525,6 +546,7 @@ namespace Service.Service
                 );
             }
         }
+
 
 
 
