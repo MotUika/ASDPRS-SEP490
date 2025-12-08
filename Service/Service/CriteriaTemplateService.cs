@@ -3,6 +3,7 @@ using BussinessObject.Models;
 using DataAccessLayer;
 using Microsoft.EntityFrameworkCore;
 using Repository.IRepository;
+using Repository.Repository;
 using Service.IService;
 using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Enums;
@@ -18,12 +19,14 @@ namespace Service.Service
     public class CriteriaTemplateService : ICriteriaTemplateService
     {
         private readonly ICriteriaTemplateRepository _criteriaTemplateRepository;
+        private readonly IRubricTemplateRepository _rubricTemplateRepository;
         private readonly ASDPRSContext _context;
         private readonly IMapper _mapper;
 
-        public CriteriaTemplateService(ICriteriaTemplateRepository criteriaTemplateRepository, ASDPRSContext context, IMapper mapper)
+        public CriteriaTemplateService(ICriteriaTemplateRepository criteriaTemplateRepository, IRubricTemplateRepository rubricTemplateRepository , ASDPRSContext context, IMapper mapper)
         {
             _criteriaTemplateRepository = criteriaTemplateRepository;
+            _rubricTemplateRepository = rubricTemplateRepository;
             _context = context;
             _mapper = mapper;
         }
@@ -177,20 +180,70 @@ namespace Service.Service
         {
             try
             {
+                // 1️⃣ Lấy CriteriaTemplate
                 var criteriaTemplate = await _criteriaTemplateRepository.GetByIdAsync(id);
                 if (criteriaTemplate == null)
                 {
-                    return new BaseResponse<bool>("Criteria template not found", StatusCodeEnum.NotFound_404, false);
+                    return new BaseResponse<bool>(
+                        "Criteria template not found",
+                        StatusCodeEnum.NotFound_404,
+                        false
+                    );
                 }
 
+                // 2️⃣ Lấy RubricTemplate cha
+                var rubricTemplate = await _rubricTemplateRepository.GetByIdAsync(criteriaTemplate.TemplateId);
+                if (rubricTemplate == null)
+                {
+                    return new BaseResponse<bool>(
+                        "Parent rubric template not found",
+                        StatusCodeEnum.NotFound_404,
+                        false
+                    );
+                }
+
+                // 3️⃣ Chỉ được xóa khi rubric template IS PUBLIC = FALSE
+                if (rubricTemplate.IsPublic)
+                {
+                    return new BaseResponse<bool>(
+                        "Cannot delete criteria template because the rubric template is public.",
+                        StatusCodeEnum.BadRequest_400,
+                        false
+                    );
+                }
+
+                // 4️⃣ Unlink tất cả Criteria đang dùng CriteriaTemplate
+                var usedCriteria = _context.Criteria
+                    .Where(c => c.CriteriaTemplateId == id)
+                    .ToList();
+
+                foreach (var c in usedCriteria)
+                {
+                    c.CriteriaTemplateId = null;
+                }
+
+                await _context.SaveChangesAsync(); // Lưu unlink trước khi xóa template
+
+                // 5️⃣ Xóa CriteriaTemplate
                 await _criteriaTemplateRepository.DeleteAsync(criteriaTemplate);
-                return new BaseResponse<bool>("Criteria template deleted successfully", StatusCodeEnum.OK_200, true);
+
+                return new BaseResponse<bool>(
+                    "Criteria template deleted successfully",
+                    StatusCodeEnum.OK_200,
+                    true
+                );
             }
             catch (Exception ex)
             {
-                return new BaseResponse<bool>($"Error deleting criteria template: {ex.Message}", StatusCodeEnum.InternalServerError_500, false);
+                return new BaseResponse<bool>(
+                    $"Error deleting criteria template: {ex.InnerException?.Message ?? ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    false
+                );
             }
         }
+
+
 
         public async Task<BaseResponse<IEnumerable<CriteriaTemplateResponse>>> GetCriteriaTemplatesByTemplateIdAsync(int templateId)
         {
