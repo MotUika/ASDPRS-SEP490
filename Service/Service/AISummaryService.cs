@@ -1068,7 +1068,6 @@ namespace Service.Service
                 {
                     return new BaseResponse<AICriteriaResponse>("Could not download file", StatusCodeEnum.BadRequest_400, null);
                 }
-
                 var fileName = submission.FileName ?? submission.OriginalFileName;
                 var extractedText = await _documentTextExtractor.ExtractTextAsync(fileStream, fileName);
                 if (string.IsNullOrWhiteSpace(extractedText))
@@ -1076,11 +1075,19 @@ namespace Service.Service
                     return new BaseResponse<AICriteriaResponse>("No text extracted", StatusCodeEnum.BadRequest_400, null);
                 }
 
-                if (extractedText.Length > 12000)
-                    extractedText = extractedText.Substring(0, 12000) + "...";
+                var maxTokensConfig = await _systemConfigService.GetSystemConfigAsync("AISummaryMaxTokens");
+                var maxWordsConfig = await _systemConfigService.GetSystemConfigAsync("AISummaryMaxWords");
+                int maxTokens = int.Parse(maxTokensConfig ?? "1000");  
+                int maxWords = int.Parse(maxWordsConfig ?? "200");    
+
+                _logger.LogInformation($"Using config for criteria feedback: MaxTokens={maxTokens}, MaxWords={maxWords}");
+
+                if (extractedText.Length > maxTokens)
+                {
+                    extractedText = extractedText.Substring(0, maxTokens) + "... [document truncated]";
+                }
 
                 var isRelevant = await CheckSubmissionRelevanceAsync(submission, assignment, extractedText);
-
                 if (!isRelevant)
                 {
                     _logger.LogWarning($"Submission {request.SubmissionId} is not relevant to assignment. Returning error criteria feedback.");
@@ -1090,9 +1097,7 @@ namespace Service.Service
 
                     foreach (var criterion in criteria)
                     {
-                        var errorMessage = "⚠Unable to evaluate: Submission content does not match assignment requirements.";
-
-                        // Lưu error feedback vào database
+                        var errorMessage = "Unable to evaluate: Submission content does not match assignment requirements.";
                         var errorSummary = new AISummary
                         {
                             SubmissionId = request.SubmissionId,
@@ -1112,7 +1117,6 @@ namespace Service.Service
                             MaxScore = criterion.MaxScore
                         });
                     }
-
                     var errorResponse = new AICriteriaResponse
                     {
                         Feedbacks = errorFeedbacks,
@@ -1219,11 +1223,9 @@ namespace Service.Service
                             _logger.LogWarning($"AI did not return expected format for criteria {criterion.CriteriaId}. Response: {criteriaSummary}");
                             summaryText = criteriaSummary;
                         }
-
-                        // Truncate summary nếu quá dài
-                        if (summaryText.Split(' ').Length > 30)
+                        if (summaryText.Split(' ').Length > maxWords)
                         {
-                            var words = summaryText.Split(' ').Take(30).ToArray();
+                            var words = summaryText.Split(' ').Take(maxWords).ToArray();
                             summaryText = string.Join(" ", words) + "...";
                         }
 
