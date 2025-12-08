@@ -226,7 +226,11 @@ builder.Services.AddAuthentication(options =>
     googleOptions.Scope.Add("email");
 
     googleOptions.SaveTokens = true;
-
+    googleOptions.Events.OnRedirectToAuthorizationEndpoint = context =>
+    {
+        context.Response.Redirect(context.RedirectUri + "&prompt=select_account");
+        return Task.CompletedTask;
+    };
     // Map extras if needed
     googleOptions.ClaimActions.MapJsonKey("picture", "picture");
     googleOptions.ClaimActions.MapJsonKey("email_verified", "email_verified");
