@@ -86,16 +86,26 @@ namespace ASDPRS_SEP490.Controllers
         [HttpPost("logout")]
         [Authorize]
         [SwaggerOperation(
-        Summary = "Đăng xuất khỏi hệ thống",
-        Description = "Thu hồi refresh token của người dùng và kết thúc phiên đăng nhập"
-    )]
+            Summary = "Đăng xuất khỏi hệ thống",
+            Description = "Thu hồi refresh token, xóa cookies, và kết thúc phiên đăng nhập (bao gồm Identity và external schemes)"
+        )]
         [SwaggerResponse(200, "Đăng xuất thành công")]
         [SwaggerResponse(401, "Chưa đăng nhập")]
         public async Task<IActionResult> Logout()
         {
             var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
             await _tokenService.RevokeRefreshToken(userId);
-            return Ok("Logged out successfully");
+
+            await _signInManager.SignOutAsync();
+
+            await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
+
+            Response.Cookies.Delete("ASDPRS_Access", new CookieOptions { Secure = true, SameSite = SameSiteMode.None });
+            Response.Cookies.Delete("ASDPRS_Refresh", new CookieOptions { Secure = true, SameSite = SameSiteMode.None });
+
+            Response.Cookies.Delete(".AspNetCore.Identity.Application", new CookieOptions { Secure = true, SameSite = SameSiteMode.None });
+
+            return Ok(new BaseResponse<string>("Logged out successfully", StatusCodeEnum.OK_200, null));
         }
 
         [HttpPost("google-login-mobile")]
