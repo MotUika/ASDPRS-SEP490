@@ -26,7 +26,7 @@ namespace Service.IService
         Task<BaseResponse<bool>> UpdateRubricAsync(int assignmentId, int rubricId);
         Task<BaseResponse<AssignmentStatsResponse>> GetAssignmentStatisticsAsync(int assignmentId);
         Task<BaseResponse<RubricResponse>> GetAssignmentRubricForReviewAsync(int assignmentId);
-        Task<BaseResponse<CourseAssignmentsWrapperResponse>> GetAssignmentsByCourseInstanceBasicAsync(int courseInstanceId);
+        Task<BaseResponse<List<AssignmentBasicResponse>>> GetAssignmentsByCourseInstanceBasicAsync(int courseInstanceId);
         Task<BaseResponse<IEnumerable<AssignmentResponse>>> GetActiveAssignmentsByCourseInstanceAsync(int courseInstanceId, int? studentId = null);
         Task<BaseResponse<AssignmentResponse>> CloneAssignmentAsync(int sourceAssignmentId, int targetCourseInstanceId, CloneAssignmentRequest request);
         Task<BaseResponse<AssignmentResponse>> UpdateAssignmentTimelineAsync(int assignmentId, UpdateAssignmentTimelineRequest request);

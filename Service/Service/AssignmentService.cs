@@ -1251,41 +1251,37 @@ namespace Service.Service
                     null);
             }
         }
-        public async Task<BaseResponse<CourseAssignmentsWrapperResponse>> GetAssignmentsByCourseInstanceBasicAsync(int courseInstanceId)
+        public async Task<BaseResponse<List<AssignmentBasicResponse>>> GetAssignmentsByCourseInstanceBasicAsync(int courseInstanceId)
         {
             try
             {
+                // Lấy studentId từ token (sẽ implement sau)
                 var studentId = GetCurrentStudentId();
-
-                var courseInstance = await _context.CourseInstances
-                    .Include(ci => ci.Course)
-                    .Include(ci => ci.CourseInstructors)
-                        .ThenInclude(ci => ci.User)
-                    .FirstOrDefaultAsync(ci => ci.CourseInstanceId == courseInstanceId);
-
-                if (courseInstance == null)
-                {
-                    return new BaseResponse<CourseAssignmentsWrapperResponse>(
-                        "Course instance not found",
-                        StatusCodeEnum.NotFound_404,
-                        null);
-                }
-
-                var firstInstructor = courseInstance.CourseInstructors
-                    .Where(ci => ci.User != null)
-                    .Select(ci => ci.User)
-                    .FirstOrDefault();
 
                 var assignments = await _assignmentRepository.GetByCourseInstanceIdAsync(courseInstanceId);
                 assignments = assignments.Where(a => a.Status != "Draft").ToList();
-
-                var assignmentResponses = new List<AssignmentBasicResponse>();
+                var responses = new List<AssignmentBasicResponse>();
 
                 foreach (var assignment in assignments)
                 {
                     var tracking = await GetAssignmentReviewTrackingAsync(assignment.AssignmentId, studentId);
 
-                    assignmentResponses.Add(new AssignmentBasicResponse
+                    var instructors = new List<InstructorInfoBasic>();
+                    if (assignment.CourseInstance?.CourseInstructors != null)
+                    {
+                        instructors = assignment.CourseInstance.CourseInstructors
+                            .Where(ci => ci.User != null)
+                            .Select(ci => new InstructorInfoBasic
+                            {
+                                UserId = ci.UserId,
+                                FullName = $"{ci.User.FirstName} {ci.User.LastName}".Trim(),
+                                Email = ci.User.Email,
+                                AvatarUrl = ci.User.AvatarUrl
+                            })
+                            .ToList();
+                    }
+
+                    responses.Add(new AssignmentBasicResponse
                     {
                         AssignmentId = assignment.AssignmentId,
                         Title = assignment.Title,
@@ -1300,43 +1296,27 @@ namespace Service.Service
                         NumPeerReviewsRequired = assignment.NumPeerReviewsRequired,
                         PendingReviewsCount = tracking.PendingCount,
                         CompletedReviewsCount = tracking.CompletedCount,
-                        CourseInstanceStartDate = courseInstance.StartDate,
-                        CourseInstanceEndDate = courseInstance.EndDate,
+                        Instructors = instructors,
+                        CourseInstanceStartDate = assignment.CourseInstance?.StartDate ?? DateTime.MinValue,
+                        CourseInstanceEndDate = assignment.CourseInstance?.EndDate ?? DateTime.MinValue,
                         AllowCrossClass = assignment.AllowCrossClass,
                         CrossClassTag = assignment.CrossClassTag
                     });
                 }
 
-                var response = new CourseAssignmentsWrapperResponse
-                {
-                    CourseInstanceId = courseInstance.CourseInstanceId,
-                    CourseName = courseInstance.Course?.CourseName,
-                    CourseCode = courseInstance.Course?.CourseCode,
-                    SectionCode = courseInstance.SectionCode,
-
-                    InstructorName = firstInstructor != null
-                        ? $"{firstInstructor.FirstName} {firstInstructor.LastName}".Trim()
-                        : "TBD",
-                    InstructorEmail = firstInstructor?.Email ?? "",
-                    InstructorAvatar = firstInstructor?.AvatarUrl ?? "",
-
-                    Assignments = assignmentResponses
-                };
-
-                return new BaseResponse<CourseAssignmentsWrapperResponse>(
+                return new BaseResponse<List<AssignmentBasicResponse>>(
                     "Success",
                     StatusCodeEnum.OK_200,
-                    response);
+                    responses);
             }
             catch (Exception ex)
             {
-                return new BaseResponse<CourseAssignmentsWrapperResponse>(
+                return new BaseResponse<List<AssignmentBasicResponse>>(
                     $"Error retrieving assignments: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
                     null);
             }
         }
-
         private async Task<(int PendingCount, int CompletedCount)> GetAssignmentReviewTrackingAsync(int assignmentId, int studentId)
         {
             var pendingCount = 0;
