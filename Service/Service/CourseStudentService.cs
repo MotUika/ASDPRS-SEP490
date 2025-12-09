@@ -96,8 +96,18 @@ namespace Service.Service
                         var middle = worksheet.Cells[row, 4].Value?.ToString().Trim();
                         var given = worksheet.Cells[row, 5].Value?.ToString().Trim();
                         var majorCode = worksheet.Cells[row, 7].Value?.ToString().Trim();
+                        var campusVal = worksheet.Cells[row, 9].Value?.ToString()?.Trim();
 
                         if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(email)) continue;
+
+                        if (int.TryParse(campusVal, out int excelCampusId))
+                        {
+                            if (excelCampusId != courseInstance.CampusId)
+                            {
+                                skippedStudents.Add($"{email} (Campus mismatch in file: {excelCampusId} vs Class: {courseInstance.CampusId})");
+                                continue;
+                            }
+                        }
 
                         var user = await _userManager.FindByEmailAsync(email);
                         if (user == null)
@@ -123,7 +133,7 @@ namespace Service.Service
                                     CourseInstanceId = courseInstanceId,
                                     UserId = user.Id,
                                     EnrolledAt = DateTime.UtcNow,
-                                    Status = "Enrolled",
+                                    Status = "Pending",
                                     ChangedByUserId = changedByUserId
                                 };
                                 var created = await _courseStudentRepository.AddAsync(cs);
@@ -207,8 +217,18 @@ namespace Service.Service
                             var given = worksheet.Cells[row, 5].Value?.ToString().Trim();
                             var email = worksheet.Cells[row, 6].Value?.ToString().Trim();
                             var majorCode = worksheet.Cells[row, 7].Value?.ToString().Trim();
+                            var campusVal = worksheet.Cells[row, 9].Value?.ToString()?.Trim();
 
                             if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(email)) continue;
+
+                            if (int.TryParse(campusVal, out int excelCampusId))
+                            {
+                                if (excelCampusId != courseInstance.CampusId)
+                                {
+                                    skippedStudents.Add($"{email} (Campus mismatch in file: {excelCampusId} vs Class: {courseInstance.CampusId})");
+                                    continue;
+                                }
+                            }
 
                             try
                             {
@@ -220,10 +240,9 @@ namespace Service.Service
 
                                 if (user != null)
                                 {
-                                    // VALIDATION: Campus Check
                                     if (user.CampusId != courseInstance.CampusId)
                                     {
-                                        skippedStudents.Add($"{email}");
+                                        skippedStudents.Add($"{email} (User Campus mismatch)");
                                         continue;
                                     }
 
