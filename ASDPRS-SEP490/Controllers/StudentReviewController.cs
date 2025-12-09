@@ -341,10 +341,10 @@ public class StudentReviewController : ControllerBase
     [HttpGet("course-instance/{courseInstanceId}/assignments-with-tracking")]
     [Authorize]
     [SwaggerOperation(
-            Summary = "Lấy danh sách bài tập trong lớp học kèm theo tracking review",
-            Description = "Trả về thông tin lớp học, giảng viên và danh sách bài tập kèm theo tracking review của sinh viên"
-        )]
-    [SwaggerResponse(200, "Thành công", typeof(BaseResponse<CourseAssignmentsWrapperResponse>))]
+    Summary = "Lấy danh sách bài tập trong lớp học kèm theo tracking review",
+    Description = "Trả về danh sách bài tập trong một lớp học cụ thể kèm theo thông tin tracking review progress của sinh viên hiện tại"
+)]
+    [SwaggerResponse(200, "Thành công", typeof(BaseResponse<List<AssignmentBasicResponse>>))]
     [SwaggerResponse(401, "Unauthorized - Token không hợp lệ")]
     [SwaggerResponse(404, "Không tìm thấy lớp học")]
     [SwaggerResponse(500, "Lỗi server")]
