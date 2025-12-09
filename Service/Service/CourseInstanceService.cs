@@ -82,47 +82,30 @@ namespace Service.Service
             try
             {
                 var courseExists = await _context.Courses.AnyAsync(c => c.CourseId == request.CourseId);
-                if (!courseExists)
-                {
-                    return new BaseResponse<CourseInstanceResponse>("Course not found", StatusCodeEnum.NotFound_404, null);
-                }
+                if (!courseExists) return new BaseResponse<CourseInstanceResponse>("Course not found", StatusCodeEnum.NotFound_404, null);
 
                 var semester = await _context.Semesters.FirstOrDefaultAsync(s => s.SemesterId == request.SemesterId);
-                if (semester == null)
-                {
-                    return new BaseResponse<CourseInstanceResponse>("Semester not found", StatusCodeEnum.NotFound_404, null);
-                }
+                if (semester == null) return new BaseResponse<CourseInstanceResponse>("Semester not found", StatusCodeEnum.NotFound_404, null);
 
                 var campusExists = await _context.Campuses.AnyAsync(c => c.CampusId == request.CampusId);
-                if (!campusExists)
-                {
-                    return new BaseResponse<CourseInstanceResponse>("Campus not found", StatusCodeEnum.NotFound_404, null);
-                }
+                if (!campusExists) return new BaseResponse<CourseInstanceResponse>("Campus not found", StatusCodeEnum.NotFound_404, null);
+
                 var now = DateTime.UtcNow;
-                if (request.StartDate < semester.StartDate)
-                {
-                    return new BaseResponse<CourseInstanceResponse>("Start date cannot be before semester start date", StatusCodeEnum.BadRequest_400, null);
-                }
-                if (request.StartDate <= now)
-                {
-                    return new BaseResponse<CourseInstanceResponse>("Start date cannot be in the past or present", StatusCodeEnum.BadRequest_400, null);
-                }
-                if (request.EndDate <= request.StartDate)
-                {
-                    return new BaseResponse<CourseInstanceResponse>("End date must be after start date", StatusCodeEnum.BadRequest_400, null);
-                }
-                if (request.EndDate > semester.EndDate)
-                {
-                    return new BaseResponse<CourseInstanceResponse>("End date cannot be after semester end date", StatusCodeEnum.BadRequest_400, null);
-                }
+                if (request.StartDate < semester.StartDate) return new BaseResponse<CourseInstanceResponse>("Start date cannot be before semester start date", StatusCodeEnum.BadRequest_400, null);
+                if (request.StartDate <= now) return new BaseResponse<CourseInstanceResponse>("Start date cannot be in the past or present", StatusCodeEnum.BadRequest_400, null);
+                if (request.EndDate <= request.StartDate) return new BaseResponse<CourseInstanceResponse>("End date must be after start date", StatusCodeEnum.BadRequest_400, null);
+                if (request.EndDate > semester.EndDate) return new BaseResponse<CourseInstanceResponse>("End date cannot be after semester end date", StatusCodeEnum.BadRequest_400, null);
+
+
                 var duplicateSection = await _context.CourseInstances
                     .AnyAsync(ci => ci.CourseId == request.CourseId &&
                                    ci.SemesterId == request.SemesterId &&
-                                   ci.SectionCode == request.SectionCode);
+                                   ci.SectionCode == request.SectionCode &&
+                                   ci.CampusId == request.CampusId);
 
                 if (duplicateSection)
                 {
-                    return new BaseResponse<CourseInstanceResponse>("Section code already exists for this course and semester", StatusCodeEnum.BadRequest_400, null);
+                    return new BaseResponse<CourseInstanceResponse>("This class section already exists for this course in this semester at this campus", StatusCodeEnum.BadRequest_400, null);
                 }
 
                 var courseInstance = _mapper.Map<CourseInstance>(request);
@@ -136,7 +119,6 @@ namespace Service.Service
 
                 var createdCourseInstance = await _courseInstanceRepository.AddAsync(courseInstance);
 
-                // Reload with related data for response
                 var courseInstanceWithDetails = await _context.CourseInstances
                     .Include(ci => ci.Course)
                     .Include(ci => ci.Semester)
@@ -208,19 +190,11 @@ namespace Service.Service
             try
             {
                 var existingCourseInstance = await _context.CourseInstances
-                    .Include(ci => ci.Course)
-                    .Include(ci => ci.Semester)
-                    .Include(ci => ci.Campus)
-                    .Include(ci => ci.CourseInstructors)
                     .Include(ci => ci.CourseStudents)
-                    .Include(ci => ci.Assignments)
                     .FirstOrDefaultAsync(ci => ci.CourseInstanceId == request.CourseInstanceId);
 
-                if (existingCourseInstance == null)
-                {
-                    return new BaseResponse<CourseInstanceResponse>("Course instance not found", StatusCodeEnum.NotFound_404, null);
-                }
-                // Prevent changing CourseId or SemesterId if there are enrolled students
+                if (existingCourseInstance == null) return new BaseResponse<CourseInstanceResponse>("Course instance not found", StatusCodeEnum.NotFound_404, null);
+
                 if (existingCourseInstance.CourseStudents.Any())
                 {
                     if ((request.CourseId > 0 && request.CourseId != existingCourseInstance.CourseId) ||
@@ -231,84 +205,32 @@ namespace Service.Service
                 }
                 var semesterId = request.SemesterId > 0 ? request.SemesterId : existingCourseInstance.SemesterId;
                 var semester = await _context.Semesters.FirstOrDefaultAsync(s => s.SemesterId == semesterId);
-                if (semester == null)
-                {
-                    return new BaseResponse<CourseInstanceResponse>("Semester not found", StatusCodeEnum.NotFound_404, null);
-                }
-                var now = DateTime.UtcNow;
-                DateTime newStartDate = request.StartDate ?? existingCourseInstance.StartDate;
-                DateTime newEndDate = request.EndDate ?? existingCourseInstance.EndDate;
-                if (request.StartDate.HasValue || request.EndDate.HasValue)
-                {
-                    if (newStartDate < semester.StartDate)
-                    {
-                        return new BaseResponse<CourseInstanceResponse>("Start date cannot be before semester start date", StatusCodeEnum.BadRequest_400, null);
-                    }
-                    if (newStartDate <= now)
-                    {
-                        return new BaseResponse<CourseInstanceResponse>("Start date cannot be in the past or present", StatusCodeEnum.BadRequest_400, null);
-                    }
-                    if (newEndDate <= newStartDate)
-                    {
-                        return new BaseResponse<CourseInstanceResponse>("End date must be after start date", StatusCodeEnum.BadRequest_400, null);
-                    }
-                    if (newEndDate > semester.EndDate)
-                    {
-                        return new BaseResponse<CourseInstanceResponse>("End date cannot be after semester end date", StatusCodeEnum.BadRequest_400, null);
-                    }
-                }
-                // Validate course if provided
-                if (request.CourseId > 0 && request.CourseId != existingCourseInstance.CourseId)
-                {
-                    var courseExists = await _context.Courses.AnyAsync(c => c.CourseId == request.CourseId);
-                    if (!courseExists)
-                    {
-                        return new BaseResponse<CourseInstanceResponse>("Course not found", StatusCodeEnum.NotFound_404, null);
-                    }
-                }
 
-                if (request.SemesterId > 0 && request.SemesterId != existingCourseInstance.SemesterId)
-                {
-                    var semesterExists = await _context.Semesters.AnyAsync(s => s.SemesterId == request.SemesterId);
-                    if (!semesterExists)
-                    {
-                        return new BaseResponse<CourseInstanceResponse>("Semester not found", StatusCodeEnum.NotFound_404, null);
-                    }
-                }
-
-                if (request.CampusId > 0 && request.CampusId != existingCourseInstance.CampusId)
-                {
-                    var campusExists = await _context.Campuses.AnyAsync(c => c.CampusId == request.CampusId);
-                    if (!campusExists)
-                    {
-                        return new BaseResponse<CourseInstanceResponse>("Campus not found", StatusCodeEnum.NotFound_404, null);
-                    }
-                }
 
                 if (!string.IsNullOrEmpty(request.SectionCode) && request.SectionCode != existingCourseInstance.SectionCode)
                 {
+                    var targetCourseId = request.CourseId > 0 ? request.CourseId : existingCourseInstance.CourseId;
+                    var targetSemesterId = request.SemesterId > 0 ? request.SemesterId : existingCourseInstance.SemesterId;
+                    var targetCampusId = request.CampusId > 0 ? request.CampusId : existingCourseInstance.CampusId;
+
                     var duplicateSection = await _context.CourseInstances
-                        .AnyAsync(ci => ci.CourseId == (request.CourseId > 0 ? request.CourseId : existingCourseInstance.CourseId) &&
-                                       ci.SemesterId == (request.SemesterId > 0 ? request.SemesterId : existingCourseInstance.SemesterId) &&
+                        .AnyAsync(ci => ci.CourseId == targetCourseId &&
+                                       ci.SemesterId == targetSemesterId &&
                                        ci.SectionCode == request.SectionCode &&
-                                       ci.CourseInstanceId != request.CourseInstanceId);
+                                       ci.CampusId == targetCampusId && // Thêm check CampusId
+                                       ci.CourseInstanceId != request.CourseInstanceId); // Loại trừ chính nó
 
                     if (duplicateSection)
                     {
-                        return new BaseResponse<CourseInstanceResponse>("Section code already exists for this course and semester", StatusCodeEnum.BadRequest_400, null);
+                        return new BaseResponse<CourseInstanceResponse>("Section code already exists for this course and semester in this campus", StatusCodeEnum.BadRequest_400, null);
                     }
                 }
 
-                // Update only provided fields
                 if (request.CourseId > 0) existingCourseInstance.CourseId = request.CourseId;
                 if (request.SemesterId > 0) existingCourseInstance.SemesterId = request.SemesterId;
                 if (request.CampusId > 0) existingCourseInstance.CampusId = request.CampusId;
                 if (!string.IsNullOrEmpty(request.SectionCode)) existingCourseInstance.SectionCode = request.SectionCode;
-                if (!string.IsNullOrEmpty(request.EnrollmentPassword)) existingCourseInstance.EnrollmentPassword = request.EnrollmentPassword;
 
-                existingCourseInstance.RequiresApproval = request.RequiresApproval;
-                if (request.StartDate.HasValue) existingCourseInstance.StartDate = request.StartDate.Value;
-                if (request.EndDate.HasValue) existingCourseInstance.EndDate = request.EndDate.Value;
                 var updatedCourseInstance = await _courseInstanceRepository.UpdateAsync(existingCourseInstance);
                 var response = _mapper.Map<CourseInstanceResponse>(updatedCourseInstance);
 
