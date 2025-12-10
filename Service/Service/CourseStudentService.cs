@@ -74,9 +74,7 @@ namespace Service.Service
                 if (courseInstance == null)
                     return new BaseResponse<List<CourseStudentResponse>>("Course instance not found", StatusCodeEnum.NotFound_404, null);
 
-                // Check deadline (45 days logic) - Chỉ áp dụng cho Student, Instructor có thể add bất cứ lúc nào
-                // Tuy nhiên logic dưới đây check chung, bạn có thể tách ra nếu muốn.
-                var deadline = courseInstance.StartDate.AddDays(45);
+                var deadline = courseInstance.StartDate.AddDays(14);
                 bool isPastDeadline = DateTime.UtcNow > deadline;
 
                 var results = new List<CourseStudentResponse>();
