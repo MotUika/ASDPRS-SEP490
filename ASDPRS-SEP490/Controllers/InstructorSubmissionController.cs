@@ -307,5 +307,33 @@ namespace ASDPRS_SEP490.Controllers
                 return StatusCode(500, new { Message = "Có lỗi xảy ra trên server.", Details = ex.Message });
             }
         }
+
+        // 🔟 Lấy thông tin Submission đầy đủ dùng để export Excel
+        [HttpGet("export/all/{assignmentId}")]
+        [SwaggerOperation(
+            Summary = "Lấy thông tin chi tiết Submission để xuất Excel",
+            Description = "Bao gồm userName, studentCode, assignment, submission, rubric criteria và điểm chấm theo tiêu chí."
+        )]
+        [SwaggerResponse(200, "Thông tin assignment đầy đủ", typeof(BaseResponse<SubmissionDetailExportResponse>))]
+        [SwaggerResponse(404, "Không tìm thấy assignment")]
+        public async Task<IActionResult> GetAllSubmissionDetailsForExportAsync(int assignmentId)
+        {
+            var result = await _submissionService.GetAllSubmissionDetailsForExportAsync(assignmentId);
+            return StatusCode((int)result.StatusCode, result);
+        }
+
+
+
+        [HttpPost("import-excel")]
+        public async Task<IActionResult> ImportGradesExcel(IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest("File is required.");
+
+            var result = await _submissionService.ImportGradesFromExcelAsync(file);
+            return StatusCode((int)result.StatusCode, result);
+        }
+
+
     }
 }

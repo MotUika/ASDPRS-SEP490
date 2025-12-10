@@ -42,6 +42,7 @@ namespace BussinessObject.Models
 
         public decimal? InstructorScore { get; set; }
         public decimal? PeerAverageScore { get; set; }
+        public decimal? OldScore { get; set; }
         public decimal? FinalScore { get; set; }
         [StringLength(1000)]
         public string? Feedback { get; set; }

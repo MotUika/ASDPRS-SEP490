@@ -5,6 +5,7 @@ using DocumentFormat.OpenXml.Spreadsheet;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using OfficeOpenXml;
 using Repository.IRepository;
 using Repository.Repository;
 using Service.Interface;
@@ -1222,6 +1223,11 @@ namespace Service.Service
                             null
                         );
                     }
+                    // LƯU OLD SCORE (CHỈ LƯU 1 LẦN)
+                    if (submission.OldScore == null)
+                    {
+                        submission.OldScore = submission.FinalScore;
+                    }
                 }
                 decimal instructorScore = 0m;
 
@@ -1455,6 +1461,7 @@ namespace Service.Service
                     MissingReviews = missingReviews,
                     MissingReviewPenaltyPerReview = missingReviewPenaltyPerReview,
                     MissingReviewPenaltyTotal = missingReviewPenaltyTotal,
+                    OldScore = submission.OldScore,
                     Feedback = submission.Feedback,
                     GradedAt = null,
                     FileUrl = submission.FileUrl,
@@ -2368,6 +2375,609 @@ namespace Service.Service
             catch (Exception ex)
             {
                 throw new Exception(ex.Message);
+            }
+        }
+
+        public async Task<BaseResponse<List<SubmissionDetailExportResponse>>>
+     GetAllSubmissionDetailsForExportAsync(int assignmentId)
+        {
+            try
+            {
+                // Lấy assignment + rubric + course + class
+                var assignment = await _context.Assignments
+                    .Include(a => a.Rubric)
+                        .ThenInclude(r => r.Criteria)
+                    .Include(a => a.CourseInstance)
+                        .ThenInclude(ci => ci.Course)
+                    .FirstOrDefaultAsync(a => a.AssignmentId == assignmentId);
+
+                if (assignment == null)
+                {
+                    return new BaseResponse<List<SubmissionDetailExportResponse>>(
+                        "Assignment not found",
+                        StatusCodeEnum.NotFound_404,
+                        null
+                    );
+                }
+
+                // 🔥 Lấy đúng sinh viên đã nộp bài
+                var submissions = await _context.Submissions
+                    .Where(s => s.AssignmentId == assignmentId)   // chỉ trong assignment
+                    .Include(s => s.User)                         // lấy user
+                    .Include(s => s.ReviewAssignments)
+                        .ThenInclude(ra => ra.Reviews)
+                            .ThenInclude(r => r.CriteriaFeedbacks)
+                    .ToListAsync();
+
+                var resultList = new List<SubmissionDetailExportResponse>();
+
+                foreach (var submission in submissions)
+                {
+                    // Review của giảng viên (có thể null)
+                    var instructorReview = submission.ReviewAssignments
+                        .SelectMany(ra => ra.Reviews)
+                        .FirstOrDefault(r => r.ReviewType == "Instructor");
+
+                    // Criteria + score mapping
+                    var criteriaScores = assignment.Rubric.Criteria
+                        .Select(c =>
+                        {
+                            var fb = instructorReview?
+                                .CriteriaFeedbacks?
+                                .FirstOrDefault(cf => cf.CriteriaId == c.CriteriaId);
+
+                            return new SubmissionCriteriaScoreExport
+                            {
+                                CriteriaId = c.CriteriaId,
+                                CriteriaName = c.Title,
+                                Score = fb?.ScoreAwarded,
+                                Feedback = fb?.Feedback
+                            };
+                        })
+                        .ToList();
+
+                    // Build DTO
+                    resultList.Add(new SubmissionDetailExportResponse
+                    {
+                        // Student
+                        UserId = submission.UserId,
+                        UserName = submission.User?.UserName,
+                        StudentCode = submission.User?.StudentCode,
+
+                        // Assignment
+                        AssignmentId = assignment.AssignmentId,
+                        AssignmentName = assignment.Title,
+                        CourseName = assignment.CourseInstance?.Course?.CourseName,
+                        ClassName = assignment.CourseInstance?.SectionCode,
+
+                        // Submission
+                        SubmissionId = submission.SubmissionId,
+                        SubmittedAt = submission.SubmittedAt,
+                        FinalScore = submission.FinalScore,
+                        FileName = submission.FileName,
+                        FileUrl = submission.FileUrl,
+                        Feedback = submission.Feedback,
+
+                        // Criteria details
+                        CriteriaScores = criteriaScores
+                    });
+                }
+
+                return new BaseResponse<List<SubmissionDetailExportResponse>>(
+                    "Success",
+                    StatusCodeEnum.OK_200,
+                    resultList
+                );
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<List<SubmissionDetailExportResponse>>(
+                    $"Error: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null
+                );
+            }
+        }
+
+
+        //public async Task<BaseResponse<GradeSubmissionResponse>> ImportGradeAsync(ImportGradeRequest request)
+        //{
+        //    try
+        //    {
+        //        // 1️⃣ Lấy submission
+        //        var submission = await _context.Submissions
+        //            .Include(s => s.User)
+        //            .Include(s => s.Assignment)
+        //                .ThenInclude(a => a.CourseInstance)
+        //                    .ThenInclude(ci => ci.Course)
+        //            .Include(s => s.Assignment)
+        //                .ThenInclude(a => a.Rubric)
+        //                    .ThenInclude(r => r.Criteria)
+        //            .FirstOrDefaultAsync(s => s.SubmissionId == request.SubmissionId);
+
+        //        if (submission == null)
+        //            return new BaseResponse<GradeSubmissionResponse>("Submission not found", StatusCodeEnum.NotFound_404, null);
+
+        //        var assignment = submission.Assignment;
+
+        //        // 🔥 Nếu assignment đã publish → yêu cầu regrade
+        //        if (assignment.Status == "GradesPublished")
+        //        {
+        //            var latestRegrade = await _context.RegradeRequests
+        //                .Where(r => r.SubmissionId == submission.SubmissionId)
+        //                .OrderByDescending(r => r.RequestedAt)
+        //                .FirstOrDefaultAsync();
+
+        //            if (latestRegrade == null || latestRegrade.Status != "Approved")
+        //                return new BaseResponse<GradeSubmissionResponse>(
+        //                    "Cannot regrade: grades published and no approved regrade request.",
+        //                    StatusCodeEnum.Forbidden_403,
+        //                    null
+        //                );
+
+        //            // Lưu old score (chỉ 1 lần)
+        //            if (submission.OldScore == null)
+        //                submission.OldScore = submission.FinalScore;
+        //        }
+
+        //        // 2️⃣ Xóa feedback cũ của Instructor
+        //        var oldReviews = await _context.ReviewAssignments
+        //            .Where(ra => ra.SubmissionId == submission.SubmissionId && ra.ReviewerUserId == request.InstructorId)
+        //            .SelectMany(ra => ra.Reviews)
+        //            .Where(r => r.ReviewType == "Instructor")
+        //            .ToListAsync();
+
+        //        foreach (var rv in oldReviews)
+        //        {
+        //            var oldFeedbacks = await _context.CriteriaFeedbacks.Where(cf => cf.ReviewId == rv.ReviewId).ToListAsync();
+        //            _context.CriteriaFeedbacks.RemoveRange(oldFeedbacks);
+        //            _context.Reviews.Remove(rv);
+        //        }
+
+        //        // 3️⃣ Tạo ReviewAssignment nếu chưa có
+        //        var raInstructor = await _context.ReviewAssignments
+        //            .FirstOrDefaultAsync(x => x.SubmissionId == submission.SubmissionId && x.ReviewerUserId == request.InstructorId);
+
+        //        if (raInstructor == null)
+        //        {
+        //            raInstructor = new ReviewAssignment
+        //            {
+        //                SubmissionId = submission.SubmissionId,
+        //                ReviewerUserId = request.InstructorId,
+        //                AssignedAt = DateTime.UtcNow,
+        //                Deadline = DateTime.UtcNow.AddDays(7),
+        //                Status = "Completed",
+        //                IsAIReview = false
+        //            };
+        //            _context.ReviewAssignments.Add(raInstructor);
+        //            await _context.SaveChangesAsync();
+        //        }
+
+        //        // 4️⃣ Tạo review mới
+        //        var review = new Review
+        //        {
+        //            ReviewAssignmentId = raInstructor.ReviewAssignmentId,
+        //            ReviewedAt = DateTime.UtcNow,
+        //            ReviewType = "Instructor",
+        //            GeneralFeedback = "Imported grading",
+        //            FeedbackSource = "Import"
+        //        };
+
+        //        _context.Reviews.Add(review);
+        //        await _context.SaveChangesAsync();
+
+        //        // 5️⃣ Lưu điểm theo tiêu chí
+        //        decimal totalScore = 0;
+        //        decimal totalWeight = 0;
+
+        //        foreach (var item in request.CriteriaScores)
+        //        {
+        //            var criteria = assignment.Rubric.Criteria.FirstOrDefault(c => c.CriteriaId == item.CriteriaId);
+        //            if (criteria == null) continue;
+
+        //            var weight = criteria.Weight > 0 ? criteria.Weight : 1;
+        //            totalScore += (item.Score ?? 0) * weight;
+        //            totalWeight += weight;
+
+        //            var fb = new CriteriaFeedback
+        //            {
+        //                ReviewId = review.ReviewId,
+        //                CriteriaId = criteria.CriteriaId,
+        //                ScoreAwarded = item.Score,
+        //                Feedback = item.Feedback,
+        //                FeedbackSource = "Import"
+        //            };
+        //            _context.CriteriaFeedbacks.Add(fb);
+        //        }
+
+        //        decimal instructorScore = totalWeight > 0
+        //            ? Math.Round(totalScore / totalWeight, 2)
+        //            : 0m;
+
+        //        review.OverallScore = instructorScore;
+
+        //        // 6️⃣ Lấy điểm_peer_avg
+        //        var peerAvg = await _reviewAssignmentRepository.GetPeerAverageScoreBySubmissionIdAsync(submission.SubmissionId)
+        //                     ?? 0m;
+        //        bool noPeer = peerAvg == 0;
+
+        //        // 7️⃣ Chuẩn hóa trọng số
+        //        var instructorWeight = assignment.InstructorWeight;
+        //        var peerWeight = assignment.PeerWeight;
+
+        //        if (instructorWeight + peerWeight == 0)
+        //        {
+        //            instructorWeight = 50;
+        //            peerWeight = 50;
+        //        }
+        //        else if (instructorWeight + peerWeight != 100)
+        //        {
+        //            var total = instructorWeight + peerWeight;
+        //            instructorWeight = (instructorWeight / total) * 100;
+        //            peerWeight = (peerWeight / total) * 100;
+        //        }
+
+        //        decimal instructorScoreNorm = instructorScore;
+        //        decimal peerScoreNorm = peerAvg / 10;
+
+        //        // 8️⃣ Tính final score
+        //        decimal finalScore = noPeer
+        //            ? instructorScoreNorm
+        //            : Math.Round(
+        //                (instructorScoreNorm * instructorWeight / 100) +
+        //                (peerScoreNorm * peerWeight / 100),
+        //                2);
+
+        //        decimal finalBeforePenalty = finalScore;
+
+        //        // 9️⃣ Penalty missing review
+        //        int requiredReviews = assignment.NumPeerReviewsRequired;
+        //        int completedReviews = await _context.ReviewAssignments
+        //            .Where(ra => ra.SubmissionId == submission.SubmissionId)
+        //            .SelectMany(ra => ra.Reviews)
+        //            .CountAsync(r => r.ReviewedAt != null);
+
+        //        int missingReviews = Math.Max(0, requiredReviews - completedReviews);
+        //        decimal penaltyPer = assignment.MissingReviewPenalty ?? 0;
+        //        decimal totalPenalty = missingReviews * penaltyPer;
+
+        //        if (totalPenalty > 0)
+        //            finalScore = Math.Max(0, finalScore - totalPenalty);
+
+        //        //  🔟 Update submission
+        //        submission.InstructorScore = instructorScoreNorm;
+        //        submission.PeerAverageScore = peerScoreNorm;
+        //        submission.FinalScore = finalScore;
+        //        submission.GradedAt = DateTime.UtcNow;
+        //        submission.Status = "Graded";
+
+        //        await _context.SaveChangesAsync();
+
+        //        var latestRegradeAfterUpdate = await _context.RegradeRequests
+        //        .Where(r => r.SubmissionId == submission.SubmissionId)
+        //        .OrderByDescending(r => r.RequestedAt)
+        //        .FirstOrDefaultAsync();
+
+        //        // ️⃣1️⃣ Tạo response y hệt GradeSubmissionResponse
+        //        var response = new GradeSubmissionResponse
+        //        {
+        //            SubmissionId = submission.SubmissionId,
+        //            AssignmentId = submission.AssignmentId,
+        //            UserId = submission.UserId,
+        //            InstructorScore = instructorScore,
+        //            PeerAverageScore = peerScoreNorm,
+        //            FinalScore = finalScore,
+        //            FinalScoreBeforePenalty = finalBeforePenalty,
+        //            MissingReviews = missingReviews,
+        //            MissingReviewPenaltyPerReview = penaltyPer,
+        //            MissingReviewPenaltyTotal = totalPenalty,
+        //            OldScore = submission.OldScore,
+        //            Feedback = submission.Feedback,
+        //            GradedAt = submission.GradedAt,
+        //            FileUrl = submission.FileUrl,
+        //            FileName = submission.FileName,
+        //            Status = submission.Status,
+        //            RegradeRequestStatus = latestRegradeAfterUpdate?.Status,
+        //            StudentName = submission.User?.UserName,
+        //            CourseName = assignment?.CourseInstance?.Course?.CourseName,
+        //            AssignmentTitle = assignment?.Title
+        //        };
+
+
+        //        return new BaseResponse<GradeSubmissionResponse>(
+        //            "Imported grading successfully",
+        //            StatusCodeEnum.OK_200,
+        //            response
+        //        );
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        return new BaseResponse<GradeSubmissionResponse>(
+        //            $"Error importing grade: {ex.Message}",
+        //            StatusCodeEnum.InternalServerError_500,
+        //            null
+        //        );
+        //    }
+        //}
+
+        public async Task<BaseResponse<List<GradeSubmissionResponse>>> ImportGradesFromExcelAsync(IFormFile file)
+        {
+            try
+            {
+                using var stream = new MemoryStream();
+                await file.CopyToAsync(stream);
+
+                using var package = new ExcelPackage(stream);
+                var ws = package.Workbook.Worksheets.FirstOrDefault();
+
+                if (ws == null)
+                    return new BaseResponse<List<GradeSubmissionResponse>>("Invalid Excel file", StatusCodeEnum.BadRequest_400, null);
+
+                var dict = new Dictionary<int, ImportGradeRequest>();
+
+                int row = 2; // BẮT BUỘC START FROM ROW 2
+                while (ws.Cells[row, 3].Value != null)
+                {
+                    if (!int.TryParse(ws.Cells[row, 3].Value.ToString(), out int submissionId))
+                    {
+                        row++;
+                        continue; // BỎ QUA dòng không hợp lệ (header hoặc blank)
+                    }
+
+                    int instructorId = Convert.ToInt32(ws.Cells[row, 4].Value);
+                    int criteriaId = Convert.ToInt32(ws.Cells[row, 6].Value);
+                    decimal score = decimal.Parse(ws.Cells[row, 8].Value.ToString());
+                    string feedback = ws.Cells[row, 9].Value?.ToString();
+
+                    if (!dict.ContainsKey(submissionId))
+                    {
+                        dict[submissionId] = new ImportGradeRequest
+                        {
+                            SubmissionId = submissionId,
+                            InstructorId = instructorId,
+                            CriteriaScores = new List<ImportCriteriaScore>()
+                        };
+                    }
+
+                    dict[submissionId].CriteriaScores.Add(new ImportCriteriaScore
+                    {
+                        CriteriaId = criteriaId,
+                        Score = score,
+                        Feedback = feedback
+                    });
+
+                    row++;
+                }
+
+
+                var results = new List<GradeSubmissionResponse>();
+
+                foreach (var entry in dict)
+                {
+                    var result = await ImportSingleSubmissionAsync(entry.Value);
+                    if (result.Data != null)
+                        results.Add(result.Data);
+                }
+
+                return new BaseResponse<List<GradeSubmissionResponse>>(
+                    "Imported all submissions successfully",
+                    StatusCodeEnum.OK_200,
+                    results
+                );
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<List<GradeSubmissionResponse>>(
+                    $"Error reading Excel: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null
+                );
+            }
+        }
+
+
+        public async Task<BaseResponse<GradeSubmissionResponse>> ImportSingleSubmissionAsync(ImportGradeRequest request)
+        {
+            try
+            {
+                var submission = await _context.Submissions
+                    .Include(s => s.User)
+                    .Include(s => s.Assignment)
+                        .ThenInclude(a => a.CourseInstance)
+                            .ThenInclude(ci => ci.Course)
+                    .Include(s => s.Assignment)
+                        .ThenInclude(a => a.Rubric)
+                        .ThenInclude(r => r.Criteria)
+                    .FirstOrDefaultAsync(s => s.SubmissionId == request.SubmissionId);
+
+                if (submission == null)
+                    return new BaseResponse<GradeSubmissionResponse>("Submission not found", StatusCodeEnum.NotFound_404, null);
+
+                var assignment = submission.Assignment;
+
+                // 🔥 If publish → must check regrade
+                if (assignment.Status == "GradesPublished")
+                {
+                    var latestRegrade = await _context.RegradeRequests
+                        .Where(r => r.SubmissionId == request.SubmissionId)
+                        .OrderByDescending(r => r.RequestedAt)
+                        .FirstOrDefaultAsync();
+
+                    if (latestRegrade == null || latestRegrade.Status != "Approved")
+                        return new BaseResponse<GradeSubmissionResponse>("Cannot regrade: no approved regrade request", StatusCodeEnum.Forbidden_403, null);
+
+                    if (submission.OldScore == null)
+                        submission.OldScore = submission.FinalScore;
+                }
+
+                // Xoá review instructor cũ
+                var oldReviews = await _context.ReviewAssignments
+                    .Where(ra => ra.SubmissionId == submission.SubmissionId && ra.ReviewerUserId == request.InstructorId)
+                    .SelectMany(ra => ra.Reviews)
+                    .Where(r => r.ReviewType == "Instructor")
+                    .ToListAsync();
+
+                foreach (var rv in oldReviews)
+                {
+                    var oldCF = await _context.CriteriaFeedbacks.Where(cf => cf.ReviewId == rv.ReviewId).ToListAsync();
+                    _context.CriteriaFeedbacks.RemoveRange(oldCF);
+                    _context.Reviews.Remove(rv);
+                }
+
+                // ReviewAssignment
+                var raInstructor = await _context.ReviewAssignments
+                    .FirstOrDefaultAsync(x => x.SubmissionId == submission.SubmissionId && x.ReviewerUserId == request.InstructorId);
+
+                if (raInstructor == null)
+                {
+                    raInstructor = new ReviewAssignment
+                    {
+                        SubmissionId = submission.SubmissionId,
+                        ReviewerUserId = request.InstructorId,
+                        AssignedAt = DateTime.UtcNow,
+                        Deadline = DateTime.UtcNow.AddDays(7),
+                        Status = "Completed",
+                        IsAIReview = false
+                    };
+                    _context.ReviewAssignments.Add(raInstructor);
+                    await _context.SaveChangesAsync();
+                }
+
+                // Tạo review
+                var review = new Review
+                {
+                    ReviewAssignmentId = raInstructor.ReviewAssignmentId,
+                    ReviewedAt = DateTime.UtcNow,
+                    ReviewType = "Instructor",
+                    FeedbackSource = "Import",
+                    GeneralFeedback = "Imported grading"
+                };
+
+                _context.Reviews.Add(review);
+                await _context.SaveChangesAsync();
+
+                // Tính điểm instructor theo rubric
+                decimal totalScore = 0, totalWeight = 0;
+
+                foreach (var cs in request.CriteriaScores)
+                {
+                    var criteria = assignment.Rubric.Criteria.FirstOrDefault(c => c.CriteriaId == cs.CriteriaId);
+                    if (criteria == null) continue;
+
+                    var weight = criteria.Weight > 0 ? criteria.Weight : 1;
+                    totalScore += (cs.Score ?? 0) * weight;
+                    totalWeight += weight;
+
+                    _context.CriteriaFeedbacks.Add(new CriteriaFeedback
+                    {
+                        ReviewId = review.ReviewId,
+                        CriteriaId = cs.CriteriaId,
+                        ScoreAwarded = cs.Score,
+                        Feedback = cs.Feedback,
+                        FeedbackSource = "Import"
+                    });
+                }
+
+                decimal instructorScore = totalWeight > 0 ? Math.Round(totalScore / totalWeight, 2) : 0;
+                review.OverallScore = instructorScore;
+
+                await _context.SaveChangesAsync();
+
+                // Peer score
+                var peerAvg = await _reviewAssignmentRepository.GetPeerAverageScoreBySubmissionIdAsync(submission.SubmissionId) ?? 0;
+                bool noPeer = peerAvg == 0;
+
+                // Normalize weights
+                var insW = assignment.InstructorWeight;
+                var peerW = assignment.PeerWeight;
+
+                if (insW + peerW == 0)
+                {
+                    insW = 50; peerW = 50;
+                }
+                else
+                {
+                    var sum = insW + peerW;
+                    insW = (insW / sum) * 100;
+                    peerW = (peerW / sum) * 100;
+                }
+
+                decimal instructorNorm = instructorScore;
+                decimal peerNorm = peerAvg / 10;
+
+                decimal finalScore = noPeer
+                    ? instructorNorm
+                    : Math.Round(instructorNorm * insW / 100 + peerNorm * peerW / 100, 2);
+
+                decimal finalBeforePenalty = finalScore;
+
+                // Penalty missing review
+                int requiredReviews = assignment.NumPeerReviewsRequired;
+
+                int completedReviews = await _context.ReviewAssignments
+                    .Where(ra => ra.SubmissionId == submission.SubmissionId)
+                    .SelectMany(ra => ra.Reviews)
+                    .CountAsync(r => r.ReviewedAt != null);
+
+                int missingReviews = Math.Max(0, requiredReviews - completedReviews);
+
+                decimal penaltyPer = assignment.MissingReviewPenalty ?? 0;
+                decimal totalPenalty = missingReviews * penaltyPer;
+
+                if (totalPenalty > 0)
+                    finalScore = Math.Max(0, finalScore - totalPenalty);
+
+                // Update submission
+                submission.InstructorScore = instructorNorm;
+                submission.PeerAverageScore = peerNorm;
+                submission.FinalScore = finalScore;
+                submission.GradedAt = DateTime.UtcNow;
+                submission.Status = "Graded";
+
+                await _context.SaveChangesAsync();
+
+                var latestRegradeReq = await _context.RegradeRequests
+                    .Where(r => r.SubmissionId == submission.SubmissionId)
+                    .OrderByDescending(r => r.RequestedAt)
+                    .FirstOrDefaultAsync();
+
+                var response = new GradeSubmissionResponse
+                {
+                    SubmissionId = submission.SubmissionId,
+                    AssignmentId = submission.AssignmentId,
+                    UserId = submission.UserId,
+                    InstructorScore = instructorNorm,
+                    PeerAverageScore = peerNorm,
+                    FinalScore = finalScore,
+                    FinalScoreBeforePenalty = finalBeforePenalty,
+                    MissingReviews = missingReviews,
+                    MissingReviewPenaltyPerReview = penaltyPer,
+                    MissingReviewPenaltyTotal = totalPenalty,
+                    OldScore = submission.OldScore,
+                    Feedback = submission.Feedback,
+                    GradedAt = submission.GradedAt,
+                    FileUrl = submission.FileUrl,
+                    FileName = submission.FileName,
+                    Status = submission.Status,
+                    RegradeRequestStatus = latestRegradeReq?.Status,
+                    StudentName = submission.User?.UserName,
+                    CourseName = submission.Assignment?.CourseInstance?.Course?.CourseName,
+                    AssignmentTitle = submission.Assignment?.Title
+                };
+
+                return new BaseResponse<GradeSubmissionResponse>(
+                    "Imported grading successfully",
+                    StatusCodeEnum.OK_200,
+                    response
+                );
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<GradeSubmissionResponse>(
+                    $"Error importing: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null
+                );
             }
         }
 

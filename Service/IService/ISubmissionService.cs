@@ -38,5 +38,9 @@ namespace Service.Interface
         Task<BaseResponse<MyScoreDetailsResponse>> GetMyScoreDetailsAsync(int assignmentId, int studentId);
         Task<IEnumerable<InstructorSubmissionInfoResponse>> GetInstructorSubmissionInfoAsync(
     int userId, int? classId, int? assignmentId);
+        Task<BaseResponse<List<SubmissionDetailExportResponse>>>
+     GetAllSubmissionDetailsForExportAsync(int assignmentId);
+        //Task<BaseResponse<GradeSubmissionResponse>> ImportGradeAsync(ImportGradeRequest request);
+        Task<BaseResponse<List<GradeSubmissionResponse>>> ImportGradesFromExcelAsync(IFormFile file);
     }
 }

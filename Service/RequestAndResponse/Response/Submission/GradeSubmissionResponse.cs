@@ -11,6 +11,7 @@ namespace Service.RequestAndResponse.Response.Submission
         // 🎯 Thông tin điểm số
         public decimal? InstructorScore { get; set; }
         public decimal? PeerAverageScore { get; set; }
+        public decimal? OldScore { get; set; }
         public decimal? FinalScore { get; set; }
 
         // ⭐ NEW: Điểm trước khi trừ penalty
