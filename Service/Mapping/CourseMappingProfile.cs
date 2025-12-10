@@ -17,8 +17,6 @@ namespace Service.Mapping
 
             // Entity to Response
             CreateMap<Course, CourseResponse>()
-                .ForMember(dest => dest.CurriculumName, opt => opt.MapFrom(src => src.Curriculum.CurriculumName))
-                .ForMember(dest => dest.MajorName, opt => opt.MapFrom(src => src.Curriculum.Major.MajorName))
                 .ForMember(dest => dest.CourseInstanceCount, opt => opt.MapFrom(src => src.CourseInstances.Count));
         }
     }

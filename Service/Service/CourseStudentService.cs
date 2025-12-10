@@ -32,6 +32,7 @@ namespace Service.Service
         private readonly IMapper _mapper;
         private readonly UserManager<User> _userManager;
         private readonly IEmailService _emailService;
+        private readonly ICourseInstructorRepository _courseInstructorRepository;
 
 
         public CourseStudentService(
@@ -45,7 +46,8 @@ namespace Service.Service
             IReviewAssignmentRepository reviewAssignmentRepository,
             IMapper mapper,
             UserManager<User> userManager,
-            IEmailService emailService)
+            IEmailService emailService,
+            ICourseInstructorRepository courseInstructorRepository)
         {
             _courseStudentRepository = courseStudentRepository;
             _courseInstanceRepository = courseInstanceRepository;
@@ -58,6 +60,7 @@ namespace Service.Service
             _mapper = mapper;
             _userManager = userManager;
             _emailService = emailService;
+            _courseInstructorRepository = courseInstructorRepository;
         }
 
         public async Task<BaseResponse<List<CourseStudentResponse>>> ImportStudentsFromExcelAsync(int courseInstanceId, Stream fileStream, int? changedByUserId)
@@ -71,14 +74,14 @@ namespace Service.Service
                 if (courseInstance == null)
                     return new BaseResponse<List<CourseStudentResponse>>("Course instance not found", StatusCodeEnum.NotFound_404, null);
 
+                // Check deadline (45 days logic) - Chỉ áp dụng cho Student, Instructor có thể add bất cứ lúc nào
+                // Tuy nhiên logic dưới đây check chung, bạn có thể tách ra nếu muốn.
                 var deadline = courseInstance.StartDate.AddDays(45);
-                if (DateTime.UtcNow > deadline)
-                {
-                    return new BaseResponse<List<CourseStudentResponse>>("Import failed: Cannot add students after 45 days from start date.", StatusCodeEnum.Forbidden_403, null);
-                }
+                bool isPastDeadline = DateTime.UtcNow > deadline;
 
                 var results = new List<CourseStudentResponse>();
-                var skippedStudents = new List<string>();
+                var skippedUsers = new List<string>();
+                int instructorCount = 0;
 
                 User changedBy = null;
                 if (changedByUserId.HasValue) changedBy = await _userManager.FindByIdAsync(changedByUserId.Value.ToString());
@@ -90,68 +93,97 @@ namespace Service.Service
 
                     for (int row = 2; row <= rowCount; row++)
                     {
+                        // Đọc dữ liệu từ Excel
                         var code = worksheet.Cells[row, 2].Value?.ToString().Trim();
-                        var email = worksheet.Cells[row, 6].Value?.ToString().Trim();
                         var surname = worksheet.Cells[row, 3].Value?.ToString().Trim();
                         var middle = worksheet.Cells[row, 4].Value?.ToString().Trim();
                         var given = worksheet.Cells[row, 5].Value?.ToString().Trim();
+                        var email = worksheet.Cells[row, 6].Value?.ToString().Trim();
                         var majorCode = worksheet.Cells[row, 7].Value?.ToString().Trim();
+                        var role = worksheet.Cells[row, 8].Value?.ToString().Trim(); // Cột Role: Student hoặc Instructor
                         var campusVal = worksheet.Cells[row, 9].Value?.ToString()?.Trim();
 
                         if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(email)) continue;
 
+                        // Check Campus
                         if (int.TryParse(campusVal, out int excelCampusId))
                         {
                             if (excelCampusId != courseInstance.CampusId)
                             {
-                                skippedStudents.Add($"{email} (Campus mismatch in file: {excelCampusId} vs Class: {courseInstance.CampusId})");
+                                skippedUsers.Add($"{email} (Campus mismatch: File {excelCampusId} vs Class {courseInstance.CampusId})");
                                 continue;
                             }
                         }
 
+                        // 1. Tạo hoặc Lấy User
                         var user = await _userManager.FindByEmailAsync(email);
                         if (user == null)
                         {
-                            user = await CreateStudentUserAsync(code, surname, middle, given, email, courseInstance.CampusId, majorCode);
+                            // Tạo user mới (Student hoặc Instructor) và gửi mail
+                            user = await CreateUserFromImportAsync(code, surname, middle, given, email, courseInstance.CampusId, role, majorCode);
                         }
 
                         if (user != null)
                         {
                             if (user.CampusId != courseInstance.CampusId)
                             {
-                                skippedStudents.Add($"{email} (Campus mismatch)");
+                                skippedUsers.Add($"{email} (User Campus mismatch)");
                                 continue;
                             }
 
-                            var existing = await _context.CourseStudents
-                                .FirstOrDefaultAsync(cs => cs.CourseInstanceId == courseInstanceId && cs.UserId == user.Id);
-
-                            if (existing == null)
+                            // 2. Phân loại xử lý dựa trên Role
+                            if (string.Equals(role, "Instructor", StringComparison.OrdinalIgnoreCase))
                             {
-                                var cs = new CourseStudent
+                                // --- XỬ LÝ INSTRUCTOR ---
+                                var existingInstructor = await _context.CourseInstructors
+                                    .FirstOrDefaultAsync(ci => ci.CourseInstanceId == courseInstanceId && ci.UserId == user.Id);
+
+                                if (existingInstructor == null)
                                 {
-                                    CourseInstanceId = courseInstanceId,
-                                    UserId = user.Id,
-                                    EnrolledAt = DateTime.UtcNow,
-                                    Status = "Pending",
-                                    ChangedByUserId = changedByUserId
-                                };
-                                var created = await _courseStudentRepository.AddAsync(cs);
-                                results.Add(MapToResponse(created, courseInstance, user, changedBy));
+                                    var ci = new CourseInstructor
+                                    {
+                                        CourseInstanceId = courseInstanceId,
+                                        UserId = user.Id
+                                    };
+                                    await _courseInstructorRepository.AddAsync(ci);
+                                    instructorCount++;
+                                }
+                            }
+                            else // Mặc định là Student
+                            {
+                                // --- XỬ LÝ STUDENT ---
+                                if (isPastDeadline)
+                                {
+                                    skippedUsers.Add($"{email} (Past enrollment deadline)");
+                                    continue;
+                                }
+
+                                var existingStudent = await _context.CourseStudents
+                                    .FirstOrDefaultAsync(cs => cs.CourseInstanceId == courseInstanceId && cs.UserId == user.Id);
+
+                                if (existingStudent == null)
+                                {
+                                    var cs = new CourseStudent
+                                    {
+                                        CourseInstanceId = courseInstanceId,
+                                        UserId = user.Id,
+                                        EnrolledAt = DateTime.UtcNow,
+                                        Status = "Pending",
+                                        ChangedByUserId = changedByUserId
+                                    };
+                                    var created = await _courseStudentRepository.AddAsync(cs);
+                                    results.Add(MapToResponse(created, courseInstance, user, changedBy));
+                                }
                             }
                         }
                     }
                 }
 
-                string message = $"Successfully imported {results.Count} students.";
-                if (skippedStudents.Any())
-                {
-                    message += $" Skipped {skippedStudents.Count} students due to campus mismatch: {string.Join(", ", skippedStudents)}.";
-                }
+                string message = $"Successfully imported {results.Count} students and {instructorCount} instructors.";
 
-                if (results.Count == 0 && skippedStudents.Any())
+                if (skippedUsers.Any())
                 {
-                    return new BaseResponse<List<CourseStudentResponse>>(message, StatusCodeEnum.OK_200, results);
+                    message += $" Skipped {skippedUsers.Count} entries: {string.Join(", ", skippedUsers.Take(5))}...";
                 }
 
                 return new BaseResponse<List<CourseStudentResponse>>(message, StatusCodeEnum.Created_201, results);
@@ -194,19 +226,14 @@ namespace Service.Service
                             continue;
                         }
 
-                        var deadline = courseInstance.StartDate.AddDays(45);
-                        if (DateTime.UtcNow > deadline)
-                        {
-                            sheetResult.Message = "Import failed: Time limit (45 days) exceeded.";
-                            results.SheetResults.Add(sheetResult);
-                            continue;
-                        }
+                        // Check deadline logic if needed (optional)
 
                         sheetResult.CourseInstanceId = courseInstance.CourseInstanceId;
                         sheetResult.CourseName = courseInstance.Course?.CourseName;
 
                         var rowCount = worksheet.Dimension?.Rows ?? 0;
                         int successCount = 0;
+                        int instructorCount = 0;
                         var skippedStudents = new List<string>();
 
                         for (int row = 2; row <= rowCount; row++)
@@ -217,6 +244,7 @@ namespace Service.Service
                             var given = worksheet.Cells[row, 5].Value?.ToString().Trim();
                             var email = worksheet.Cells[row, 6].Value?.ToString().Trim();
                             var majorCode = worksheet.Cells[row, 7].Value?.ToString().Trim();
+                            var role = worksheet.Cells[row, 8].Value?.ToString().Trim(); // Đọc Role
                             var campusVal = worksheet.Cells[row, 9].Value?.ToString()?.Trim();
 
                             if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(email)) continue;
@@ -225,7 +253,7 @@ namespace Service.Service
                             {
                                 if (excelCampusId != courseInstance.CampusId)
                                 {
-                                    skippedStudents.Add($"{email} (Campus mismatch in file: {excelCampusId} vs Class: {courseInstance.CampusId})");
+                                    skippedStudents.Add($"{email} (Campus mismatch)");
                                     continue;
                                 }
                             }
@@ -235,7 +263,8 @@ namespace Service.Service
                                 var user = await _userManager.FindByEmailAsync(email);
                                 if (user == null)
                                 {
-                                    user = await CreateStudentUserAsync(code, surname, middle, given, email, campusId, majorCode);
+                                    // SỬ DỤNG HÀM MỚI (đã có tham số role)
+                                    user = await CreateUserFromImportAsync(code, surname, middle, given, email, campusId, role, majorCode);
                                 }
 
                                 if (user != null)
@@ -246,23 +275,42 @@ namespace Service.Service
                                         continue;
                                     }
 
-                                    var existingCourseStudent = await _context.CourseStudents
-                                        .FirstOrDefaultAsync(cs => cs.CourseInstanceId == courseInstance.CourseInstanceId && cs.UserId == user.Id);
-
-                                    if (existingCourseStudent == null)
+                                    // Logic Instructor vs Student
+                                    if (string.Equals(role, "Instructor", StringComparison.OrdinalIgnoreCase))
                                     {
-                                        var courseStudent = new CourseStudent
+                                        var existingInstructor = await _context.CourseInstructors
+                                            .FirstOrDefaultAsync(ci => ci.CourseInstanceId == courseInstance.CourseInstanceId && ci.UserId == user.Id);
+                                        if (existingInstructor == null)
                                         {
-                                            CourseInstanceId = courseInstance.CourseInstanceId,
-                                            UserId = user.Id,
-                                            EnrolledAt = DateTime.UtcNow,
-                                            Status = "Enrolled",
-                                            ChangedByUserId = changedByUserId
-                                        };
-                                        var created = await _courseStudentRepository.AddAsync(courseStudent);
-                                        var response = MapToResponse(created, courseInstance, user, changedBy);
-                                        sheetResult.ImportedStudents.Add(response);
-                                        successCount++;
+                                            var ci = new CourseInstructor
+                                            {
+                                                CourseInstanceId = courseInstance.CourseInstanceId,
+                                                UserId = user.Id
+                                            };
+                                            await _courseInstructorRepository.AddAsync(ci);
+                                            instructorCount++;
+                                        }
+                                    }
+                                    else // Student
+                                    {
+                                        var existingCourseStudent = await _context.CourseStudents
+                                            .FirstOrDefaultAsync(cs => cs.CourseInstanceId == courseInstance.CourseInstanceId && cs.UserId == user.Id);
+
+                                        if (existingCourseStudent == null)
+                                        {
+                                            var courseStudent = new CourseStudent
+                                            {
+                                                CourseInstanceId = courseInstance.CourseInstanceId,
+                                                UserId = user.Id,
+                                                EnrolledAt = DateTime.UtcNow,
+                                                Status = "Enrolled",
+                                                ChangedByUserId = changedByUserId
+                                            };
+                                            var created = await _courseStudentRepository.AddAsync(courseStudent);
+                                            var response = MapToResponse(created, courseInstance, user, changedBy);
+                                            sheetResult.ImportedStudents.Add(response);
+                                            successCount++;
+                                        }
                                     }
                                 }
                             }
@@ -273,12 +321,11 @@ namespace Service.Service
                         }
 
                         sheetResult.SuccessCount = successCount;
-                        sheetResult.Message = $"Imported {successCount} students.";
+                        sheetResult.Message = $"Imported {successCount} students and {instructorCount} instructors.";
                         if (skippedStudents.Any())
                         {
-                            sheetResult.Message += $" Skipped {skippedStudents.Count} due to campus mismatch: {string.Join(", ", skippedStudents)}.";
+                            sheetResult.Message += $" Skipped {skippedStudents.Count} due to campus mismatch.";
                         }
-
                         results.SheetResults.Add(sheetResult);
                         results.TotalSuccessCount += successCount;
                     }
@@ -290,7 +337,7 @@ namespace Service.Service
                 return new BaseResponse<MultipleCourseImportResponse>($"Error during multiple sheet import: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
-        private async Task<User> CreateStudentUserAsync(string studentCode, string surname, string middleName, string givenName, string email, int campusId, string majorCode = null)
+        private async Task<User> CreateUserFromImportAsync(string code, string surname, string middleName, string givenName, string email, int campusId, string role, string majorCode = null)
         {
             try
             {
@@ -298,25 +345,29 @@ namespace Service.Service
                 {
                     UserName = email.Split('@')[0],
                     Email = email,
-                    StudentCode = studentCode,
+                    StudentCode = code,
                     FirstName = givenName,
                     LastName = $"{surname} {middleName}".Trim(),
                     CampusId = campusId,
                     IsActive = true,
                     CreatedAt = DateTime.UtcNow
                 };
+
                 if (!string.IsNullOrEmpty(majorCode))
                 {
                     var major = await _context.Majors.FirstOrDefaultAsync(m => m.MajorCode == majorCode);
                     if (major != null) user.MajorId = major.MajorId;
                 }
-                // Tạo mật khẩu ngẫu nhiên
+
                 var password = GenerateRandomPassword();
-                var result = await _userManager.CreateAsync(user, password); 
+                var result = await _userManager.CreateAsync(user, password);
+
                 if (result.Succeeded)
                 {
-                    await _userManager.AddToRoleAsync(user, "Student");
-                    await SendWelcomeEmailAsync(user, password);
+                    string roleToAssign = string.Equals(role, "Instructor", StringComparison.OrdinalIgnoreCase) ? "Instructor" : "Student";
+                    await _userManager.AddToRoleAsync(user, roleToAssign);
+                    // Gọi hàm gửi mail mới với đủ 3 tham số
+                    await SendWelcomeEmailAsync(user, password, roleToAssign);
                     return user;
                 }
                 return null;
@@ -333,7 +384,8 @@ namespace Service.Service
                 chars[i] = validChars[random.Next(validChars.Length)];
             }
             return new string(chars);
-        }        public async Task<BaseResponse<CourseStudentResponse>> EnrollStudentAsync(int courseInstanceId, int studentUserId, string enrollKey)
+        }        
+        public async Task<BaseResponse<CourseStudentResponse>> EnrollStudentAsync(int courseInstanceId, int studentUserId, string enrollKey)
         {
             try
             {
@@ -959,29 +1011,78 @@ namespace Service.Service
             };
         }
 
-        private async Task SendWelcomeEmailAsync(User user, string password)
+        private async Task SendWelcomeEmailAsync(User user, string password, string role)
         {
             try
             {
-                string subject = "Welcome to ASDPRS System - Your Account Credentials";
-                string htmlContent = $@"
-                    <html>
-                    <body>
-                        <h2>Welcome to ASDPRS System</h2>
-                        <p>Dear {user.FirstName} {user.LastName},</p>
-                        <p>Your account has been automatically created via course enrollment.</p>
-                        <p><strong>Username:</strong> {user.UserName}</p>
-                        <p><strong>Password:</strong> {password}</p>
-                        <p>Please log in and change your password as soon as possible.</p>
-                        <br>
-                        <p>Best regards,<br>ASDPRS Team</p>
-                    </body>
-                    </html>";
+                string subject;
+                string htmlContent;
+
+                if (role == "Instructor")
+                {
+                    subject = "Official Appointment: ASDPRS System Instructor Credentials";
+                    htmlContent = $@"
+                        <html>
+                        <body style='font-family: Arial, sans-serif; line-height: 1.6; color: #333;'>
+                            <div style='max-width: 600px; margin: 0 auto; border: 1px solid #ddd; padding: 20px; border-radius: 5px;'>
+                                <h2 style='color: #0056b3; text-align: center;'>ASDPRS Academic Portal - Instructor Welcome</h2>
+                                <hr style='border: 0; border-top: 1px solid #eee;' />
+                                
+                                <p>Dear <strong>{user.FirstName} {user.LastName}</strong>,</p>
+                                
+                                <p>We are pleased to inform you that your Instructor account for the <strong>ASDPRS Academic System</strong> has been successfully created. You have been added to the system to manage courses and student assessments.</p>
+                                
+                                <div style='background-color: #f9f9f9; padding: 15px; border-left: 4px solid #0056b3; margin: 20px 0;'>
+                                    <h3 style='margin-top: 0; color: #0056b3;'>📱 Mobile Application Credentials</h3>
+                                    <p>To access the ASDPRS Mobile App for grading and attendance, please use the following credentials:</p>
+                                    <ul style='list-style: none; padding-left: 0;'>
+                                        <li><strong>Username:</strong> <span style='font-family: monospace; font-size: 1.1em;'>{user.UserName}</span></li>
+                                        <li><strong>Password:</strong> <span style='font-family: monospace; font-size: 1.1em; background-color: #eef; padding: 2px 5px; border-radius: 3px;'>{password}</span></li>
+                                    </ul>
+                                    <p style='font-size: 0.9em; color: #666;'><em>*Please change your password upon your first login for security purposes.</em></p>
+                                </div>
+
+                                <div style='margin: 20px 0;'>
+                                    <h3 style='color: #28a745;'>💻 Web Portal Access</h3>
+                                    <p>For the Web Portal (Course Management, Reports), please continue to use the <strong>Google Login</strong> method with your university email address: <strong>{user.Email}</strong>.</p>
+                                </div>
+
+                                <p>If you encounter any issues accessing your account or the assigned courses, please contact the IT Support Department immediately.</p>
+                                
+                                <br>
+                                <p>Sincerely,</p>
+                                <p><strong>ASDPRS Administration Team</strong><br>
+                                <span style='font-size: 0.85em; color: #777;'>Automated System Notification</span></p>
+                            </div>
+                        </body>
+                        </html>";
+                }
+                else // Student Email
+                {
+                    subject = "Welcome to ASDPRS System - Your Account Credentials";
+                    htmlContent = $@"
+                        <html>
+                        <body style='font-family: Arial, sans-serif;'>
+                            <h2>Welcome to ASDPRS System</h2>
+                            <p>Dear {user.FirstName} {user.LastName},</p>
+                            <p>Your student account has been automatically created via course enrollment.</p>
+                            
+                            <p><strong>Username:</strong> {user.UserName}</p>
+                            <p><strong>Password:</strong> {password}</p>
+                            
+                            <p>Please log in and change your password as soon as possible.</p>
+                            <br>
+                            <p>Best regards,<br>ASDPRS Team</p>
+                        </body>
+                        </html>";
+                }
+
                 await _emailService.SendEmail(user.Email, subject, htmlContent);
             }
-            catch
+            catch (Exception ex)
             {
-                // Log error but don't stop the process
+                // Log error (Console/Logger) but ensure the import process doesn't crash
+                Console.WriteLine($"Failed to send email to {user.Email}: {ex.Message}");
             }
         }
     }
