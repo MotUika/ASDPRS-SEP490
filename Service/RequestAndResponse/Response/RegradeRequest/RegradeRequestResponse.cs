@@ -39,6 +39,7 @@ namespace Service.RequestAndResponse.Response.RegradeRequest
 
         public decimal? InstructorScore { get; set; }
         public decimal? PeerAverageScore { get; set; }
+        public decimal? OldScore { get; set; }
         public decimal? FinalScore { get; set; }
         public string Feedback { get; set; }
         public DateTime? GradedAt { get; set; }
@@ -64,6 +65,7 @@ namespace Service.RequestAndResponse.Response.RegradeRequest
     public class GradeInfoResponse
     {
         public decimal? FinalScoreAfterRegrade { get; set; }
+        public decimal? OldScore { get; set; }
         public decimal? InstructorScore { get; set; }
         public decimal? PeerAverageScore { get; set; }
         public string InstructorFeedback { get; set; }
