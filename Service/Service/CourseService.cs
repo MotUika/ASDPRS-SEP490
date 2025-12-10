@@ -75,33 +75,15 @@ namespace Service.Service
         {
             try
             {
-                // Validate if curriculum exists
-                var curriculumExists = await _context.Curriculums.AnyAsync(c => c.CurriculumId == request.CurriculumId);
-                if (!curriculumExists)
-                {
-                    return new BaseResponse<CourseResponse>("Curriculum not found", StatusCodeEnum.NotFound_404, null);
-                }
-
-                // Check for duplicate course code in the same curriculum
-                var duplicateCourse = await _context.Courses
-                    .AnyAsync(c => c.CurriculumId == request.CurriculumId && c.CourseCode == request.CourseCode);
-
-                if (duplicateCourse)
-                {
-                    return new BaseResponse<CourseResponse>("Course code already exists in this curriculum", StatusCodeEnum.BadRequest_400, null);
-                }
-
                 var course = _mapper.Map<Course>(request);
+                course.CurriculumId = 1; 
+                course.Credits = 0;
                 var createdCourse = await _courseRepository.AddAsync(course);
-
-                // Reload with related data for response
                 var courseWithDetails = await _context.Courses
-                    .Include(c => c.Curriculum)
-                        .ThenInclude(cur => cur.Major)
                     .Include(c => c.CourseInstances)
                     .FirstOrDefaultAsync(c => c.CourseId == createdCourse.CourseId);
-
                 var response = _mapper.Map<CourseResponse>(courseWithDetails);
+                response.CourseInstanceCount = courseWithDetails.CourseInstances.Count;
                 return new BaseResponse<CourseResponse>("Course created successfully", StatusCodeEnum.Created_201, response);
             }
             catch (Exception ex)
@@ -115,52 +97,17 @@ namespace Service.Service
             try
             {
                 var existingCourse = await _context.Courses
-                    .Include(c => c.Curriculum)
-                        .ThenInclude(cur => cur.Major)
                     .Include(c => c.CourseInstances)
                     .FirstOrDefaultAsync(c => c.CourseId == request.CourseId);
-
                 if (existingCourse == null)
                 {
                     return new BaseResponse<CourseResponse>("Course not found", StatusCodeEnum.NotFound_404, null);
                 }
-
-                // Validate curriculum if provided
-                if (request.CurriculumId > 0 && request.CurriculumId != existingCourse.CurriculumId)
-                {
-                    var curriculumExists = await _context.Curriculums.AnyAsync(c => c.CurriculumId == request.CurriculumId);
-                    if (!curriculumExists)
-                    {
-                        return new BaseResponse<CourseResponse>("Curriculum not found", StatusCodeEnum.NotFound_404, null);
-                    }
-                }
-
-                // Check for duplicate course code if provided
-                if (!string.IsNullOrEmpty(request.CourseCode) && request.CourseCode != existingCourse.CourseCode)
-                {
-                    var curriculumIdToCheck = request.CurriculumId > 0 ? request.CurriculumId : existingCourse.CurriculumId;
-                    var duplicateCourse = await _context.Courses
-                        .AnyAsync(c => c.CurriculumId == curriculumIdToCheck &&
-                                     c.CourseCode == request.CourseCode &&
-                                     c.CourseId != request.CourseId);
-
-                    if (duplicateCourse)
-                    {
-                        return new BaseResponse<CourseResponse>("Course code already exists in this curriculum", StatusCodeEnum.BadRequest_400, null);
-                    }
-                }
-
-                // Update only provided fields
-                if (request.CurriculumId > 0) existingCourse.CurriculumId = request.CurriculumId;
                 if (!string.IsNullOrEmpty(request.CourseCode)) existingCourse.CourseCode = request.CourseCode;
                 if (!string.IsNullOrEmpty(request.CourseName)) existingCourse.CourseName = request.CourseName;
-                if (request.Credits > 0) existingCourse.Credits = request.Credits;
-
                 existingCourse.IsActive = request.IsActive;
-
                 var updatedCourse = await _courseRepository.UpdateAsync(existingCourse);
                 var response = _mapper.Map<CourseResponse>(updatedCourse);
-
                 return new BaseResponse<CourseResponse>("Course updated successfully", StatusCodeEnum.OK_200, response);
             }
             catch (Exception ex)
