@@ -43,6 +43,21 @@ namespace DataAccessLayer.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "Courses",
+                columns: table => new
+                {
+                    CourseId = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    CourseCode = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    CourseName = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    IsActive = table.Column<bool>(type: "bit", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Courses", x => x.CourseId);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Majors",
                 columns: table => new
                 {
@@ -143,36 +158,6 @@ namespace DataAccessLayer.Migrations
                         column: x => x.MajorId,
                         principalTable: "Majors",
                         principalColumn: "MajorId");
-                });
-
-            migrationBuilder.CreateTable(
-                name: "Curriculums",
-                columns: table => new
-                {
-                    CurriculumId = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
-                    CampusId = table.Column<int>(type: "int", nullable: false),
-                    MajorId = table.Column<int>(type: "int", nullable: false),
-                    CurriculumName = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
-                    CurriculumCode = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
-                    TotalCredits = table.Column<int>(type: "int", nullable: false),
-                    IsActive = table.Column<bool>(type: "bit", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Curriculums", x => x.CurriculumId);
-                    table.ForeignKey(
-                        name: "FK_Curriculums_Campuses_CampusId",
-                        column: x => x.CampusId,
-                        principalTable: "Campuses",
-                        principalColumn: "CampusId",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_Curriculums_Majors_MajorId",
-                        column: x => x.MajorId,
-                        principalTable: "Majors",
-                        principalColumn: "MajorId",
-                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -316,7 +301,8 @@ namespace DataAccessLayer.Migrations
                     IsPublic = table.Column<bool>(type: "bit", nullable: false),
                     CreatedByUserId = table.Column<int>(type: "int", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    MajorId = table.Column<int>(type: "int", nullable: true)
+                    MajorId = table.Column<int>(type: "int", nullable: true),
+                    CourseId = table.Column<int>(type: "int", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -328,10 +314,17 @@ namespace DataAccessLayer.Migrations
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
+                        name: "FK_RubricTemplates_Courses_CourseId",
+                        column: x => x.CourseId,
+                        principalTable: "Courses",
+                        principalColumn: "CourseId",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
                         name: "FK_RubricTemplates_Majors_MajorId",
                         column: x => x.MajorId,
                         principalTable: "Majors",
-                        principalColumn: "MajorId");
+                        principalColumn: "MajorId",
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -355,54 +348,6 @@ namespace DataAccessLayer.Migrations
                         principalTable: "AspNetUsers",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "Courses",
-                columns: table => new
-                {
-                    CourseId = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
-                    CurriculumId = table.Column<int>(type: "int", nullable: false),
-                    CourseCode = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
-                    CourseName = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
-                    Credits = table.Column<int>(type: "int", nullable: false),
-                    IsActive = table.Column<bool>(type: "bit", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Courses", x => x.CourseId);
-                    table.ForeignKey(
-                        name: "FK_Courses_Curriculums_CurriculumId",
-                        column: x => x.CurriculumId,
-                        principalTable: "Curriculums",
-                        principalColumn: "CurriculumId",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "CriteriaTemplates",
-                columns: table => new
-                {
-                    CriteriaTemplateId = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
-                    TemplateId = table.Column<int>(type: "int", nullable: false),
-                    Title = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
-                    Description = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
-                    Weight = table.Column<int>(type: "int", nullable: false),
-                    MaxScore = table.Column<decimal>(type: "decimal(5,2)", precision: 5, scale: 2, nullable: false),
-                    ScoringType = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
-                    ScoreLabel = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_CriteriaTemplates", x => x.CriteriaTemplateId);
-                    table.ForeignKey(
-                        name: "FK_CriteriaTemplates_RubricTemplates_TemplateId",
-                        column: x => x.TemplateId,
-                        principalTable: "RubricTemplates",
-                        principalColumn: "TemplateId",
-                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -443,6 +388,31 @@ namespace DataAccessLayer.Migrations
                         principalTable: "Semesters",
                         principalColumn: "SemesterId",
                         onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "CriteriaTemplates",
+                columns: table => new
+                {
+                    CriteriaTemplateId = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    TemplateId = table.Column<int>(type: "int", nullable: false),
+                    Title = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    Description = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
+                    Weight = table.Column<int>(type: "int", nullable: false),
+                    MaxScore = table.Column<decimal>(type: "decimal(5,2)", precision: 5, scale: 2, nullable: false),
+                    ScoringType = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    ScoreLabel = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_CriteriaTemplates", x => x.CriteriaTemplateId);
+                    table.ForeignKey(
+                        name: "FK_CriteriaTemplates_RubricTemplates_TemplateId",
+                        column: x => x.TemplateId,
+                        principalTable: "RubricTemplates",
+                        principalColumn: "TemplateId",
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -608,6 +578,7 @@ namespace DataAccessLayer.Migrations
                     IsPublic = table.Column<bool>(type: "bit", nullable: false),
                     InstructorScore = table.Column<decimal>(type: "decimal(18,2)", nullable: true),
                     PeerAverageScore = table.Column<decimal>(type: "decimal(18,2)", nullable: true),
+                    OldScore = table.Column<decimal>(type: "decimal(18,2)", nullable: true),
                     FinalScore = table.Column<decimal>(type: "decimal(18,2)", nullable: true),
                     Feedback = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true),
                     GradedAt = table.Column<DateTime>(type: "datetime2", nullable: true)
@@ -894,7 +865,7 @@ namespace DataAccessLayer.Migrations
             migrationBuilder.InsertData(
                 table: "AspNetUsers",
                 columns: new[] { "Id", "AccessFailedCount", "AvatarUrl", "CampusId", "ConcurrencyStamp", "CreatedAt", "Email", "EmailConfirmed", "FirstName", "IsActive", "LastName", "LockoutEnabled", "LockoutEnd", "MajorId", "NormalizedEmail", "NormalizedUserName", "PasswordHash", "PhoneNumber", "PhoneNumberConfirmed", "SecurityStamp", "StudentCode", "TwoFactorEnabled", "UserName" },
-                values: new object[] { 1, 0, null, 1, "745e917c-ad0a-4e62-adf6-0a8b0c495992", new DateTime(2025, 12, 3, 10, 53, 47, 533, DateTimeKind.Utc).AddTicks(283), "admin@example.com", true, "Admin", true, "User", true, null, null, "ADMIN@EXAMPLE.COM", "ADMIN", "AQAAAAIAAYagAAAAEK95SlxvEPzqxJyTxIof0ufhmHVKdEGcuw7MxCBj92JUehpXlaMI0F4RrX3mzLDNzA==", null, false, "7fa51900-fb06-4694-94b5-0199d872ea2a", "ADMIN001", false, "admin" });
+                values: new object[] { 1, 0, null, 1, "c1c7498d-8cdf-47e2-9c9d-f71cb1beb723", new DateTime(2025, 12, 11, 15, 52, 49, 626, DateTimeKind.Utc).AddTicks(1906), "admin@example.com", true, "Admin", true, "User", true, null, null, "ADMIN@EXAMPLE.COM", "ADMIN", "AQAAAAIAAYagAAAAEK95SlxvEPzqxJyTxIof0ufhmHVKdEGcuw7MxCBj92JUehpXlaMI0F4RrX3mzLDNzA==", null, false, "ce6d831e-95a1-4598-b25e-231058e1e6bc", "ADMIN001", false, "admin" });
 
             migrationBuilder.InsertData(
                 table: "AspNetUserRoles",
@@ -906,13 +877,13 @@ namespace DataAccessLayer.Migrations
                 columns: new[] { "ConfigId", "ConfigKey", "ConfigValue", "Description", "UpdatedAt", "UpdatedByUserId" },
                 values: new object[,]
                 {
-                    { 100, "ScorePrecision", "0.5", "Number accuracy (0.25, 0.5, 1.0)", new DateTime(2025, 12, 3, 10, 53, 47, 533, DateTimeKind.Utc).AddTicks(350), 1 },
-                    { 101, "AISummaryMaxTokens", "1000", "Maximum number of tokens for AI summary", new DateTime(2025, 12, 3, 10, 53, 47, 533, DateTimeKind.Utc).AddTicks(352), 1 },
-                    { 102, "AISummaryMaxWords", "200", "Maximum word count for AI summary", new DateTime(2025, 12, 3, 10, 53, 47, 533, DateTimeKind.Utc).AddTicks(353), 1 },
-                    { 103, "DefaultPassThreshold", "50", "Ngưỡng điểm mặc định để Pass", new DateTime(2025, 12, 3, 10, 53, 47, 533, DateTimeKind.Utc).AddTicks(354), 1 },
-                    { 104, "PlagiarismThreshold", "80", "Maximum allowed plagiarism percentage before blocking submission (0-100)", new DateTime(2025, 12, 3, 10, 53, 47, 533, DateTimeKind.Utc).AddTicks(355), 1 },
-                    { 105, "RegradeProcessingDeadlineDays", "7", "Number of days for instructors to process regrade requests", new DateTime(2025, 12, 3, 10, 53, 47, 533, DateTimeKind.Utc).AddTicks(355), 1 },
-                    { 106, "RegradeRequestDeadlineDays", "3", "Number of days after grades are published for students to submit regrade requests", new DateTime(2025, 12, 3, 10, 53, 47, 533, DateTimeKind.Utc).AddTicks(356), 1 }
+                    { 100, "ScorePrecision", "0.5", "Number accuracy (0.25, 0.5, 1.0)", new DateTime(2025, 12, 11, 15, 52, 49, 626, DateTimeKind.Utc).AddTicks(1963), 1 },
+                    { 101, "AISummaryMaxTokens", "1000", "Maximum number of tokens for AI summary", new DateTime(2025, 12, 11, 15, 52, 49, 626, DateTimeKind.Utc).AddTicks(1964), 1 },
+                    { 102, "AISummaryMaxWords", "200", "Maximum word count for AI summary", new DateTime(2025, 12, 11, 15, 52, 49, 626, DateTimeKind.Utc).AddTicks(1965), 1 },
+                    { 103, "DefaultPassThreshold", "50", "Ngưỡng điểm mặc định để Pass", new DateTime(2025, 12, 11, 15, 52, 49, 626, DateTimeKind.Utc).AddTicks(1966), 1 },
+                    { 104, "PlagiarismThreshold", "80", "Maximum allowed plagiarism percentage before blocking submission (0-100)", new DateTime(2025, 12, 11, 15, 52, 49, 626, DateTimeKind.Utc).AddTicks(1967), 1 },
+                    { 105, "RegradeProcessingDeadlineDays", "7", "Number of days for instructors to process regrade requests", new DateTime(2025, 12, 11, 15, 52, 49, 626, DateTimeKind.Utc).AddTicks(1968), 1 },
+                    { 106, "RegradeRequestDeadlineDays", "3", "Number of days after grades are published for students to submit regrade requests", new DateTime(2025, 12, 11, 15, 52, 49, 626, DateTimeKind.Utc).AddTicks(1969), 1 }
                 });
 
             migrationBuilder.CreateIndex(
@@ -1050,11 +1021,6 @@ namespace DataAccessLayer.Migrations
                 column: "UserId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Courses_CurriculumId",
-                table: "Courses",
-                column: "CurriculumId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_CourseStudents_ChangedByUserId",
                 table: "CourseStudents",
                 column: "ChangedByUserId");
@@ -1093,16 +1059,6 @@ namespace DataAccessLayer.Migrations
                 name: "IX_CriteriaTemplates_TemplateId",
                 table: "CriteriaTemplates",
                 column: "TemplateId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Curriculums_CampusId",
-                table: "Curriculums",
-                column: "CampusId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Curriculums_MajorId",
-                table: "Curriculums",
-                column: "MajorId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Notifications_AssignmentId",
@@ -1185,6 +1141,11 @@ namespace DataAccessLayer.Migrations
                 name: "IX_Rubrics_TemplateId",
                 table: "Rubrics",
                 column: "TemplateId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RubricTemplates_CourseId",
+                table: "RubricTemplates",
+                column: "CourseId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_RubricTemplates_CreatedByUserId",
@@ -1290,16 +1251,13 @@ namespace DataAccessLayer.Migrations
                 name: "RubricTemplates");
 
             migrationBuilder.DropTable(
-                name: "Courses");
-
-            migrationBuilder.DropTable(
                 name: "Semesters");
 
             migrationBuilder.DropTable(
                 name: "AspNetUsers");
 
             migrationBuilder.DropTable(
-                name: "Curriculums");
+                name: "Courses");
 
             migrationBuilder.DropTable(
                 name: "AcademicYears");

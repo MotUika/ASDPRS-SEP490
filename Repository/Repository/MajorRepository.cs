@@ -24,14 +24,12 @@ namespace Repository.Repository
         public async Task<IEnumerable<Major>> GetAllAsync()
         {
             return await _context.Majors
-                .Include(m => m.Curriculums)
                 .ToListAsync();
         }
 
         public async Task<Major> GetByIdAsync(int id)
         {
             return await _context.Majors
-                .Include(m => m.Curriculums)
                 .FirstOrDefaultAsync(m => m.MajorId == id);
         }
 

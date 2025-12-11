@@ -34,14 +34,12 @@ namespace Service.Service
             try
             {
                 var major = await _context.Majors
-                    .Include(m => m.Curriculums)
                     .FirstOrDefaultAsync(m => m.MajorId == id);
 
                 if (major == null)
                     return new BaseResponse<MajorResponse>("Major not found", StatusCodeEnum.NotFound_404, null);
 
                 var response = _mapper.Map<MajorResponse>(major);
-                response.CurriculumCount = major.Curriculums?.Count ?? 0;
 
                 return new BaseResponse<MajorResponse>("Major retrieved successfully", StatusCodeEnum.OK_200, response);
             }
@@ -55,12 +53,12 @@ namespace Service.Service
         {
             try
             {
-                var majors = await _context.Majors.Include(m => m.Curriculums).ToListAsync();
+                var majors = await _context.Majors
+                    .ToListAsync();
 
                 var response = majors.Select(m =>
                 {
                     var res = _mapper.Map<MajorResponse>(m);
-                    res.CurriculumCount = m.Curriculums?.Count ?? 0;
                     return res;
                 });
 
@@ -71,7 +69,6 @@ namespace Service.Service
                 return new BaseResponse<IEnumerable<MajorResponse>>($"Error retrieving majors: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
-
         public async Task<BaseResponse<MajorResponse>> CreateMajorAsync(CreateMajorRequest request)
         {
             try

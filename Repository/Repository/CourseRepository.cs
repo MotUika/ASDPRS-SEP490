@@ -21,18 +21,9 @@ namespace Repository.Repository
             _context = context;
         }
 
-        public async Task<IEnumerable<Course>> GetByCurriculumIdAsync(int curriculumId)
-        {
-            return await _context.Courses
-                .Include(c => c.Curriculum)
-                .Where(c => c.CurriculumId == curriculumId)
-                .ToListAsync();
-        }
-
         public async Task<IEnumerable<Course>> GetByCourseCodeAsync(string courseCode)
         {
             return await _context.Courses
-                .Include(c => c.Curriculum)
                 .Where(c => c.CourseCode.Contains(courseCode))
                 .ToListAsync();
         }

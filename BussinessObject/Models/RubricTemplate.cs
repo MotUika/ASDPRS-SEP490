@@ -10,7 +10,6 @@ public class RubricTemplate
     [Required]
     public string Title { get; set; }
 
-    // REMOVED: Description field
     public bool IsPublic { get; set; }
 
     [Required]
@@ -26,6 +25,11 @@ public class RubricTemplate
 
     [ForeignKey(nameof(MajorId))]
     public Major? Major { get; set; }
+
+    public int? CourseId { get; set; }
+
+    [ForeignKey(nameof(CourseId))]
+    public Course? Course { get; set; }
 
     public ICollection<Rubric> Rubrics { get; set; }
     public ICollection<CriteriaTemplate> CriteriaTemplates { get; set; }

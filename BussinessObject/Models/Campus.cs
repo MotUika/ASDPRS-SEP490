@@ -18,7 +18,6 @@ namespace BussinessObject.Models
 
         public ICollection<User> Users { get; set; }
         public ICollection<AcademicYear> AcademicYears { get; set; }
-        public ICollection<Curriculum> Curriculums { get; set; }
         public ICollection<CourseInstance> CourseInstances { get; set; }
     }
 }

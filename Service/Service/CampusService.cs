@@ -35,7 +35,6 @@ namespace Service.Service
                 var campus = await _context.Campuses
                     .Include(c => c.Users)
                     .Include(c => c.AcademicYears)
-                    .Include(c => c.Curriculums)
                     .Include(c => c.CourseInstances)
                     .FirstOrDefaultAsync(c => c.CampusId == id);
 
@@ -47,7 +46,6 @@ namespace Service.Service
                 var response = _mapper.Map<CampusResponse>(campus);
                 response.UserCount = campus.Users?.Count ?? 0;
                 response.AcademicYearCount = campus.AcademicYears?.Count ?? 0;
-                response.CurriculumCount = campus.Curriculums?.Count ?? 0;
                 response.CourseInstanceCount = campus.CourseInstances?.Count ?? 0;
 
                 return new BaseResponse<CampusResponse>("Campus retrieved successfully", StatusCodeEnum.OK_200, response);
@@ -57,7 +55,6 @@ namespace Service.Service
                 return new BaseResponse<CampusResponse>($"Error retrieving campus: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
-
         public async Task<BaseResponse<IEnumerable<CampusResponse>>> GetAllCampusesAsync()
         {
             try
@@ -65,7 +62,6 @@ namespace Service.Service
                 var campuses = await _context.Campuses
                     .Include(c => c.Users)
                     .Include(c => c.AcademicYears)
-                    .Include(c => c.Curriculums)
                     .Include(c => c.CourseInstances)
                     .ToListAsync();
 
@@ -74,7 +70,6 @@ namespace Service.Service
                     var campusResponse = _mapper.Map<CampusResponse>(campus);
                     campusResponse.UserCount = campus.Users?.Count ?? 0;
                     campusResponse.AcademicYearCount = campus.AcademicYears?.Count ?? 0;
-                    campusResponse.CurriculumCount = campus.Curriculums?.Count ?? 0;
                     campusResponse.CourseInstanceCount = campus.CourseInstances?.Count ?? 0;
                     return campusResponse;
                 });
@@ -86,7 +81,6 @@ namespace Service.Service
                 return new BaseResponse<IEnumerable<CampusResponse>>($"Error retrieving campuses: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
-
         public async Task<BaseResponse<CampusResponse>> CreateCampusAsync(CreateCampusRequest request)
         {
             try

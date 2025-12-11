@@ -269,54 +269,29 @@ namespace Service.Service
         {
             try
             {
-                // 🧩 Bước 1: Lấy user + toàn bộ thông tin major
                 var user = await _context.Users
                     .Include(u => u.CourseInstructors)
                         .ThenInclude(ci => ci.CourseInstance)
                             .ThenInclude(ci => ci.Course)
-                                .ThenInclude(c => c.Curriculum)
-                                    .ThenInclude(cur => cur.Major)
                     .FirstOrDefaultAsync(u => u.Id == userId);
 
                 if (user == null)
                 {
-                    return new BaseResponse<IEnumerable<RubricTemplateResponse>>(
-                        $"UserId {userId} not found.",
-                        StatusCodeEnum.NotFound_404,
-                        null);
+                    return new BaseResponse<IEnumerable<RubricTemplateResponse>>($"UserId {userId} not found.", StatusCodeEnum.NotFound_404, null);
                 }
 
-                // 🧠 Bước 2: Xác định tất cả các major mà user liên quan
                 var userMajorIds = new List<int>();
 
                 // major trực tiếp của user (nếu có)
                 if (user.MajorId.HasValue)
                     userMajorIds.Add(user.MajorId.Value);
 
-                // major từ các khóa học user dạy
-                var courseMajors = user.CourseInstructors
-                    .Where(ci => ci.CourseInstance?.Course?.Curriculum?.Major != null)
-                    .Select(ci => ci.CourseInstance.Course.Curriculum.Major.MajorId)
-                    .Distinct()
-                    .ToList();
-
-                userMajorIds.AddRange(courseMajors);
-                userMajorIds = userMajorIds.Distinct().ToList();
-
-                if (!userMajorIds.Any())
-                {
-                    return new BaseResponse<IEnumerable<RubricTemplateResponse>>(
-                        $"UserId {userId} has no associated major.",
-                        StatusCodeEnum.Forbidden_403,
-                        null);
-                }
-
                 // 🧩 Bước 3: Lấy các RubricTemplate có Major phù hợp
                 var rubricTemplates = await _context.RubricTemplates
                  .Include(rt => rt.CreatedByUser)
                  .Include(rt => rt.Rubrics)
                  .Include(rt => rt.CriteriaTemplates)
-                 .Include(rt => rt.Major) // ✅ thêm dòng này
+                 .Include(rt => rt.Major)
                  .Where(rt =>
                      (rt.CreatedByUserId == userId &&
                       (rt.MajorId == null || (rt.MajorId.HasValue && userMajorIds.Contains(rt.MajorId.Value))))
@@ -437,13 +412,10 @@ namespace Service.Service
         {
             try
             {
-                // ✅ Bước 1: Kiểm tra userId tồn tại
                 var user = await _context.Users
                     .Include(u => u.CourseInstructors)
                         .ThenInclude(ci => ci.CourseInstance)
                             .ThenInclude(ci => ci.Course)
-                                .ThenInclude(c => c.Curriculum)
-                                    .ThenInclude(cur => cur.Major)
                     .FirstOrDefaultAsync(u => u.Id == userId);
 
                 if (user == null)
@@ -454,7 +426,6 @@ namespace Service.Service
                         null);
                 }
 
-                // ✅ Bước 2: Kiểm tra MajorId tồn tại
                 var majorExists = await _context.Majors.AnyAsync(m => m.MajorId == majorId);
                 if (!majorExists)
                 {
@@ -464,27 +435,13 @@ namespace Service.Service
                         null);
                 }
 
-                // ✅ Bước 3: Kiểm tra user có dạy môn thuộc major này không
-                var userMajorIds = user.CourseInstructors
-                    .Select(ci => ci.CourseInstance.Course.Curriculum.Major.MajorId)
-                    .Distinct()
-                    .ToList();
 
-                if (!userMajorIds.Contains(majorId))
-                {
-                    return new BaseResponse<IEnumerable<RubricTemplateResponse>>(
-                        $"UserId {userId} does not teach any course in MajorId {majorId}.",
-                        StatusCodeEnum.Forbidden_403,
-                        null);
-                }
-
-                // ✅ Bước 4: Lấy danh sách rubric template
                 var templates = await _context.RubricTemplates
                     .Include(rt => rt.CreatedByUser)
                     .Include(rt => rt.CriteriaTemplates)
                     .Where(rt =>
-                        (rt.IsPublic && rt.MajorId == majorId) ||     // Public rubric đúng ngành
-                        (rt.CreatedByUserId == userId && (rt.MajorId == majorId || rt.MajorId == null)) // Riêng user
+                        (rt.IsPublic && rt.MajorId == majorId) ||     
+                        (rt.CreatedByUserId == userId && (rt.MajorId == majorId || rt.MajorId == null)) 
                     )
                     .ToListAsync();
 
@@ -496,7 +453,6 @@ namespace Service.Service
                         null);
                 }
 
-                // ✅ Bước 5: Map response + lấy các assignment sử dụng template
                 var response = _mapper.Map<IEnumerable<RubricTemplateResponse>>(templates);
 
                 foreach (var template in response)
@@ -533,13 +489,10 @@ namespace Service.Service
         {
             try
             {
-                // 1️⃣ Lấy user + các thông tin course + major
                 var user = await _context.Users
                     .Include(u => u.CourseInstructors)
                         .ThenInclude(ci => ci.CourseInstance)
                             .ThenInclude(ci => ci.Course)
-                                .ThenInclude(c => c.Curriculum)
-                                    .ThenInclude(cur => cur.Major)
                     .FirstOrDefaultAsync(u => u.Id == userId);
 
                 if (user == null)
@@ -550,29 +503,11 @@ namespace Service.Service
                         null);
                 }
 
-                // 2️⃣ Xác định tất cả các major mà user liên quan
                 var userMajorIds = new List<int>();
                 if (user.MajorId.HasValue)
                     userMajorIds.Add(user.MajorId.Value);
 
-                var courseMajors = user.CourseInstructors
-                    .Where(ci => ci.CourseInstance?.Course?.Curriculum?.Major != null)
-                    .Select(ci => ci.CourseInstance.Course.Curriculum.Major.MajorId)
-                    .Distinct()
-                    .ToList();
 
-                userMajorIds.AddRange(courseMajors);
-                userMajorIds = userMajorIds.Distinct().ToList();
-
-                if (!userMajorIds.Any())
-                {
-                    return new BaseResponse<IEnumerable<RubricTemplateResponse>>(
-                        $"UserId {userId} has no associated major.",
-                        StatusCodeEnum.Forbidden_403,
-                        null);
-                }
-
-                // 3️⃣ Lấy các RubricTemplate public và major hợp lệ
                 var rubricTemplates = await _context.RubricTemplates
                     .Include(rt => rt.CreatedByUser)
                     .Include(rt => rt.Rubrics)
