@@ -18,7 +18,6 @@ namespace DataAccessLayer
         public DbSet<User> Users { get; set; }
         public DbSet<AcademicYear> AcademicYears { get; set; }
         public DbSet<Semester> Semesters { get; set; }
-        public DbSet<Curriculum> Curriculums { get; set; }
         public DbSet<Course> Courses { get; set; }
         public DbSet<CourseInstance> CourseInstances { get; set; }
         public DbSet<CourseInstructor> CourseInstructors { get; set; }
@@ -55,12 +54,6 @@ namespace DataAccessLayer
                 .HasMany(c => c.AcademicYears)
                 .WithOne(ay => ay.Campus)
                 .HasForeignKey(ay => ay.CampusId)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            modelBuilder.Entity<Campus>()
-                .HasMany(c => c.Curriculums)
-                .WithOne(cu => cu.Campus)
-                .HasForeignKey(cu => cu.CampusId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<Campus>()
@@ -134,13 +127,6 @@ namespace DataAccessLayer
                 .HasMany(ay => ay.Semesters)
                 .WithOne(s => s.AcademicYear)
                 .HasForeignKey(s => s.AcademicYearId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            // Curriculum
-            modelBuilder.Entity<Curriculum>()
-                .HasMany(cu => cu.Courses)
-                .WithOne(c => c.Curriculum)
-                .HasForeignKey(c => c.CurriculumId)
                 .OnDelete(DeleteBehavior.Cascade);
 
             // Course
@@ -284,6 +270,16 @@ namespace DataAccessLayer
                 .WithOne(ct => ct.Template)
                 .HasForeignKey(ct => ct.TemplateId)
                 .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<RubricTemplate>()
+                .HasOne(rt => rt.Course)
+                .WithMany(c => c.RubricTemplates)
+                .HasForeignKey(rt => rt.CourseId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<RubricTemplate>()
+                .HasOne(rt => rt.Major)
+                .WithMany(m => m.RubricTemplates)
+                .HasForeignKey(rt => rt.MajorId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             // Criteria
             modelBuilder.Entity<Criteria>()
@@ -382,23 +378,6 @@ namespace DataAccessLayer
                 .HasForeignKey(rt => rt.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            modelBuilder.Entity<Major>()
-                .HasMany(m => m.Curriculums)
-                .WithOne(c => c.Major)
-                .HasForeignKey(c => c.MajorId)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            modelBuilder.Entity<Curriculum>()
-                .HasOne(c => c.Major)
-                .WithMany(m => m.Curriculums)
-                .HasForeignKey(c => c.MajorId)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            modelBuilder.Entity<Curriculum>()
-                .HasOne(c => c.Campus)
-                .WithMany(c => c.Curriculums)
-                .HasForeignKey(c => c.CampusId)
-                .OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<Assignment>()
                 .HasIndex(a => a.Title); // Index for search
             modelBuilder.Entity<Assignment>()

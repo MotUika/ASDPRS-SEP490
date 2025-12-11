@@ -374,15 +374,27 @@ namespace Service.Service
         }
         private string GenerateRandomPassword(int length = 12)
         {
-            const string validChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_-+=[{]};:>|./?";
+            const string lowers = "abcdefghijklmnopqrstuvwxyz";
+            const string uppers = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            const string digits = "0123456789";
+            const string specials = "!@#$%^&*()_-+=[{]};:>|./?";
+            const string allChars = lowers + uppers + digits + specials;
+
             var random = new Random();
-            var chars = new char[length];
-            for (int i = 0; i < length; i++)
+            var passwordChars = new List<char>();
+
+            passwordChars.Add(lowers[random.Next(lowers.Length)]);
+            passwordChars.Add(uppers[random.Next(uppers.Length)]);
+            passwordChars.Add(digits[random.Next(digits.Length)]);
+            passwordChars.Add(specials[random.Next(specials.Length)]);
+
+            for (int i = passwordChars.Count; i < length; i++)
             {
-                chars[i] = validChars[random.Next(validChars.Length)];
+                passwordChars.Add(allChars[random.Next(allChars.Length)]);
             }
-            return new string(chars);
-        }        
+
+            return new string(passwordChars.OrderBy(x => random.Next()).ToArray());
+        }
         public async Task<BaseResponse<CourseStudentResponse>> EnrollStudentAsync(int courseInstanceId, int studentUserId, string enrollKey)
         {
             try

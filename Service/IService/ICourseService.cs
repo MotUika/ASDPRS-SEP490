@@ -13,10 +13,8 @@ namespace Service.IService
         Task<BaseResponse<CourseResponse>> CreateCourseAsync(CreateCourseRequest request);
         Task<BaseResponse<CourseResponse>> UpdateCourseAsync(UpdateCourseRequest request);
         Task<BaseResponse<bool>> DeleteCourseAsync(int id);
-        Task<BaseResponse<IEnumerable<CourseResponse>>> GetCoursesByCurriculumAsync(int curriculumId);
         Task<BaseResponse<IEnumerable<CourseResponse>>> GetCoursesByCodeAsync(string courseCode);
         Task<BaseResponse<IEnumerable<CourseResponse>>> GetActiveCoursesAsync();
-        Task<BaseResponse<IEnumerable<CourseResponse>>> GetCoursesByMajorAsync(int majorId);
         Task<BaseResponse<IEnumerable<CourseResponse>>> GetCoursesByUserIdAsync(int userId);
     }
 }

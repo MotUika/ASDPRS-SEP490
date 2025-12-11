@@ -118,7 +118,6 @@ namespace Service.Service
                         null);
                 }
 
-                // Validate config value based on key
                 var validationResult = ValidateConfigValue(request.ConfigKey, request.ConfigValue);
                 if (!validationResult.IsValid)
                 {
@@ -128,12 +127,10 @@ namespace Service.Service
                         null);
                 }
 
-                // Chỉ update ConfigValue, không cho phép thay đổi các field khác
                 config.ConfigValue = request.ConfigValue;
                 config.UpdatedAt = DateTime.UtcNow;
                 config.UpdatedByUserId = request.UpdatedByUserId;
 
-                // Không update Description nếu không cung cấp, nhưng theo request, Description optional nên không update nếu null
                 if (!string.IsNullOrEmpty(request.Description))
                 {
                     config.Description = request.Description;
@@ -165,7 +162,6 @@ namespace Service.Service
             }
         }
 
-        // Helper method để validate config value
         private (bool IsValid, string ErrorMessage) ValidateConfigValue(string key, string value)
         {
             return key switch
@@ -176,7 +172,8 @@ namespace Service.Service
                 "DefaultPassThreshold" => ValidatePercentage(value),
                 "PlagiarismThreshold" => ValidatePercentage(value),
                 "RegradeProcessingDeadlineDays" => ValidatePositiveInteger(value, "RegradeProcessingDeadlineDays"),
-                _ => (true, string.Empty) // Cho phép update các config khác không cần validate
+                "RegradeRequestDeadlineDays" => ValidatePositiveInteger(value, "RegradeRequestDeadlineDays"),
+                _ => (true, string.Empty)
             };
         }
 
@@ -208,7 +205,6 @@ namespace Service.Service
             return (true, string.Empty);
         }
 
-        // Helper method để lấy giá trị config với fallback và type conversion
         public async Task<T> GetConfigValueAsync<T>(string key, T defaultValue = default(T)) where T : IConvertible
         {
             try

@@ -21,7 +21,6 @@ namespace Repository
             services.AddScoped<CourseDAO>();
             services.AddScoped<CriteriaTemplateDAO>();
             services.AddScoped<CriteriaFeedbackDAO>();
-            services.AddScoped<CurriculumDAO>();
             services.AddScoped<SemesterDAO>();
             services.AddScoped<SubmissionDAO>();
             services.AddScoped<CriteriaDAO>();
@@ -46,7 +45,6 @@ namespace Repository
             services.AddScoped<ICourseRepository, CourseRepository>();
             services.AddScoped<ICriteriaTemplateRepository, CriteriaTemplateRepository>();
             services.AddScoped<ICriteriaFeedbackRepository, CriteriaFeedbackRepository>();
-            services.AddScoped<ICurriculumRepository, CurriculumRepository>();
             services.AddScoped<ISemesterRepository, SemesterRepository>();
             services.AddScoped<ISubmissionRepository, SubmissionRepository>();
             services.AddScoped<ICriteriaRepository, CriteriaRepository>();

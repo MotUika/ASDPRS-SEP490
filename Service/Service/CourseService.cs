@@ -33,8 +33,6 @@ namespace Service.Service
             try
             {
                 var course = await _context.Courses
-                    .Include(c => c.Curriculum)
-                        .ThenInclude(cur => cur.Major)
                     .Include(c => c.CourseInstances)
                     .FirstOrDefaultAsync(c => c.CourseId == id);
 
@@ -57,8 +55,6 @@ namespace Service.Service
             try
             {
                 var courses = await _context.Courses
-                    .Include(c => c.Curriculum)
-                        .ThenInclude(cur => cur.Major)
                     .Include(c => c.CourseInstances)
                     .ToListAsync();
 
@@ -76,12 +72,12 @@ namespace Service.Service
             try
             {
                 var course = _mapper.Map<Course>(request);
-                course.CurriculumId = 1; 
-                course.Credits = 0;
+
                 var createdCourse = await _courseRepository.AddAsync(course);
                 var courseWithDetails = await _context.Courses
                     .Include(c => c.CourseInstances)
                     .FirstOrDefaultAsync(c => c.CourseId == createdCourse.CourseId);
+
                 var response = _mapper.Map<CourseResponse>(courseWithDetails);
                 response.CourseInstanceCount = courseWithDetails.CourseInstances.Count;
                 return new BaseResponse<CourseResponse>("Course created successfully", StatusCodeEnum.Created_201, response);
@@ -99,13 +95,17 @@ namespace Service.Service
                 var existingCourse = await _context.Courses
                     .Include(c => c.CourseInstances)
                     .FirstOrDefaultAsync(c => c.CourseId == request.CourseId);
+
                 if (existingCourse == null)
                 {
                     return new BaseResponse<CourseResponse>("Course not found", StatusCodeEnum.NotFound_404, null);
                 }
+
                 if (!string.IsNullOrEmpty(request.CourseCode)) existingCourse.CourseCode = request.CourseCode;
                 if (!string.IsNullOrEmpty(request.CourseName)) existingCourse.CourseName = request.CourseName;
+
                 existingCourse.IsActive = request.IsActive;
+
                 var updatedCourse = await _courseRepository.UpdateAsync(existingCourse);
                 var response = _mapper.Map<CourseResponse>(updatedCourse);
                 return new BaseResponse<CourseResponse>("Course updated successfully", StatusCodeEnum.OK_200, response);
@@ -115,7 +115,6 @@ namespace Service.Service
                 return new BaseResponse<CourseResponse>($"Error updating course: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
-
         public async Task<BaseResponse<bool>> DeleteCourseAsync(int id)
         {
             try
@@ -129,7 +128,6 @@ namespace Service.Service
                     return new BaseResponse<bool>("Course not found", StatusCodeEnum.NotFound_404, false);
                 }
 
-                // Check if course has course instances
                 if (course.CourseInstances.Any())
                 {
                     return new BaseResponse<bool>("Cannot delete course that has course instances", StatusCodeEnum.BadRequest_400, false);
@@ -144,33 +142,11 @@ namespace Service.Service
             }
         }
 
-        public async Task<BaseResponse<IEnumerable<CourseResponse>>> GetCoursesByCurriculumAsync(int curriculumId)
-        {
-            try
-            {
-                var courses = await _context.Courses
-                    .Include(c => c.Curriculum)
-                        .ThenInclude(cur => cur.Major)
-                    .Include(c => c.CourseInstances)
-                    .Where(c => c.CurriculumId == curriculumId)
-                    .ToListAsync();
-
-                var response = _mapper.Map<IEnumerable<CourseResponse>>(courses);
-                return new BaseResponse<IEnumerable<CourseResponse>>("Courses retrieved successfully", StatusCodeEnum.OK_200, response);
-            }
-            catch (Exception ex)
-            {
-                return new BaseResponse<IEnumerable<CourseResponse>>($"Error retrieving courses: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
-            }
-        }
-
         public async Task<BaseResponse<IEnumerable<CourseResponse>>> GetCoursesByCodeAsync(string courseCode)
         {
             try
             {
                 var courses = await _context.Courses
-                    .Include(c => c.Curriculum)
-                        .ThenInclude(cur => cur.Major)
                     .Include(c => c.CourseInstances)
                     .Where(c => c.CourseCode.Contains(courseCode))
                     .ToListAsync();
@@ -189,8 +165,6 @@ namespace Service.Service
             try
             {
                 var courses = await _context.Courses
-                    .Include(c => c.Curriculum)
-                        .ThenInclude(cur => cur.Major)
                     .Include(c => c.CourseInstances)
                     .Where(c => c.IsActive)
                     .ToListAsync();
@@ -204,26 +178,6 @@ namespace Service.Service
             }
         }
 
-        public async Task<BaseResponse<IEnumerable<CourseResponse>>> GetCoursesByMajorAsync(int majorId)
-        {
-            try
-            {
-                var courses = await _context.Courses
-                    .Include(c => c.Curriculum)
-                        .ThenInclude(cur => cur.Major)
-                    .Include(c => c.CourseInstances)
-                    .Where(c => c.Curriculum.MajorId == majorId)
-                    .ToListAsync();
-
-                var response = _mapper.Map<IEnumerable<CourseResponse>>(courses);
-                return new BaseResponse<IEnumerable<CourseResponse>>("Courses retrieved successfully", StatusCodeEnum.OK_200, response);
-            }
-            catch (Exception ex)
-            {
-                return new BaseResponse<IEnumerable<CourseResponse>>($"Error retrieving courses: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
-            }
-        }
-
         public async Task<BaseResponse<IEnumerable<CourseResponse>>> GetCoursesByUserIdAsync(int userId)
         {
             try
@@ -234,8 +188,6 @@ namespace Service.Service
                                      where ciu.UserId == userId
                                      select c)
                                     .Distinct()
-                                    .Include(c => c.Curriculum)
-                                        .ThenInclude(cur => cur.Major)
                                     .Include(c => c.CourseInstances)
                                     .ToListAsync();
 

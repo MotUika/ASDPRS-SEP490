@@ -362,5 +362,23 @@ namespace ASDPRS_SEP490.Controllers
             }
             return Ok(result.Data);
         }
+
+        [HttpPost("forgot-password")]
+        [SwaggerOperation(
+            Summary = "Quên mật khẩu",
+            Description = "Gửi yêu cầu reset mật khẩu. Hệ thống sẽ tạo mật khẩu mới (có chữ hoa, số, ký tự đặc biệt) và gửi về email của người dùng."
+        )]
+        [SwaggerResponse(200, "Gửi mật khẩu mới thành công", typeof(BaseResponse<bool>))]
+        [SwaggerResponse(400, "Dữ liệu không hợp lệ")]
+        public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
+        {
+            if (string.IsNullOrEmpty(request.Email))
+            {
+                return BadRequest(new BaseResponse<bool>("Email is required", StatusCodeEnum.BadRequest_400, false));
+            }
+
+            var result = await _userService.ForgotPasswordAsync(request.Email);
+            return StatusCode((int)result.StatusCode, result);
+        }
     }
 }

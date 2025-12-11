@@ -126,24 +126,6 @@ namespace ASDPRS_SEP490.Controllers
             };
         }
 
-        [HttpGet("curriculum/{curriculumId}")]
-        [SwaggerOperation(
-            Summary = "Lấy danh sách môn học theo chương trình đào tạo",
-            Description = "Trả về danh sách các môn học thuộc chương trình đào tạo được chỉ định"
-        )]
-        [SwaggerResponse(200, "Thành công", typeof(BaseResponse<IEnumerable<CourseResponse>>))]
-        [SwaggerResponse(500, "Lỗi server")]
-        public async Task<IActionResult> GetCoursesByCurriculum(int curriculumId)
-        {
-            var result = await _courseService.GetCoursesByCurriculumAsync(curriculumId);
-
-            return result.StatusCode switch
-            {
-                StatusCodeEnum.OK_200 => Ok(result),
-                _ => StatusCode(500, result)
-            };
-        }
-
         [HttpGet("code/{courseCode}")]
         [SwaggerOperation(
             Summary = "Tìm kiếm môn học theo mã môn học",
@@ -172,24 +154,6 @@ namespace ASDPRS_SEP490.Controllers
         public async Task<IActionResult> GetActiveCourses()
         {
             var result = await _courseService.GetActiveCoursesAsync();
-
-            return result.StatusCode switch
-            {
-                StatusCodeEnum.OK_200 => Ok(result),
-                _ => StatusCode(500, result)
-            };
-        }
-
-        [HttpGet("major/{majorId}")]
-        [SwaggerOperation(
-            Summary = "Lấy danh sách môn học theo ngành",
-            Description = "Trả về danh sách các môn học thuộc về một ngành đào tạo cụ thể dựa trên MajorId"
-        )]
-        [SwaggerResponse(200, "Thành công", typeof(BaseResponse<IEnumerable<CourseResponse>>))]
-        [SwaggerResponse(500, "Lỗi server")]
-        public async Task<IActionResult> GetCoursesByMajor(int majorId)
-        {
-            var result = await _courseService.GetCoursesByMajorAsync(majorId);
 
             return result.StatusCode switch
             {

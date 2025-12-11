@@ -27,7 +27,6 @@ namespace Service
             services.AddAutoMapper(typeof(AcademicYearMappingProfile));
             services.AddAutoMapper(typeof(SemesterMappingProfile));
             services.AddAutoMapper(typeof(CourseMappingProfile));
-            services.AddAutoMapper(typeof(CurriculumProfile));
             services.AddAutoMapper(typeof(CourseInstanceMappingProfile));
             services.AddAutoMapper(typeof(UserMappingProfile));
             services.AddAutoMapper(typeof(RubricTemplateMappingProfile));
@@ -48,7 +47,6 @@ namespace Service
             services.AddScoped<IAcademicYearService, AcademicYearService>();
             services.AddScoped<ISemesterService, SemesterService>();
             services.AddScoped<ICourseService, CourseService>();
-            services.AddScoped<ICurriculumService, CurriculumService>();
             services.AddScoped<ICriteriaTemplateService, CriteriaTemplateService>();
             services.AddScoped<IRubricTemplateService, RubricTemplateService>();
             services.AddScoped<IRubricService, RubricService>();

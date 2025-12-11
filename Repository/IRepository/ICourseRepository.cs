@@ -14,7 +14,6 @@ namespace Repository.IRepository
         Task<Course> UpdateAsync(Course entity);
         Task<Course> DeleteAsync(Course entity);
         Task<IEnumerable<Course>> GetAllAsync();
-        Task<IEnumerable<Course>> GetByCurriculumIdAsync(int curriculumId);
         Task<IEnumerable<Course>> GetByCourseCodeAsync(string courseCode);
     }
 }

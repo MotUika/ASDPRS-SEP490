@@ -22,6 +22,7 @@ namespace Service.IService
         Task<BaseResponse<IEnumerable<UserResponse>>> GetUsersByCampusAsync(int campusId);
         Task<BaseResponse<string>> UpdateUserAvatarAsync(UpdateUserAvatarRequest request);
         Task<BaseResponse<bool>> ChangePasswordAsync(ChangePasswordRequest request);
+        Task<BaseResponse<bool>> ForgotPasswordAsync(string email);
         Task<BaseResponse<bool>> DeactivateUserAsync(int userId);
         Task<BaseResponse<bool>> ActivateUserAsync(int userId);
         Task<BaseResponse<AccountStatisticsResponse>> GetTotalAccountsAsync();

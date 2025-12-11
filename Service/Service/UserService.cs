@@ -3,19 +3,20 @@ using BussinessObject.Models;
 using DataAccessLayer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using OfficeOpenXml;
 using Repository.IRepository;
 using Service.IService;
 using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Enums;
 using Service.RequestAndResponse.Request.User;
 using Service.RequestAndResponse.Response.User;
-using OfficeOpenXml;
 using Service.RequestAndResponse.Response.User.Service.RequestAndResponse.Response.User;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace Service.Service
@@ -382,6 +383,19 @@ namespace Service.Service
                 {
                     return new BaseResponse<bool>("User not found", StatusCodeEnum.NotFound_404, false);
                 }
+                var hasNumber = new Regex(@"[0-9]+");
+                var hasUpperChar = new Regex(@"[A-Z]+");
+                var hasMinimum8Chars = new Regex(@".{8,}");
+                var hasSpecialChar = new Regex(@"[@#$%^&*!]+");
+
+                if (!hasMinimum8Chars.IsMatch(request.NewPassword))
+                    return new BaseResponse<bool>("Password must be at least 8 characters.", StatusCodeEnum.BadRequest_400, false);
+                if (!hasUpperChar.IsMatch(request.NewPassword))
+                    return new BaseResponse<bool>("Password must contain at least one uppercase letter.", StatusCodeEnum.BadRequest_400, false);
+                if (!hasNumber.IsMatch(request.NewPassword))
+                    return new BaseResponse<bool>("Password must contain at least one number.", StatusCodeEnum.BadRequest_400, false);
+                if (!hasSpecialChar.IsMatch(request.NewPassword))
+                    return new BaseResponse<bool>("Password must contain at least one special character (@, #, $, etc.).", StatusCodeEnum.BadRequest_400, false);
 
                 var result = await _userManager.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
                 if (!result.Succeeded)
@@ -394,6 +408,53 @@ namespace Service.Service
             catch (Exception ex)
             {
                 return new BaseResponse<bool>($"Error changing password: {ex.Message}", StatusCodeEnum.InternalServerError_500, false);
+            }
+        }
+        public async Task<BaseResponse<bool>> ForgotPasswordAsync(string email)
+        {
+            try
+            {
+                var user = await _userManager.FindByEmailAsync(email);
+                if (user == null)
+                {
+                    return new BaseResponse<bool>("If the email exists, a new password has been sent.", StatusCodeEnum.OK_200, true);
+                }
+
+                // Tạo mật khẩu mới thỏa mãn điều kiện
+                string newPassword = GenerateStrongPassword();
+
+                // Tạo token reset password (cần thiết vì ta không biết password cũ)
+                var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+
+                // Reset password
+                var result = await _userManager.ResetPasswordAsync(user, token, newPassword);
+
+                if (!result.Succeeded)
+                {
+                    return new BaseResponse<bool>($"Error resetting password: {string.Join(", ", result.Errors.Select(e => e.Description))}", StatusCodeEnum.InternalServerError_500, false);
+                }
+
+                string subject = "ASDPRS System - Password Reset";
+                string htmlContent = $@"
+                <html>
+                <body>
+                    <h2>Password Reset Request</h2>
+                    <p>Dear {user.FirstName} {user.LastName},</p>
+                    <p>Your password has been reset successfully.</p>
+                    <p><strong>New Password:</strong> {newPassword}</p>
+                    <p>Please log in and change your password immediately for security reasons.</p>
+                    <br>
+                    <p>Best regards,<br>ASDPRS Team</p>
+                </body>
+                </html>";
+
+                await _emailService.SendEmail(user.Email, subject, htmlContent);
+
+                return new BaseResponse<bool>("New password has been sent to your email.", StatusCodeEnum.OK_200, true);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<bool>($"Error processing request: {ex.Message}", StatusCodeEnum.InternalServerError_500, false);
             }
         }
 
@@ -574,7 +635,7 @@ namespace Service.Service
 
                 // Generate random password if not provided
                 string password = string.IsNullOrEmpty(request.Password)
-                    ? GenerateRandomPassword()
+                    ? GenerateStrongPassword()
                     : request.Password;
 
                 var result = await _userManager.CreateAsync(user, password);
@@ -713,18 +774,29 @@ namespace Service.Service
             }
         }
 
-        private string GenerateRandomPassword(int length = 12)
+        private string GenerateStrongPassword()
         {
-            const string validChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_-+=[{]};:>|./?";
-            var random = new Random();
-            var chars = new char[length];
+            const int length = 10; 
+            const string lowers = "abcdefghijklmnopqrstuvwxyz";
+            const string uppers = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            const string digits = "0123456789";
+            const string specials = "@#$%^&*!";
 
-            for (int i = 0; i < length; i++)
+            var random = new Random();
+            var passwordChars = new List<char>();
+
+            passwordChars.Add(lowers[random.Next(lowers.Length)]);
+            passwordChars.Add(uppers[random.Next(uppers.Length)]);
+            passwordChars.Add(digits[random.Next(digits.Length)]);
+            passwordChars.Add(specials[random.Next(specials.Length)]);
+
+            string allChars = lowers + uppers + digits + specials;
+            for (int i = passwordChars.Count; i < length; i++)
             {
-                chars[i] = validChars[random.Next(validChars.Length)];
+                passwordChars.Add(allChars[random.Next(allChars.Length)]);
             }
 
-            return new string(chars);
+            return new string(passwordChars.OrderBy(x => random.Next()).ToArray());
         }
 
         public async Task<BaseResponse<List<UserResponse>>> ImportUsersFromExcelAsync(Stream fileStream)
@@ -780,7 +852,7 @@ namespace Service.Service
                             CreatedAt = DateTime.UtcNow
                         };
 
-                        string password = GenerateRandomPassword();
+                        string password = GenerateStrongPassword();
                         var result = await _userManager.CreateAsync(newUser, password);
 
                         if (result.Succeeded)

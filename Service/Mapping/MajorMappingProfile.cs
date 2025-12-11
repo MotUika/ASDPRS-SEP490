@@ -11,8 +11,7 @@ namespace Service.Mapping
         {
             CreateMap<CreateMajorRequest, Major>();
             CreateMap<UpdateMajorRequest, Major>();
-            CreateMap<Major, MajorResponse>()
-                .ForMember(dest => dest.CurriculumCount, opt => opt.MapFrom(src => src.Curriculums != null ? src.Curriculums.Count : 0));
+            CreateMap<Major, MajorResponse>();
         }
     }
 }
