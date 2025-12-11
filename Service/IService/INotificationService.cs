@@ -25,5 +25,6 @@ namespace Service.IService
         Task<BaseResponse<bool>> SendAnnouncementToCourseAsync(SendAnnouncementRequest request, int courseInstanceId);
         Task SendGradesPublishedNotificationToStudents(int assignmentId);
         Task SendInstructorAssignedNotificationAsync(int userId, int courseInstanceId);
+        Task SendDeadlineExtendedNotificationAsync(int assignmentId, DateTime newDeadline);
     }
 }

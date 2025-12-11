@@ -517,6 +517,29 @@ namespace Service.Service
             await CreateNotificationAsync(request);
         }
 
+        public async Task SendDeadlineExtendedNotificationAsync(int assignmentId, DateTime newDeadline)
+        {
+            var assignment = await _assignmentRepository.GetByIdAsync(assignmentId);
+            if (assignment == null) return;
+
+            // Lấy danh sách sinh viên của CourseInstance
+            var students = await _courseStudentRepository.GetByCourseInstanceIdAsync(assignment.CourseInstanceId);
+
+            foreach (var student in students)
+            {
+                var request = new CreateNotificationRequest
+                {
+                    UserId = student.UserId,
+                    Title = "Assignment Deadline Extended",
+                    Message = $"The deadline for assignment '{assignment.Title}' has been extended to {newDeadline}.",
+                    Type = "DeadlineExtended",
+                    AssignmentId = assignment.AssignmentId
+                };
+
+                await CreateNotificationAsync(request);
+            }
+        }
+
 
     }
 }

@@ -40,6 +40,7 @@ namespace Service.Service
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly ISystemConfigService _systemConfigService;
         private readonly IRubricService _rubricService;
+        private readonly ICriteriaService _criteriaService;
         private readonly IRubricTemplateRepository _rubricTemplateRepository;
         private readonly IFileStorageService _fileStorageService;
 
@@ -57,7 +58,8 @@ namespace Service.Service
             ASDPRSContext context,
             INotificationService notificationService,
             IRubricService rubricService,
-            IRubricTemplateRepository rubricTemplateRepository,
+            ICriteriaService criteriaService,
+        IRubricTemplateRepository rubricTemplateRepository,
             IFileStorageService fileStorageService,
             ICriteriaFeedbackRepository criteriaFeedbackRepository, IHttpContextAccessor httpContextAccessor, ISystemConfigService systemConfigService)
         {
@@ -73,6 +75,7 @@ namespace Service.Service
             _context = context;
             _notificationService = notificationService;
             _rubricService = rubricService;
+            _criteriaService = criteriaService;
             _rubricTemplateRepository = rubricTemplateRepository;
             _fileStorageService = fileStorageService;
             _criteriaFeedbackRepository = criteriaFeedbackRepository;
@@ -1087,7 +1090,7 @@ namespace Service.Service
                 // 4. Update deadline
                 assignment.Deadline = newDeadline;
                 await _assignmentRepository.UpdateAsync(assignment);
-
+                await _notificationService.SendDeadlineExtendedNotificationAsync(assignment.AssignmentId, assignment.Deadline);
                 return new BaseResponse<bool>(
                     "Assignment deadline extended successfully",
                     StatusCodeEnum.OK_200,
@@ -2055,7 +2058,30 @@ namespace Service.Service
                         StatusCodeEnum.BadRequest_400,
                         null);
                 }
+                // 🔥 VALIDATE: Criteria must sum to 100
+                var criteriaResponse = await _criteriaService.GetCriteriaByAssignmentIdAsync(assignmentId);
 
+                if (criteriaResponse.Data == null || !criteriaResponse.Data.Any())
+                {
+                    return new BaseResponse<AssignmentResponse>(
+                        "This assignment has no criteria. Please add criteria before publishing.",
+                        StatusCodeEnum.BadRequest_400,
+                        null
+                    );
+                }
+
+                var totalWeight = criteriaResponse.Data.Sum(c => c.Weight);
+
+                if (totalWeight < 100)
+                {
+                    var missing = 100 - totalWeight;
+
+                    return new BaseResponse<AssignmentResponse>(
+                        $"Cannot publish: criteria total weight = {totalWeight}. Missing: {missing}.",
+                        StatusCodeEnum.BadRequest_400,
+                        null
+                    );
+                }
                 // Kiểm tra logic chuyển trạng thái
                 if (assignment.StartDate.HasValue && DateTime.UtcNow < assignment.StartDate.Value)
                 {
