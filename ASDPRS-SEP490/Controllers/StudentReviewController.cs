@@ -759,8 +759,8 @@ public class StudentReviewController : ControllerBase
 
     [HttpPost("assignment/{assignmentId}/check-plagiarism")]
     [SwaggerOperation(
-        Summary = "Kiểm tra tỷ lệ trùng lặp bài nộp (chủ động)",
-        Description = "Sinh viên upload file để check tỷ lệ similarity với các bài khác trong assignment, không lưu file."
+        Summary = "Kiểm tra bài nộp (AI + Similarity)",
+        Description = "Trả về 3 thông số: Độ liên quan (AI), Check gian lận (AI), và Tỷ lệ trùng lặp (Cosine Similarity)."
     )]
     [SwaggerResponse(200, "Thành công", typeof(BaseResponse<PlagiarismCheckResponse>))]
     [SwaggerResponse(403, "Access denied")]

@@ -1562,8 +1562,7 @@ namespace Service.Service
             }
         }
 
-        // method cho check plagiarism chủ động (trả details)
-        public async Task<BaseResponse<PlagiarismCheckResponse>> CheckPlagiarismActiveAsync(int assignmentId, IFormFile file, int? excludeSubmissionId = null)
+        public async Task<BaseResponse<PlagiarismCheckResponse>> CheckPlagiarismActiveAsync(int assignmentId, IFormFile file, int? studentId = null)
         {
             if (file == null)
             {
@@ -1572,52 +1571,81 @@ namespace Service.Service
 
             try
             {
-                // Get threshold from config, default 80%
-                var thresholdStr = await _systemConfigService.GetSystemConfigAsync("PlagiarismThreshold") ?? "80";
-                double threshold = double.Parse(thresholdStr) / 100;
+                // 1. Lấy thông tin Assignment và Student
+                var assignment = await _assignmentRepository.GetByIdAsync(assignmentId);
+                if (assignment == null)
+                    return new BaseResponse<PlagiarismCheckResponse>("Assignment not found", StatusCodeEnum.NotFound_404, null);
 
-                // Extract text from new file
+                var studentName = "Unknown Student";
+                if (studentId.HasValue)
+                {
+                    var student = await _userRepository.GetByIdAsync(studentId.Value);
+                    if (student != null) studentName = $"{student.FirstName} {student.LastName}";
+                }
+
+                // 2. Extract Text từ file upload
                 using var newStream = file.OpenReadStream();
                 string newText = await _documentTextExtractor.ExtractTextAsync(newStream, file.FileName);
 
                 if (string.IsNullOrWhiteSpace(newText))
                 {
-                    return new BaseResponse<PlagiarismCheckResponse>("No text extracted from file", StatusCodeEnum.BadRequest_400, new PlagiarismCheckResponse { MaxSimilarity = 0, IsAboveThreshold = false });
+                    return new BaseResponse<PlagiarismCheckResponse>(
+                        "No text extracted",
+                        StatusCodeEnum.BadRequest_400,
+                        new PlagiarismCheckResponse { RelevantContent = false, ContentChecking = "Empty file", PlagiarismContent = 0 }
+                    );
                 }
 
-                // Get other submissions in same assignment
-                var otherSubmissions = (await _submissionRepository.GetByAssignmentIdAsync(assignmentId))
-                    .Where(s => s.SubmissionId != excludeSubmissionId)
-                    .ToList();
 
-                if (!otherSubmissions.Any())
+                var aiCheckTask = _genAIService.CheckIntegrityAsync(
+                    newText.Length > 8000 ? newText.Substring(0, 8000) : newText,
+                    assignment.Title,
+                    studentName
+                );
+
+                var plagiarismTask = Task.Run(async () =>
                 {
-                    return new BaseResponse<PlagiarismCheckResponse>("No other submissions to compare", StatusCodeEnum.OK_200, new PlagiarismCheckResponse { MaxSimilarity = 0, IsAboveThreshold = false });
-                }
+                    var otherSubmissions = (await _submissionRepository.GetByAssignmentIdAsync(assignmentId))
+                        .Where(s => s.UserId != studentId)
+                        .ToList();
 
-                double maxSimilarity = 0;
+                    if (!otherSubmissions.Any()) return 0.0;
 
-                foreach (var other in otherSubmissions)
-                {
-                    using var otherStream = await _fileStorageService.GetFileStreamAsync(other.FileUrl);
-                    if (otherStream == null) continue;
+                    double maxSim = 0;
+                    foreach (var other in otherSubmissions)
+                    {
+                        using var otherStream = await _fileStorageService.GetFileStreamAsync(other.FileUrl);
+                        if (otherStream == null) continue;
 
-                    string otherText = await _documentTextExtractor.ExtractTextAsync(otherStream, other.FileName);
-                    if (string.IsNullOrWhiteSpace(otherText)) continue;
+                        string otherText = await _documentTextExtractor.ExtractTextAsync(otherStream, other.FileName);
+                        if (string.IsNullOrWhiteSpace(otherText)) continue;
 
-                    double sim = CosineSimilarity(newText, otherText);
-                    if (sim > maxSimilarity) maxSimilarity = sim;
-                }
+                        double sim = CosineSimilarity(newText, otherText);
+                        if (sim > maxSim) maxSim = sim;
+                    }
+                    return maxSim * 100;
+                });
 
+                await Task.WhenAll(aiCheckTask, plagiarismTask);
+
+                var aiResult = await aiCheckTask;
+                var plagiarismPercent = await plagiarismTask;
+
+                // Get Threshold config
+                var thresholdStr = await _systemConfigService.GetSystemConfigAsync("PlagiarismThreshold") ?? "80";
+                double threshold = double.Parse(thresholdStr);
+
+                // 4. Tổng hợp kết quả
                 var response = new PlagiarismCheckResponse
                 {
-                    MaxSimilarity = maxSimilarity * 100,
-                    IsAboveThreshold = maxSimilarity > threshold,
-                    Threshold = threshold * 100
+                    RelevantContent = aiResult.IsRelevant,
+                    ContentChecking = aiResult.CheatDetails,
+                    PlagiarismContent = Math.Round(plagiarismPercent, 2),
+                    Threshold = threshold
                 };
 
                 return new BaseResponse<PlagiarismCheckResponse>(
-                    response.IsAboveThreshold ? "High similarity detected" : "Plagiarism check passed",
+                    "Check completed successfully",
                     StatusCodeEnum.OK_200,
                     response);
             }
@@ -1625,12 +1653,11 @@ namespace Service.Service
             {
                 _logger.LogError(ex, "Error during plagiarism check");
                 return new BaseResponse<PlagiarismCheckResponse>(
-                    $"Error checking plagiarism: {ex.Message}",
+                    $"Error checking: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
                     null);
             }
         }
-
         private double CosineSimilarity(string text1, string text2)
         {
             var vec1 = TextToVector(text1);

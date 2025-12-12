@@ -8,8 +8,12 @@ namespace Service.RequestAndResponse.Response.Submission
 {
     public class PlagiarismCheckResponse
     {
-        public double MaxSimilarity { get; set; }
-        public bool IsAboveThreshold { get; set; }
+        public bool RelevantContent { get; set; }
+
+        public string ContentChecking { get; set; }
+
+        public double PlagiarismContent { get; set; }
+
         public double Threshold { get; set; }
     }
 }
