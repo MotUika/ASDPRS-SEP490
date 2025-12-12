@@ -40,6 +40,7 @@ namespace Service.Service
         private readonly IReviewAssignmentService _reviewAssignmentService;
         private readonly ISystemConfigService _systemConfigService;
         private readonly IDocumentTextExtractor _documentTextExtractor;
+        private readonly IGenAIService _genAIService;
 
         public SubmissionService(
             ISubmissionRepository submissionRepository,
@@ -54,7 +55,7 @@ namespace Service.Service
             IFileStorageService fileStorageService,
             ASDPRSContext context,
             IReviewAssignmentService reviewAssignmentService, ISystemConfigService systemConfigService,
-            IDocumentTextExtractor documentTextExtractor)
+            IDocumentTextExtractor documentTextExtractor, IGenAIService genAIService)
         {
             _submissionRepository = submissionRepository;
             _assignmentRepository = assignmentRepository;
@@ -70,6 +71,7 @@ namespace Service.Service
             _reviewAssignmentService = reviewAssignmentService;
             _systemConfigService = systemConfigService;
             _documentTextExtractor = documentTextExtractor;
+            _genAIService = genAIService;
         }
 
 
