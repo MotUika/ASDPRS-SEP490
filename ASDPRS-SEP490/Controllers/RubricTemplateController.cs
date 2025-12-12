@@ -201,7 +201,7 @@ namespace ASDPRS_SEP490.Controllers
         [HttpGet("major/{majorId}/user/{userId}")]
         [SwaggerOperation(
             Summary = "Lấy Rubric Template theo Major và User",
-            Description = "Trả về danh sách Rubric Template công khai thuộc Major cụ thể, và template riêng của user (nếu có)"
+            Description = "Trả về danh sách Rubric Template công khai thuộc Course cụ thể, và template riêng của user (nếu có)"
         )]
         [SwaggerResponse(200, "Thành công", typeof(BaseResponse<IEnumerable<RubricTemplateResponse>>))]
         [SwaggerResponse(400, "MajorId hoặc UserId không hợp lệ")]
@@ -220,6 +220,36 @@ namespace ASDPRS_SEP490.Controllers
             {
                 StatusCodeEnum.OK_200 => Ok(result),
                 StatusCodeEnum.NotFound_404 => NotFound(result),
+                _ => StatusCode(500, result)
+            };
+        }
+
+        [HttpGet("course/{courseId}/user/{userId}")]
+        [SwaggerOperation(
+            Summary = "Lấy Rubric Template theo Course và User",
+            Description = "Trả về danh sách Rubric Template: \n1. Template công khai thuộc Course đó. \n2. Template riêng do User tạo (thuộc Course đó hoặc template chung)."
+        )]
+        [SwaggerResponse(200, "Thành công", typeof(BaseResponse<IEnumerable<RubricTemplateResponse>>))]
+        [SwaggerResponse(400, "CourseId hoặc UserId không hợp lệ")]
+        [SwaggerResponse(403, "User không dạy môn học này")]
+        [SwaggerResponse(404, "Không tìm thấy template nào")]
+        [SwaggerResponse(500, "Lỗi server")]
+        public async Task<IActionResult> GetRubricTemplatesByUserAndCourse(int courseId, int userId)
+        {
+            if (courseId <= 0 || userId <= 0)
+                return BadRequest(new BaseResponse<IEnumerable<RubricTemplateResponse>>(
+                    "CourseId and UserId must be greater than 0",
+                    StatusCodeEnum.BadRequest_400,
+                    null));
+
+            var result = await _rubricTemplateService.GetRubricTemplatesByUserAndCourseAsync(userId, courseId);
+
+            return result.StatusCode switch
+            {
+                StatusCodeEnum.OK_200 => Ok(result),
+                StatusCodeEnum.NotFound_404 => NotFound(result),
+                StatusCodeEnum.Forbidden_403 => StatusCode(403, result),
+                StatusCodeEnum.BadRequest_400 => BadRequest(result),
                 _ => StatusCode(500, result)
             };
         }

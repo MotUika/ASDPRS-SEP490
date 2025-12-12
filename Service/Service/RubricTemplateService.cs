@@ -269,48 +269,41 @@ namespace Service.Service
         {
             try
             {
-                var user = await _context.Users
-                    .Include(u => u.CourseInstructors)
-                        .ThenInclude(ci => ci.CourseInstance)
-                            .ThenInclude(ci => ci.Course)
-                    .FirstOrDefaultAsync(u => u.Id == userId);
-
-                if (user == null)
+                var userExists = await _context.Users.AnyAsync(u => u.Id == userId);
+                if (!userExists)
                 {
                     return new BaseResponse<IEnumerable<RubricTemplateResponse>>($"UserId {userId} not found.", StatusCodeEnum.NotFound_404, null);
                 }
 
-                var userMajorIds = new List<int>();
 
-                // major trực tiếp của user (nếu có)
-                if (user.MajorId.HasValue)
-                    userMajorIds.Add(user.MajorId.Value);
+                var taughtCourseIds = await _context.CourseInstructors
+                    .Where(ci => ci.UserId == userId)
+                    .Select(ci => ci.CourseInstance.CourseId)
+                    .Distinct()
+                    .ToListAsync();
 
-                // 🧩 Bước 3: Lấy các RubricTemplate có Major phù hợp
                 var rubricTemplates = await _context.RubricTemplates
-                 .Include(rt => rt.CreatedByUser)
-                 .Include(rt => rt.Rubrics)
-                 .Include(rt => rt.CriteriaTemplates)
-                 .Include(rt => rt.Major)
-                 .Where(rt =>
-                     (rt.CreatedByUserId == userId &&
-                      (rt.MajorId == null || (rt.MajorId.HasValue && userMajorIds.Contains(rt.MajorId.Value))))
-                     || (rt.IsPublic && rt.MajorId.HasValue && userMajorIds.Contains(rt.MajorId.Value))
-                 )
-                 .ToListAsync();
+                    .Include(rt => rt.CreatedByUser)
+                    .Include(rt => rt.Rubrics)
+                    .Include(rt => rt.CriteriaTemplates)
+                    .Include(rt => rt.Course)
+                    .Include(rt => rt.Major)
+                    .Where(rt =>
+                        rt.CreatedByUserId == userId ||
+                        (rt.IsPublic && rt.CourseId.HasValue && taughtCourseIds.Contains(rt.CourseId.Value))
+                    )
+                    .ToListAsync();
 
                 if (!rubricTemplates.Any())
                 {
                     return new BaseResponse<IEnumerable<RubricTemplateResponse>>(
-                        $"No rubric templates found for UserId {userId} with their major(s).",
-                        StatusCodeEnum.NotFound_404,
-                        null);
+                        $"No rubric templates found for UserId {userId}.",
+                        StatusCodeEnum.OK_200,
+                        new List<RubricTemplateResponse>());
                 }
 
-                // 🧠 Bước 4: Map sang response
                 var response = _mapper.Map<IEnumerable<RubricTemplateResponse>>(rubricTemplates);
 
-                // 🧩 Bước 5: Gán danh sách assignment có CourseName và ClassName
                 foreach (var template in response)
                 {
                     var assignments = await _rubricTemplateRepository.GetAssignmentsUsingTemplateAsync(template.TemplateId);
@@ -329,7 +322,7 @@ namespace Service.Service
                 }
 
                 return new BaseResponse<IEnumerable<RubricTemplateResponse>>(
-                    $"Found {response.Count()} rubric template(s) accessible to UserId {userId}.",
+                    $"Found {response.Count()} rubric template(s).",
                     StatusCodeEnum.OK_200,
                     response);
             }
@@ -440,8 +433,8 @@ namespace Service.Service
                     .Include(rt => rt.CreatedByUser)
                     .Include(rt => rt.CriteriaTemplates)
                     .Where(rt =>
-                        (rt.IsPublic && rt.MajorId == majorId) ||     
-                        (rt.CreatedByUserId == userId && (rt.MajorId == majorId || rt.MajorId == null)) 
+                        (rt.IsPublic && rt.MajorId == majorId) ||
+                        (rt.CreatedByUserId == userId && (rt.MajorId == majorId || rt.MajorId == null))
                     )
                     .ToListAsync();
 
@@ -485,49 +478,118 @@ namespace Service.Service
             }
         }
 
+        public async Task<BaseResponse<IEnumerable<RubricTemplateResponse>>> GetRubricTemplatesByUserAndCourseAsync(int userId, int courseId)
+        {
+            try
+            {
+                var userExists = await _context.Users.AnyAsync(u => u.Id == userId);
+                if (!userExists)
+                {
+                    return new BaseResponse<IEnumerable<RubricTemplateResponse>>($"UserId {userId} not found.", StatusCodeEnum.BadRequest_400, null);
+                }
+
+                var courseExists = await _context.Courses.AnyAsync(c => c.CourseId == courseId);
+                if (!courseExists)
+                {
+                    return new BaseResponse<IEnumerable<RubricTemplateResponse>>($"CourseId {courseId} not found.", StatusCodeEnum.BadRequest_400, null);
+                }
+
+                var isTeaching = await _context.CourseInstructors
+                    .AnyAsync(ci => ci.UserId == userId && ci.CourseInstance.CourseId == courseId);
+
+                if (!isTeaching)
+                {
+                    return new BaseResponse<IEnumerable<RubricTemplateResponse>>(
+                        $"UserId {userId} does not teach any instance of CourseId {courseId}.",
+                        StatusCodeEnum.Forbidden_403,
+                        null);
+                }
+
+                var templates = await _context.RubricTemplates
+                    .Include(rt => rt.CreatedByUser)
+                    .Include(rt => rt.CriteriaTemplates)
+                    .Include(rt => rt.Course)
+                    .Where(rt =>
+                        (rt.IsPublic && rt.CourseId == courseId) ||
+                        (rt.CreatedByUserId == userId && (rt.CourseId == courseId || rt.CourseId == null))
+                    )
+                    .ToListAsync();
+
+                if (!templates.Any())
+                {
+                    return new BaseResponse<IEnumerable<RubricTemplateResponse>>(
+                        $"No templates found for UserId {userId} and CourseId {courseId}.",
+                        StatusCodeEnum.OK_200,
+                        new List<RubricTemplateResponse>());
+                }
+
+                var response = _mapper.Map<IEnumerable<RubricTemplateResponse>>(templates);
+
+                foreach (var template in response)
+                {
+                    var assignments = await _rubricTemplateRepository.GetAssignmentsUsingTemplateAsync(template.TemplateId);
+                    template.AssignmentsUsingTemplate = assignments?.Any() == true
+                        ? assignments.Select(a => new AssignmentUsingTemplateResponse
+                        {
+                            AssignmentId = a.AssignmentId,
+                            Title = a.Title,
+                            CourseName = a.CourseInstance?.Course?.CourseName,
+                            ClassName = $"{a.CourseInstance?.Course?.CourseName} - {a.CourseInstance?.SectionCode}",
+                            CampusName = a.CourseInstance?.Campus?.CampusName,
+                            Deadline = a.Deadline
+                        }).ToList()
+                        : new List<AssignmentUsingTemplateResponse>();
+                }
+
+                return new BaseResponse<IEnumerable<RubricTemplateResponse>>(
+                    $"Found {response.Count()} template(s) for UserId {userId} and CourseId {courseId}.",
+                    StatusCodeEnum.OK_200,
+                    response);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<IEnumerable<RubricTemplateResponse>>(
+                    $"Error retrieving templates: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
+            }
+        }
+
         public async Task<BaseResponse<IEnumerable<RubricTemplateResponse>>> GetPublicRubricTemplatesByUserIdAsync(int userId)
         {
             try
             {
-                var user = await _context.Users
-                    .Include(u => u.CourseInstructors)
-                        .ThenInclude(ci => ci.CourseInstance)
-                            .ThenInclude(ci => ci.Course)
-                    .FirstOrDefaultAsync(u => u.Id == userId);
-
-                if (user == null)
+                var userExists = await _context.Users.AnyAsync(u => u.Id == userId);
+                if (!userExists)
                 {
-                    return new BaseResponse<IEnumerable<RubricTemplateResponse>>(
-                        $"UserId {userId} not found.",
-                        StatusCodeEnum.NotFound_404,
-                        null);
+                    return new BaseResponse<IEnumerable<RubricTemplateResponse>>($"UserId {userId} not found.", StatusCodeEnum.NotFound_404, null);
                 }
 
-                var userMajorIds = new List<int>();
-                if (user.MajorId.HasValue)
-                    userMajorIds.Add(user.MajorId.Value);
+                var taughtCourseIds = await _context.CourseInstructors
+                    .Where(ci => ci.UserId == userId)
+                    .Select(ci => ci.CourseInstance.CourseId)
+                    .Distinct()
+                    .ToListAsync();
 
+                if (!taughtCourseIds.Any())
+                {
+                    return new BaseResponse<IEnumerable<RubricTemplateResponse>>(
+                        $"UserId {userId} is not teaching any courses.",
+                        StatusCodeEnum.OK_200,
+                        new List<RubricTemplateResponse>());
+                }
 
                 var rubricTemplates = await _context.RubricTemplates
                     .Include(rt => rt.CreatedByUser)
                     .Include(rt => rt.Rubrics)
                     .Include(rt => rt.CriteriaTemplates)
+                    .Include(rt => rt.Course)
                     .Include(rt => rt.Major)
-                    .Where(rt => rt.IsPublic && rt.MajorId.HasValue && userMajorIds.Contains(rt.MajorId.Value))
+                    .Where(rt => rt.IsPublic && rt.CourseId.HasValue && taughtCourseIds.Contains(rt.CourseId.Value))
                     .ToListAsync();
 
-                if (!rubricTemplates.Any())
-                {
-                    return new BaseResponse<IEnumerable<RubricTemplateResponse>>(
-                        $"No public rubric templates found for UserId {userId} with their major(s).",
-                        StatusCodeEnum.NotFound_404,
-                        null);
-                }
-
-                // 4️⃣ Map sang response
                 var response = _mapper.Map<IEnumerable<RubricTemplateResponse>>(rubricTemplates);
 
-                // 5️⃣ Gán danh sách assignments đang sử dụng template
                 foreach (var template in response)
                 {
                     var assignments = await _rubricTemplateRepository.GetAssignmentsUsingTemplateAsync(template.TemplateId);
@@ -545,7 +607,7 @@ namespace Service.Service
                 }
 
                 return new BaseResponse<IEnumerable<RubricTemplateResponse>>(
-                    $"Found {response.Count()} public template(s) accessible to UserId {userId}.",
+                    $"Found {response.Count()} public template(s) relevant to user's courses.",
                     StatusCodeEnum.OK_200,
                     response);
             }

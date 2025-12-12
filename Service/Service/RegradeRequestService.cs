@@ -110,7 +110,15 @@ namespace Service.Service
                         null);
                 }
 
-                // Check if there's already a pending request for this submission
+                var existingRequests = await _regradeRequestRepository.GetBySubmissionIdAsync(request.SubmissionId);
+                if (existingRequests.Count() >= 2)
+                {
+                    return new BaseResponse<RegradeRequestResponse>(
+                        "You have reached the maximum limit of 2 regrade requests for this submission.",
+                        StatusCodeEnum.BadRequest_400,
+                        null);
+                }
+
                 var hasPendingRequest = await _regradeRequestRepository.HasPendingRequestForSubmissionAsync(request.SubmissionId);
                 if (hasPendingRequest)
                 {
@@ -543,7 +551,6 @@ namespace Service.Service
         }
 
 
-
         private async Task<int> GetTotalCountByFilter(GetRegradeRequestsByFilterRequest request)
         {
             var allRequests = await _regradeRequestRepository.GetAllAsync();
@@ -672,8 +679,6 @@ namespace Service.Service
         }
 
 
-
-
         public async Task<BaseResponse<RegradeRequestResponse>> CompleteRegradeRequestAsync(UpdateRegradeRequestStatusByUserRequest request)
         {
             try
@@ -792,8 +797,6 @@ namespace Service.Service
                 );
             }
         }
-
-
 
 
         private async Task SendRegradeNotificationToInstructors(RegradeRequest regradeRequest, Submission submission, Assignment assignment)
