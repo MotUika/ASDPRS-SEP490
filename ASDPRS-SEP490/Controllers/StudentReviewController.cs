@@ -274,9 +274,12 @@ public class StudentReviewController : ControllerBase
     [SwaggerResponse(404, "No available submissions")]
     public async Task<IActionResult> GetRandomReview(int assignmentId)
     {
-        var studentId = GetCurrentStudentId();
-        var result = await _reviewAssignmentService.GetRandomReviewAssignmentAsync(assignmentId, studentId);
-        return StatusCode((int)result.StatusCode, result);
+        return await CheckEnrollmentByAssignmentAndExecute(assignmentId, async () =>
+        {
+            var studentId = GetCurrentStudentId();
+            var result = await _reviewAssignmentService.GetRandomReviewAssignmentAsync(assignmentId, studentId);
+            return StatusCode((int)result.StatusCode, result);
+        });
     }
 
     [HttpGet("assignment/{assignmentId}/random-cross-class-review")]
