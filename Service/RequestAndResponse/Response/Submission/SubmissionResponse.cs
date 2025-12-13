@@ -18,7 +18,7 @@ namespace Service.RequestAndResponse.Response.Submission
         public string FileName { get; set; }
         public string OriginalFileName { get; set; }
         public string Keywords { get; set; }
-        public DateTime SubmittedAt { get; set; }
+        public DateTime? SubmittedAt { get; set; }
         public string Status { get; set; }
         public bool IsPublic { get; set; }
         // 🎯 Thông tin điểm số
