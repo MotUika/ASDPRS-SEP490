@@ -135,6 +135,24 @@ namespace Service.Service
                     );
                 }
 
+                // Validate nằm trong CourseInstance
+                var courseDateValidation = await ValidateAssignmentDatesWithinCourseInstanceAsync(
+                    request.CourseInstanceId,
+                    request.StartDate,
+                    request.Deadline,
+                    request.ReviewDeadline,
+                    request.FinalDeadline
+                );
+
+                if (courseDateValidation != null)
+                {
+                    return new BaseResponse<AssignmentResponse>(
+                        courseDateValidation,
+                        StatusCodeEnum.BadRequest_400,
+                        null
+                    );
+                }
+
                 // Validate weights sum to 100
                 if (request.InstructorWeight + request.PeerWeight != 100)
                 {
@@ -454,7 +472,25 @@ namespace Service.Service
                     );
                 }
 
-                // 🧩 Update các field cơ bản
+                // Validate nằm trong CourseInstance
+                var courseDateValidation = await ValidateAssignmentDatesWithinCourseInstanceAsync(
+                    assignment.CourseInstanceId,
+                    request.StartDate ?? assignment.StartDate,
+                    request.Deadline ?? assignment.Deadline,
+                    request.ReviewDeadline ?? assignment.ReviewDeadline,
+                    request.FinalDeadline ?? assignment.FinalDeadline
+                );
+
+                if (courseDateValidation != null)
+                {
+                    return new BaseResponse<AssignmentResponse>(
+                        courseDateValidation,
+                        StatusCodeEnum.BadRequest_400,
+                        null
+                    );
+                }
+
+                // Update các field cơ bản
                 if (!string.IsNullOrEmpty(request.Title))
                     assignment.Title = request.Title;
 
@@ -508,7 +544,7 @@ namespace Service.Service
                     assignment.PeerWeight = request.PeerWeight.Value;
                 }
 
-                // 🧩 Nếu đổi RubricTemplate → tạo rubric mới
+                //  Nếu đổi RubricTemplate → tạo rubric mới
                 if (request.RubricTemplateId.HasValue &&
                     (!assignment.RubricTemplateId.HasValue ||
                      assignment.RubricTemplateId.Value != request.RubricTemplateId.Value))
@@ -530,10 +566,10 @@ namespace Service.Service
                             null);
                     }
 
-                    // ✅ Gán templateId mới
+                    //  Gán templateId mới
                     assignment.RubricTemplateId = request.RubricTemplateId.Value;
 
-                    // ✅ Tạo rubric hoàn toàn mới (KHÔNG đụng rubric cũ)
+                    //  Tạo rubric hoàn toàn mới (KHÔNG đụng rubric cũ)
                     var newRubricResult = await _rubricService.CreateRubricFromTemplateAsync(
      request.RubricTemplateId.Value,
      assignment.AssignmentId
@@ -541,7 +577,7 @@ namespace Service.Service
 
                     if (newRubricResult.StatusCode == StatusCodeEnum.Created_201 && newRubricResult.Data != null)
                     {
-                        // ✅ Gán rubricId mới
+                        //  Gán rubricId mới
                         assignment.RubricId = newRubricResult.Data.RubricId;
                         assignment.RubricTemplateId = request.RubricTemplateId.Value;
 
@@ -2160,6 +2196,41 @@ namespace Service.Service
             return null; 
         }
 
+        private async Task<string> ValidateAssignmentDatesWithinCourseInstanceAsync(
+    int courseInstanceId,
+    DateTime? startDate,
+    DateTime deadline,
+    DateTime? reviewDeadline,
+    DateTime? finalDeadline)
+        {
+            var courseInstance = await _context.CourseInstances
+                .FirstOrDefaultAsync(ci => ci.CourseInstanceId == courseInstanceId);
+
+            if (courseInstance == null)
+            {
+                return "Course instance not found";
+            }
+
+            var ciStart = courseInstance.StartDate;
+            var ciEnd = courseInstance.EndDate;
+
+            bool IsOutOfRange(DateTime date)
+                => date < ciStart || date > ciEnd;
+
+            if (startDate.HasValue && IsOutOfRange(startDate.Value))
+                return $"StartDate must be within course period ({ciStart:dd/MM/yyyy} - {ciEnd:dd/MM/yyyy})";
+
+            if (IsOutOfRange(deadline))
+                return $"Deadline must be within course period ({ciStart:dd/MM/yyyy} - {ciEnd:dd/MM/yyyy})";
+
+            if (reviewDeadline.HasValue && IsOutOfRange(reviewDeadline.Value))
+                return $"ReviewDeadline must be within course period ({ciStart:dd/MM/yyyy} - {ciEnd:dd/MM/yyyy})";
+
+            if (finalDeadline.HasValue && IsOutOfRange(finalDeadline.Value))
+                return $"FinalDeadline must be within course period ({ciStart:dd/MM/yyyy} - {ciEnd:dd/MM/yyyy})";
+
+            return null; // ✅ OK
+        }
 
 
     }

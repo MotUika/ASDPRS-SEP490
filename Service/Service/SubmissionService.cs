@@ -694,7 +694,7 @@ namespace Service.Service
         {
             try
             {
-                // 1. Lấy Assignment
+                // 1️⃣ Lấy assignment + rubric
                 var assignment = await _assignmentRepository.GetAssignmentWithRubricAsync(assignmentId);
                 if (assignment == null)
                 {
@@ -706,7 +706,7 @@ namespace Service.Service
 
                 var courseInstanceId = assignment.CourseInstanceId;
 
-                // 2. Lấy tất cả sinh viên trong lớp (CourseInstance)
+                // 2️⃣ Lấy toàn bộ sinh viên trong lớp
                 var enrolledStudents = await _context.CourseStudents
                     .Where(cs => cs.CourseInstanceId == courseInstanceId)
                     .Include(cs => cs.User)
@@ -726,23 +726,28 @@ namespace Service.Service
                         });
                 }
 
-                // 3. Lấy submissions
+                // 3️⃣ Lấy submissions của assignment
                 var submissions = await _submissionRepository.GetByAssignmentIdAsync(assignmentId);
 
-                // 4. Tạo danh sách đầy đủ
+                // Map sẵn assignment info (tránh map lặp)
+                var assignmentInfo = _mapper.Map<AssignmentInfoResponse>(assignment);
+
                 var responseList = new List<SubmissionResponse>();
 
+                // 4️⃣ Build danh sách đầy đủ sinh viên
                 foreach (var student in enrolledStudents)
                 {
                     var submission = submissions.FirstOrDefault(s => s.UserId == student.Id);
 
                     if (submission != null)
                     {
-                        responseList.Add(await MapToSubmissionResponse(submission));
+                        // ✅ Có nộp bài
+                        var submissionResponse = await MapToSubmissionResponse(submission);
+                        responseList.Add(submissionResponse);
                     }
                     else
                     {
-                        var assignmentInfo = _mapper.Map<AssignmentInfoResponse>(assignment);
+                        // ❌ Chưa nộp bài
                         var userInfo = _mapper.Map<UserInfoResponse>(student);
 
                         responseList.Add(new SubmissionResponse
@@ -750,24 +755,31 @@ namespace Service.Service
                             SubmissionId = 0,
                             AssignmentId = assignmentId,
                             UserId = student.Id,
+
                             StudentName = $"{student.FirstName} {student.LastName}".Trim(),
                             StudentCode = student.StudentCode,
+
                             CourseName = assignment.CourseInstance?.Course?.CourseName,
                             ClassName = assignment.CourseInstance?.SectionCode,
+
                             FileUrl = null,
                             FileName = null,
                             OriginalFileName = null,
                             Keywords = null,
-                            SubmittedAt = submission.SubmittedAt,
+
+                            SubmittedAt = null, 
                             Status = "Not Submitted",
+
                             IsPublic = false,
                             InstructorScore = null,
                             PeerAverageScore = null,
                             FinalScore = null,
                             Feedback = null,
                             GradedAt = null,
+
                             Assignment = assignmentInfo,
                             User = userInfo,
+
                             ReviewAssignments = new List<SubmissionReviewAssignmentResponse>(),
                             AISummaries = new List<AISummaryResponse>(),
                             RegradeRequests = new List<RegradeRequestSubmissionResponse>()
@@ -775,13 +787,13 @@ namespace Service.Service
                     }
                 }
 
-                // 5. Sắp xếp
+                // 5️⃣ Sắp xếp
                 responseList = responseList
                     .OrderBy(x => x.StudentName)
                     .ThenBy(x => x.StudentCode)
                     .ToList();
 
-                // 6. Tạo response
+                // 6️⃣ Response
                 var response = new SubmissionListResponse
                 {
                     Submissions = responseList,
@@ -796,13 +808,15 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error in GetSubmissionsByAssignmentIdAsync for assignment {assignmentId}");
+                _logger.LogError(ex, $"Error in GetSubmissionsAllStudentByAssignmentIdAsync for assignment {assignmentId}");
+
                 return new BaseResponse<SubmissionListResponse>(
                     "An error occurred while retrieving the submission list",
                     StatusCodeEnum.InternalServerError_500,
                     null);
             }
         }
+
 
         public async Task<BaseResponse<SubmissionListResponse>> GetSubmissionsByUserIdAsync(int userId, int pageNumber = 1, int pageSize = 20)
         {
