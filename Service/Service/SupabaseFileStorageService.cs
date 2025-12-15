@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Service.Interface;
 using Supabase;
@@ -15,21 +16,20 @@ public class SupabaseFileStorageService : IFileStorageService
     private readonly string _bucket;
     private readonly HttpClient _httpClient;
 
-    public SupabaseFileStorageService(ILogger<SupabaseFileStorageService> logger, HttpClient httpClient)
+    public SupabaseFileStorageService(ILogger<SupabaseFileStorageService> logger, HttpClient httpClient, IConfiguration configuration)
     {
         _logger = logger;
         _httpClient = httpClient;
 
-        var url = "https://yznanpovvpvcqtblwggk.supabase.co";
-        var key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6bmFucG92dnB2Y3F0Ymx3Z2drIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1OTU2NjU1NywiZXhwIjoyMDc1MTQyNTU3fQ.LivBDEuCI7VOVbjArzbI3aDdZkSEpwnOXISEE87nTxE";
-        _bucket = "files";
+        var url = configuration["Authentication:Supabase:Url"] ?? throw new ArgumentNullException("Authentication:Supabase:Url is missing in configuration");
+        var key = configuration["Authentication:Supabase:ServiceKey"] ?? throw new ArgumentNullException("Authentication:Supabase:ServiceKey is missing in configuration");
+        _bucket = configuration["Authentication:Supabase:DefaultBucket"] ?? "files";
 
         _client = new Supabase.Client(url, key, new SupabaseOptions
         {
             AutoConnectRealtime = false
         });
-
-        _logger.LogInformation($"✅ Supabase initialized with bucket '{_bucket}'");
+        _logger.LogInformation($"Supabase initialized with bucket '{_bucket}'");
     }
 
     private static string SanitizeFilename(string fileName)

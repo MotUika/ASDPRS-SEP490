@@ -126,12 +126,12 @@ builder.Services.AddControllers().AddNewtonsoftJson(options =>
 
 // Register Repository + Service
 builder.Services.ConfigureRepositoryService(builder.Configuration);
-builder.Services.AddScoped<IFileStorageService, SupabaseFileStorageService>();
 builder.Services.AddSingleton<IDocumentTextExtractor, DocumentTextExtractor>();
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<IFileStorageService, SupabaseFileStorageService>();
 builder.Services.AddHttpClient<IGenAIService, GeminiAiService>();
 builder.Services.ConfigureServiceService(builder.Configuration);
-builder.Services.AddHostedService<AssignmentStatusUpdater>(); // Background job to update assignment statuses
+builder.Services.AddHostedService<AssignmentStatusUpdater>();
 builder.Services.AddScoped(typeof(IBaseRepository<>), typeof(BaseRepository<>));
 builder.Services.AddSignalR();
 
