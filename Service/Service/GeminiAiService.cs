@@ -341,32 +341,38 @@ REQUIREMENTS: Evaluate this criterion. Return format: Score: X | Summary: [conci
         public async Task<(bool IsRelevant, string CheatDetails)> CheckIntegrityAsync(string documentText, string assignmentTitle, string studentName)
         {
             var prompt = $@"
-**STRICT BLIND REVIEW & ANONYMITY CHECK**
+**SUBMISSION INTEGRITY & RELEVANCE ANALYSIS**
 
 ASSIGNMENT TITLE: {assignmentTitle}
 
-DOCUMENT CONTENT:
+DOCUMENT CONTENT (Snippet):
 {documentText}
 
-**YOUR TASKS:**
-1. **Relevance Check:** Determine if the content is RELEVANT to the assignment title (Yes/No).
-2. **Anonymity Check (CRITICAL):** - This submission allows **NO PERSONAL IDENTIFIERS**.
-   - Scan the document for **ANY** Student Name or Student ID/Code appearing in headers, footers, titles, or signatures.
-   - **RULE:** If you find ANY name (even if it looks like the author's name) or ANY ID, set 'hasIdentityIssue' to true.
-   - Ignore names of famous people, authors of cited books, or names in coding examples (e.g., 'String name = ""John"";'). ONLY flag names that identify the submitter.
+**YOUR TASKS (EXECUTE IN ORDER):**
+
+1.  **DOMAIN/SUBJECT CHECK (CRITICAL):** - Identify the academic subject of the **ASSIGNMENT TITLE** (e.g., Public Relations, History, Marketing).
+    - Identify the academic subject of the **DOCUMENT CONTENT** (e.g., Java Coding, OOP, Mathematics).
+    - **RULE:** If the subjects are totally different (e.g., Assignment is 'PR/Business' but Content is 'Coding/Java'), set `isRelevant` to `false`.
+    - *Example:* Assignment 'PR Case Study' vs Content 'Java Singleton Pattern' => `isRelevant: false`.
+
+2.  **ANONYMITY CHECK (BLIND REVIEW):** - Scan the document for **ANY** Student Name or Student ID appearing in headers, footers, or signatures.
+    - **RULE:** If you find ANY personal name (even the author's) or ID, set `hasIdentityIssue` to `true`.
+    - **EXCLUSIONS:** Ignore common words like 'self', 'me', 'author', 'student'. Ignore names of famous people/citations.
 
 **RESPONSE FORMAT:**
 Return a valid JSON object ONLY. No markdown.
 {{
   ""isRelevant"": true/false,
+  ""relevanceReason"": ""[Briefly explain why it matches or mismatches the subject]"",
   ""hasIdentityIssue"": true/false,
-  ""foundName"": ""[The specific name found in the document, or empty]"",
-  ""foundId"": ""[The specific ID found in the document, or empty]""
+  ""foundName"": ""[Name found, or empty]"",
+  ""foundId"": ""[ID found, or empty]"",
+  ""locationSnippet"": ""[Quote where the Name/ID appears]""
 }}";
 
             try
             {
-                var resultJson = await SummarizeAsync(prompt, maxOutputTokens: 300);
+                var resultJson = await SummarizeAsync(prompt, maxOutputTokens: 400);
 
                 resultJson = resultJson.Replace("```json", "").Replace("```", "").Trim();
 
@@ -374,20 +380,22 @@ Return a valid JSON object ONLY. No markdown.
                 var root = doc.RootElement;
 
                 bool isRelevant = root.TryGetProperty("isRelevant", out var relElement) && relElement.GetBoolean();
-                bool hasIdentityIssue = root.TryGetProperty("hasIdentityIssue", out var idIssueElement) && idIssueElement.GetBoolean();
+                string relevanceReason = root.TryGetProperty("relevanceReason", out var reasonEl) ? reasonEl.GetString() : "";
 
-                string foundName = root.TryGetProperty("foundName", out var nameEl) ? nameEl.GetString() : "Unknown";
-                string foundId = root.TryGetProperty("foundId", out var idEl) ? idEl.GetString() : "Unknown";
+                bool hasIdentityIssue = root.TryGetProperty("hasIdentityIssue", out var idIssueElement) && idIssueElement.GetBoolean();
+                string foundName = root.TryGetProperty("foundName", out var nameEl) ? nameEl.GetString() : "";
+                string foundId = root.TryGetProperty("foundId", out var idEl) ? idEl.GetString() : "";
+                string locationSnippet = root.TryGetProperty("locationSnippet", out var locEl) ? locEl.GetString() : "";
 
                 if (hasIdentityIssue)
                 {
-                    string cheatDetails = $"The submission contains the name {foundName} and student ID {foundId}, which is not allowed and is considered a violation of integrity.";
+                    string cheatDetails = $"The submission contains the name '{foundName}' and student ID '{foundId}' (found in: \"{locationSnippet}\"), which is not allowed and is considered a violation of integrity.";
                     return (isRelevant, cheatDetails);
                 }
 
                 if (!isRelevant)
                 {
-                    return (false, "The submission content is not relevant to the assignment.");
+                    return (false, $"Irrelevant Content: {relevanceReason}");
                 }
 
                 return (true, "No anomalies detected");
