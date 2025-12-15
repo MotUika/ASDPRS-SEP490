@@ -46,8 +46,8 @@ namespace Service.RequestAndResponse.Response.Assignment
         public int ReviewCount { get; set; }
         public string Status { get; set; }       // trạng thái thực (Active, Closed, InReview,...)
         public string UiStatus { get; set; }     // hiển thị cho UI (Due Soon, Overdue,...)
-        public bool IsActive => StartDate == null || DateTime.UtcNow >= StartDate;
-        public bool IsOverdue => DateTime.UtcNow > Deadline;
-        public int DaysUntilDeadline => (int)(Deadline - DateTime.UtcNow).TotalDays;
+        public bool IsActive => StartDate == null || DateTime.UtcNow.AddHours(7) >= StartDate;
+        public bool IsOverdue => DateTime.UtcNow.AddHours(7) > Deadline;
+        public int DaysUntilDeadline => (int)(Deadline - DateTime.UtcNow.AddHours(7)).TotalDays;
     }
 }

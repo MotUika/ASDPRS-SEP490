@@ -96,7 +96,7 @@ namespace Service.Service
                 if (user == null)
                     return new BaseResponse<SubmissionResponse>("User not found", StatusCodeEnum.NotFound_404, null);
 
-                var now = DateTime.UtcNow;
+                var now = DateTime.UtcNow.AddHours(7);
                 if (assignment.StartDate.HasValue && now < assignment.StartDate.Value)
                 {
                     return new BaseResponse<SubmissionResponse>(
@@ -133,7 +133,7 @@ namespace Service.Service
                     FileName = uploadResult.FileName,      // object path in bucket (useful to delete)
                     OriginalFileName = request.File.FileName,
                     Keywords = request.Keywords,
-                    SubmittedAt = DateTime.UtcNow,
+                    SubmittedAt = DateTime.UtcNow.AddHours(7),
                     Status = "Submitted",
                     IsPublic = request.IsPublic
                 };
@@ -180,7 +180,7 @@ namespace Service.Service
                 if (user == null)
                     return new BaseResponse<SubmissionResponse>("User not found", StatusCodeEnum.NotFound_404, null);
 
-                var now = DateTime.UtcNow;
+                var now = DateTime.UtcNow.AddHours(7);
                 if (assignment.StartDate.HasValue && now < assignment.StartDate.Value)
                 {
                     return new BaseResponse<SubmissionResponse>(
@@ -224,7 +224,7 @@ namespace Service.Service
                     FileName = uploadResult.FileName,
                     OriginalFileName = request.File.FileName,
                     Keywords = request.Keywords,
-                    SubmittedAt = DateTime.UtcNow,
+                    SubmittedAt = DateTime.UtcNow.AddHours(7),
                     Status = "Submitted",
                     IsPublic = request.IsPublic
                 };
@@ -358,7 +358,7 @@ namespace Service.Service
                     ConfigKey = configKey,
                     ConfigValue = value,
                     Description = "Submission config",
-                    UpdatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow.AddHours(7),
                     UpdatedByUserId = 1  // Assume, or pass
                 };
                 _context.SystemConfigs.Add(config);
@@ -366,7 +366,7 @@ namespace Service.Service
             else
             {
                 config.ConfigValue = value;
-                config.UpdatedAt = DateTime.UtcNow;
+                config.UpdatedAt = DateTime.UtcNow.AddHours(7);
                 // UpdatedBy
             }
 
@@ -1092,7 +1092,7 @@ namespace Service.Service
                     return new BaseResponse<bool>("Access denied", StatusCodeEnum.Forbidden_403, false);
 
                 var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
-                var now = DateTime.UtcNow;
+                var now = DateTime.UtcNow.AddHours(7);
 
                 if (assignment.Status != AssignmentStatusEnum.Active.ToString())
                 {
@@ -1279,8 +1279,8 @@ namespace Service.Service
                         {
                             SubmissionId = submission.SubmissionId,
                             ReviewerUserId = request.InstructorId,
-                            AssignedAt = DateTime.UtcNow,
-                            Deadline = DateTime.UtcNow.AddDays(7),
+                            AssignedAt = DateTime.UtcNow.AddHours(7),
+                            Deadline = DateTime.UtcNow.AddHours(7).AddDays(7),
                             Status = "Completed",
                             IsAIReview = false
                         };
@@ -1294,7 +1294,7 @@ namespace Service.Service
                         ReviewAssignmentId = instructorReviewAssignment.ReviewAssignmentId,
                         OverallScore = 0,
                         GeneralFeedback = request.Feedback,
-                        ReviewedAt = DateTime.UtcNow,
+                        ReviewedAt = DateTime.UtcNow.AddHours(7),
                         ReviewType = "Instructor",
                         FeedbackSource = "Instructor"
                     };
@@ -1352,8 +1352,8 @@ namespace Service.Service
                         {
                             SubmissionId = submission.SubmissionId,
                             ReviewerUserId = request.InstructorId,
-                            AssignedAt = DateTime.UtcNow,
-                            Deadline = DateTime.UtcNow.AddDays(7),
+                            AssignedAt = DateTime.UtcNow.AddHours(7),
+                            Deadline = DateTime.UtcNow.AddHours(7).AddDays(7),
                             Status = "Completed",
                             IsAIReview = false
                         };
@@ -1366,7 +1366,7 @@ namespace Service.Service
                         ReviewAssignmentId = reviewAssignment.ReviewAssignmentId,
                         OverallScore = null,
                         GeneralFeedback = request.Feedback,
-                        ReviewedAt = DateTime.UtcNow,
+                        ReviewedAt = DateTime.UtcNow.AddHours(7),
                         ReviewType = "Instructor",
                         FeedbackSource = "Instructor"
                     };
@@ -1731,7 +1731,7 @@ namespace Service.Service
                             Note = "Assignment is already in 'GradesPublished' status."
                         });
                 }
-                var now = DateTime.UtcNow;
+                var now = DateTime.UtcNow.AddHours(7);
                 var finalDeadline = assignment.FinalDeadline ?? assignment.Deadline;
                 var isPastDeadline = now > finalDeadline;
 
@@ -1794,7 +1794,7 @@ namespace Service.Service
 
                 // === PUBLIC THÀNH CÔNG ===
                 bool changed = false;
-                var publicTime = DateTime.UtcNow;
+                var publicTime = DateTime.UtcNow.AddHours(7);
                 foreach (var s in submissions.Where(s => s.Status == "Graded" || s.FinalScore == 0))
                 {
                     s.IsPublic = true;
@@ -2153,7 +2153,7 @@ namespace Service.Service
                 }
 
                 // 4. Only grade zero after ReviewDeadline
-                var now = DateTime.UtcNow;
+                var now = DateTime.UtcNow.AddHours(7);
                 if (assignment.ReviewDeadline.HasValue && now <= assignment.ReviewDeadline.Value)
                 {
                     return new BaseResponse<AutoGradeZeroResponse>(
@@ -2587,8 +2587,8 @@ namespace Service.Service
         //            {
         //                SubmissionId = submission.SubmissionId,
         //                ReviewerUserId = request.InstructorId,
-        //                AssignedAt = DateTime.UtcNow,
-        //                Deadline = DateTime.UtcNow.AddDays(7),
+        //                AssignedAt = DateTime.UtcNow.AddHours(7),
+        //                Deadline = DateTime.UtcNow.AddHours(7).AddDays(7),
         //                Status = "Completed",
         //                IsAIReview = false
         //            };
@@ -2600,7 +2600,7 @@ namespace Service.Service
         //        var review = new Review
         //        {
         //            ReviewAssignmentId = raInstructor.ReviewAssignmentId,
-        //            ReviewedAt = DateTime.UtcNow,
+        //            ReviewedAt = DateTime.UtcNow.AddHours(7),
         //            ReviewType = "Instructor",
         //            GeneralFeedback = "Imported grading",
         //            FeedbackSource = "Import"
@@ -2691,7 +2691,7 @@ namespace Service.Service
         //        submission.InstructorScore = instructorScoreNorm;
         //        submission.PeerAverageScore = peerScoreNorm;
         //        submission.FinalScore = finalScore;
-        //        submission.GradedAt = DateTime.UtcNow;
+        //        submission.GradedAt = DateTime.UtcNow.AddHours(7);
         //        submission.Status = "Graded";
 
         //        await _context.SaveChangesAsync();
@@ -2877,8 +2877,8 @@ namespace Service.Service
                     {
                         SubmissionId = submission.SubmissionId,
                         ReviewerUserId = request.InstructorId,
-                        AssignedAt = DateTime.UtcNow,
-                        Deadline = DateTime.UtcNow.AddDays(7),
+                        AssignedAt = DateTime.UtcNow.AddHours(7),
+                        Deadline = DateTime.UtcNow.AddHours(7).AddDays(7),
                         Status = "Completed",
                         IsAIReview = false
                     };
@@ -2890,7 +2890,7 @@ namespace Service.Service
                 var review = new Review
                 {
                     ReviewAssignmentId = raInstructor.ReviewAssignmentId,
-                    ReviewedAt = DateTime.UtcNow,
+                    ReviewedAt = DateTime.UtcNow.AddHours(7),
                     ReviewType = "Instructor",
                     FeedbackSource = "Import",
                     GeneralFeedback = "Imported grading"
@@ -2974,7 +2974,7 @@ namespace Service.Service
                 submission.InstructorScore = instructorNorm;
                 submission.PeerAverageScore = peerNorm;
                 submission.FinalScore = finalScore;
-                submission.GradedAt = DateTime.UtcNow;
+                submission.GradedAt = DateTime.UtcNow.AddHours(7);
                 submission.Status = "Graded";
 
                 await _context.SaveChangesAsync();

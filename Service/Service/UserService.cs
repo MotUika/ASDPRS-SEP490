@@ -849,7 +849,7 @@ namespace Service.Service
                             CampusId = campusId,
                             MajorId = majorId,
                             IsActive = true,
-                            CreatedAt = DateTime.UtcNow
+                            CreatedAt = DateTime.UtcNow.AddHours(7)
                         };
 
                         string password = GenerateStrongPassword();

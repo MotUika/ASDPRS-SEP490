@@ -92,7 +92,7 @@ namespace Service.Service
                     var requestDeadlineDays = await _systemConfigService.GetConfigValueAsync<int>("RegradeRequestDeadlineDays", 3);
                     var requestDeadline = submission.GradedAt.Value.AddDays(requestDeadlineDays);
 
-                    if (DateTime.UtcNow > requestDeadline)
+                    if (DateTime.UtcNow.AddHours(7) > requestDeadline)
                     {
                         return new BaseResponse<RegradeRequestResponse>(
                             $"Regrade request deadline has passed. Students must submit requests within {requestDeadlineDays} days after grades are published (Deadline: {requestDeadline:yyyy-MM-dd HH:mm})",
@@ -101,7 +101,6 @@ namespace Service.Service
                     }
                 }
 
-                // Check if student exists and is the owner of the submission
                 if (submission.UserId != request.RequestedByUserId)
                 {
                     return new BaseResponse<RegradeRequestResponse>(
@@ -128,13 +127,12 @@ namespace Service.Service
                         null);
                 }
 
-                // Create new regrade request
                 var regradeRequest = new RegradeRequest
                 {
                     SubmissionId = request.SubmissionId,
                     Reason = request.Reason,
                     Status = "Pending",
-                    RequestedAt = DateTime.UtcNow
+                    RequestedAt = DateTime.UtcNow.AddHours(7)
                 };
 
                 var createdRequest = await _regradeRequestRepository.AddAsync(regradeRequest);
@@ -574,7 +572,7 @@ namespace Service.Service
 
                 var deadlineDays = await _systemConfigService.GetConfigValueAsync<int>("RegradeProcessingDeadlineDays", 7);
                 var deadline = existingRequest.RequestedAt.AddDays(deadlineDays);
-                if (DateTime.UtcNow > deadline && existingRequest.Status == "Pending")
+                if (DateTime.UtcNow.AddHours(7) > deadline && existingRequest.Status == "Pending")
                 {
                     _logger.LogWarning($"Regrade request processing deadline exceeded. RequestId: {request.RequestId}");
                     return new BaseResponse<RegradeRequestResponse>(
@@ -706,7 +704,7 @@ namespace Service.Service
 
                 var deadlineDays = await _systemConfigService.GetConfigValueAsync<int>("RegradeProcessingDeadlineDays", 7);
                 var deadline = existingRequest.RequestedAt.AddDays(deadlineDays);
-                if (DateTime.UtcNow > deadline)
+                if (DateTime.UtcNow.AddHours(7) > deadline)
                 {
                     return new BaseResponse<RegradeRequestResponse>(
                         "Processing deadline for this regrade request has passed",

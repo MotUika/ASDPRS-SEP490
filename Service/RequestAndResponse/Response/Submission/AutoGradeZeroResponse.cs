@@ -12,6 +12,6 @@ namespace Service.RequestAndResponse.Response.Submission
         public List<string> StudentCodes { get; set; } = new();
         public string Message { get; set; } = string.Empty;
         public bool Success { get; set; }
-        public DateTime ProcessedAt { get; set; } = DateTime.UtcNow;
+        public DateTime ProcessedAt { get; set; } = DateTime.UtcNow.AddHours(7);
     }
 }

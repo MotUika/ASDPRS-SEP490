@@ -153,7 +153,7 @@ namespace Service.Service
                 }
 
                 // 5. Kiểm tra khóa học có đang diễn ra không
-                var now = DateTime.UtcNow;
+                var now = DateTime.UtcNow.AddHours(7);
                 if (courseInstance.StartDate <= now && now <= courseInstance.EndDate)
                 {
                     return new BaseResponse<bool>(
@@ -335,11 +335,11 @@ namespace Service.Service
 
             string courseStatus; 
             // 🔸 Xác định trạng thái lớp học
-            if (courseInstance.StartDate > DateTime.UtcNow)
+            if (courseInstance.StartDate > DateTime.UtcNow.AddHours(7))
             {
                 courseStatus = "Upcoming"; // Chưa bắt đầu
             }
-            else if (courseInstance.EndDate < DateTime.UtcNow)
+            else if (courseInstance.EndDate < DateTime.UtcNow.AddHours(7))
             {
                 courseStatus = "Completed"; // Đã kết thúc
             }
@@ -365,7 +365,7 @@ namespace Service.Service
                 InstructorName = user?.FirstName ?? string.Empty,
                 InstructorEmail = user?.Email ?? string.Empty,
                 IsMainInstructor = false,
-                CreatedAt = DateTime.UtcNow,
+                CreatedAt = DateTime.UtcNow.AddHours(7),
                 StudentCount = studentCount,
                 CourseInstanceStatus = courseStatus
             };

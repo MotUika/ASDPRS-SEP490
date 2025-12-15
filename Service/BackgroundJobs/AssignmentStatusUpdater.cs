@@ -59,7 +59,7 @@ namespace Service.BackgroundJobs
                 if (updatedCount > 0)
                 {
                     await context.SaveChangesAsync();
-                    Console.WriteLine($"Updated {updatedCount} assignment statuses at {DateTime.UtcNow}");
+                    Console.WriteLine($"Updated {updatedCount} assignment statuses at {DateTime.UtcNow.AddHours(7)}");
                 }
             }
             catch (Exception ex)
@@ -70,7 +70,7 @@ namespace Service.BackgroundJobs
 
         private string CalculateAssignmentStatus(Assignment assignment, ASDPRSContext context)
         {
-            var now = DateTime.UtcNow;
+            var now = DateTime.UtcNow.AddHours(7);
 
             // 1. Upcoming - chưa đến StartDate
             if (assignment.StartDate.HasValue && now < assignment.StartDate.Value)

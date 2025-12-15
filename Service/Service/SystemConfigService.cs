@@ -128,7 +128,7 @@ namespace Service.Service
                 }
 
                 config.ConfigValue = request.ConfigValue;
-                config.UpdatedAt = DateTime.UtcNow;
+                config.UpdatedAt = DateTime.UtcNow.AddHours(7);
                 config.UpdatedByUserId = request.UpdatedByUserId;
 
                 if (!string.IsNullOrEmpty(request.Description))

@@ -75,7 +75,7 @@ namespace Service.Service
                     return new BaseResponse<List<CourseStudentResponse>>("Course instance not found", StatusCodeEnum.NotFound_404, null);
 
                 var deadline = courseInstance.StartDate.AddDays(14);
-                bool isPastDeadline = DateTime.UtcNow > deadline;
+                bool isPastDeadline = DateTime.UtcNow.AddHours(7) > deadline;
 
                 var results = new List<CourseStudentResponse>();
                 var skippedUsers = new List<string>();
@@ -165,7 +165,7 @@ namespace Service.Service
                                     {
                                         CourseInstanceId = courseInstanceId,
                                         UserId = user.Id,
-                                        EnrolledAt = DateTime.UtcNow,
+                                        EnrolledAt = DateTime.UtcNow.AddHours(7),
                                         Status = "Pending",
                                         ChangedByUserId = changedByUserId
                                     };
@@ -300,7 +300,7 @@ namespace Service.Service
                                             {
                                                 CourseInstanceId = courseInstance.CourseInstanceId,
                                                 UserId = user.Id,
-                                                EnrolledAt = DateTime.UtcNow,
+                                                EnrolledAt = DateTime.UtcNow.AddHours(7),
                                                 Status = "Enrolled",
                                                 ChangedByUserId = changedByUserId
                                             };
@@ -348,7 +348,7 @@ namespace Service.Service
                     LastName = $"{surname} {middleName}".Trim(),
                     CampusId = campusId,
                     IsActive = true,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.UtcNow.AddHours(7)
                 };
 
                 if (!string.IsNullOrEmpty(majorCode))
@@ -426,7 +426,7 @@ namespace Service.Service
                     return new BaseResponse<CourseStudentResponse>("Course instance not found", StatusCodeEnum.NotFound_404, null);
 
                 var deadline = courseInstance.StartDate.AddDays(14);
-                if (DateTime.UtcNow > deadline)
+                if (DateTime.UtcNow.AddHours(7) > deadline)
                 {
                     return new BaseResponse<CourseStudentResponse>("Cannot add students after 14 days from the course start date.", StatusCodeEnum.Forbidden_403, null);
                 }
@@ -459,10 +459,10 @@ namespace Service.Service
                 {
                     CourseInstanceId = request.CourseInstanceId,
                     UserId = request.UserId,
-                    EnrolledAt = DateTime.UtcNow,
+                    EnrolledAt = DateTime.UtcNow.AddHours(7),
                     Status = request.Status ?? "Enrolled",
                     ChangedByUserId = request.ChangedByUserId,
-                    StatusChangedAt = DateTime.UtcNow
+                    StatusChangedAt = DateTime.UtcNow.AddHours(7)
                 };
                 await _courseStudentRepository.AddAsync(courseStudent);
                 User changedByUser = null;
@@ -485,7 +485,7 @@ namespace Service.Service
                     return new BaseResponse<bool>("Course instance not found", StatusCodeEnum.NotFound_404, false);
 
                 var deadline = courseInstance.StartDate.AddDays(14);
-                if (DateTime.UtcNow > deadline)
+                if (DateTime.UtcNow.AddHours(7) > deadline)
                 {
                     return new BaseResponse<bool>("Cannot remove students after 14 days from the course start date.", StatusCodeEnum.Forbidden_403, false);
                 }
@@ -649,7 +649,7 @@ namespace Service.Service
                 }
 
                 courseStudent.Status = status;
-                courseStudent.StatusChangedAt = DateTime.UtcNow;
+                courseStudent.StatusChangedAt = DateTime.UtcNow.AddHours(7);
                 courseStudent.ChangedByUserId = changedByUserId;
 
                 await _courseStudentRepository.UpdateAsync(courseStudent);
@@ -688,7 +688,7 @@ namespace Service.Service
 
                 courseStudent.FinalGrade = finalGrade;
                 courseStudent.IsPassed = isPassed;
-                courseStudent.StatusChangedAt = DateTime.UtcNow;
+                courseStudent.StatusChangedAt = DateTime.UtcNow.AddHours(7);
                 courseStudent.ChangedByUserId = changedByUserId;
 
                 await _courseStudentRepository.UpdateAsync(courseStudent);
@@ -743,9 +743,9 @@ namespace Service.Service
                     {
                         CourseInstanceId = request.CourseInstanceId,
                         UserId = studentId,
-                        EnrolledAt = DateTime.UtcNow,
+                        EnrolledAt = DateTime.UtcNow.AddHours(7),
                         Status = request.Status,
-                        StatusChangedAt = DateTime.UtcNow,
+                        StatusChangedAt = DateTime.UtcNow.AddHours(7),
                         ChangedByUserId = request.ChangedByUserId
                     };
 

@@ -82,7 +82,7 @@ namespace Service.Service
                     ReviewAssignmentId = request.ReviewAssignmentId,
                     OverallScore = overallScore,
                     GeneralFeedback = request.GeneralFeedback,
-                    ReviewedAt = request.ReviewedAt ?? DateTime.UtcNow,
+                    ReviewedAt = request.ReviewedAt ?? DateTime.UtcNow.AddHours(7),
                     ReviewType = request.ReviewType,
                     FeedbackSource = request.FeedbackSource
                 };
@@ -416,7 +416,7 @@ namespace Service.Service
 
                 request.FeedbackSource = "AI";
                 request.ReviewType = "AI";
-                request.ReviewedAt = DateTime.UtcNow;
+                request.ReviewedAt = DateTime.UtcNow.AddHours(7);
                 request.GeneralFeedback = aiFeedback;
 
                 if (assignment.RubricId.HasValue)
@@ -489,7 +489,7 @@ namespace Service.Service
                         null);
                 }
 
-                if (reviewAssignment.Deadline < DateTime.UtcNow)
+                if (reviewAssignment.Deadline < DateTime.UtcNow.AddHours(7))
                 {
                     reviewAssignment.Status = "Overdue";
                     await _reviewAssignmentRepository.UpdateAsync(reviewAssignment);
@@ -511,7 +511,7 @@ namespace Service.Service
                     ReviewAssignmentId = request.ReviewAssignmentId,
                     OverallScore = overallScore,
                     GeneralFeedback = request.GeneralFeedback,
-                    ReviewedAt = DateTime.UtcNow,
+                    ReviewedAt = DateTime.UtcNow.AddHours(7),
                     ReviewType = "Peer",
                     FeedbackSource = "Student"
                 };
@@ -581,7 +581,7 @@ namespace Service.Service
                 var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
 
                 // Check if still within review period
-                if (assignment.ReviewDeadline.HasValue && DateTime.UtcNow > assignment.ReviewDeadline.Value)
+                if (assignment.ReviewDeadline.HasValue && DateTime.UtcNow.AddHours(7) > assignment.ReviewDeadline.Value)
                 {
                     return new BaseResponse<ReviewResponse>(
                         "Cannot edit review after review deadline",
@@ -591,7 +591,7 @@ namespace Service.Service
 
                 // Update review
                 review.GeneralFeedback = request.GeneralFeedback;
-                review.ReviewedAt = DateTime.UtcNow;
+                review.ReviewedAt = DateTime.UtcNow.AddHours(7);
 
                 // Update criteria feedbacks
                 var existingFeedbacks = await _criteriaFeedbackRepository.GetByReviewIdAsync(review.ReviewId);
@@ -670,7 +670,7 @@ namespace Service.Service
                     var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
 
                     response.CanEdit = assignment.ReviewDeadline.HasValue &&
-                                      DateTime.UtcNow <= assignment.ReviewDeadline.Value;
+                                      DateTime.UtcNow.AddHours(7) <= assignment.ReviewDeadline.Value;
                     response.EditDeadline = assignment.ReviewDeadline;
 
                     responses.Add(response);
@@ -721,7 +721,7 @@ namespace Service.Service
                     var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
 
                     response.CanEdit = assignment.ReviewDeadline.HasValue &&
-                                      DateTime.UtcNow <= assignment.ReviewDeadline.Value;
+                                      DateTime.UtcNow.AddHours(7) <= assignment.ReviewDeadline.Value;
                     response.EditDeadline = assignment.ReviewDeadline;
 
                     responses.Add(response);
@@ -846,7 +846,7 @@ namespace Service.Service
             var assignment = submission != null ? await _assignmentRepository.GetByIdAsync(submission.AssignmentId) : null;
 
             string penaltyNote = string.Empty;
-            if (reviewAssignment?.Deadline < DateTime.UtcNow && reviewAssignment.Status != "Completed")
+            if (reviewAssignment?.Deadline < DateTime.UtcNow.AddHours(7) && reviewAssignment.Status != "Completed")
             {
                 var missPenaltyStr = await GetAssignmentConfig(assignment?.AssignmentId ?? 0, "MissingReviewPenalty");
                 if (decimal.TryParse(missPenaltyStr, out decimal missPenalty))
@@ -963,7 +963,7 @@ namespace Service.Service
 
                 response.SetDisplayScore(assignment.GradingScale);
 
-                response.CanEdit = assignment.ReviewDeadline.HasValue && DateTime.UtcNow <= assignment.ReviewDeadline.Value;
+                response.CanEdit = assignment.ReviewDeadline.HasValue && DateTime.UtcNow.AddHours(7) <= assignment.ReviewDeadline.Value;
                 response.EditDeadline = assignment.ReviewDeadline;
 
                 return new BaseResponse<ReviewResponse>("Review details retrieved successfully", StatusCodeEnum.OK_200, response);
