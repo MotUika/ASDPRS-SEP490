@@ -2094,6 +2094,26 @@ namespace Service.Service
                         StatusCodeEnum.BadRequest_400,
                         null);
                 }
+                // 2️⃣ ❌ CourseInstance Upcoming → không cho publish
+                var courseInstance =
+                    await _courseInstanceRepository.GetByIdAsync(assignment.CourseInstanceId);
+
+                if (courseInstance == null)
+                {
+                    return new BaseResponse<AssignmentResponse>(
+                        "Course instance not found",
+                        StatusCodeEnum.NotFound_404,
+                        null);
+                }
+
+                // 🔥 UPCOMING = chưa tới StartDate
+                if (DateTime.UtcNow < courseInstance.StartDate)
+                {
+                    return new BaseResponse<AssignmentResponse>(
+                        "Cannot publish assignment because the course has not started yet.",
+                        StatusCodeEnum.BadRequest_400,
+                        null);
+                }
                 // 🔥 VALIDATE: Criteria must sum to 100
                 var criteriaResponse = await _criteriaService.GetCriteriaByAssignmentIdAsync(assignmentId);
 
