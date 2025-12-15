@@ -775,6 +775,13 @@ namespace Service.Service
                     instructorId,
                     request.ReviewedByUserId
                 );
+
+                // UPDATE GRADED AT
+                if (updatedRequest.SubmissionId != null)
+                {
+                    await _submissionRepository.UpdateGradedAtAsync(updatedRequest.SubmissionId);
+                }
+
                 await SendRegradeStatusNotificationToStudent(updatedRequest);
 
                 // Load full request để map response
