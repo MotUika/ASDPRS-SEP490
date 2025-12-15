@@ -425,10 +425,10 @@ namespace Service.Service
                 if (courseInstance == null)
                     return new BaseResponse<CourseStudentResponse>("Course instance not found", StatusCodeEnum.NotFound_404, null);
 
-                var deadline = courseInstance.StartDate.AddDays(45);
+                var deadline = courseInstance.StartDate.AddDays(14);
                 if (DateTime.UtcNow > deadline)
                 {
-                    return new BaseResponse<CourseStudentResponse>("Cannot add students after 45 days from the course start date.", StatusCodeEnum.Forbidden_403, null);
+                    return new BaseResponse<CourseStudentResponse>("Cannot add students after 14 days from the course start date.", StatusCodeEnum.Forbidden_403, null);
                 }
 
                 if (!string.IsNullOrEmpty(request.StudentCode) && request.UserId == 0)
@@ -484,10 +484,10 @@ namespace Service.Service
                 if (courseInstance == null)
                     return new BaseResponse<bool>("Course instance not found", StatusCodeEnum.NotFound_404, false);
 
-                var deadline = courseInstance.StartDate.AddDays(45);
+                var deadline = courseInstance.StartDate.AddDays(14);
                 if (DateTime.UtcNow > deadline)
                 {
-                    return new BaseResponse<bool>("Cannot remove students after 45 days from the course start date.", StatusCodeEnum.Forbidden_403, false);
+                    return new BaseResponse<bool>("Cannot remove students after 14 days from the course start date.", StatusCodeEnum.Forbidden_403, false);
                 }
 
                 var courseStudent = await _courseStudentRepository.GetByIdAsync(courseStudentId);
