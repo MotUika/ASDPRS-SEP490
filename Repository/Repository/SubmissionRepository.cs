@@ -112,5 +112,18 @@ namespace Repository.Repository
             await _context.Submissions.AddRangeAsync(submissions);
             // KHÔNG SaveChanges ở đây
         }
+
+        public async Task UpdateGradedAtAsync(int submissionId)
+        {
+            var submission = await _context.Submissions
+                .FirstOrDefaultAsync(s => s.SubmissionId == submissionId);
+
+            if (submission != null)
+            {
+                submission.GradedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+            }
+        }
+
     }
 }
