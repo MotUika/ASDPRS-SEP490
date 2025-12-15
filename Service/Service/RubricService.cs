@@ -456,7 +456,8 @@ namespace Service.Service
         //    );
         //}
 
-        public async Task<BaseResponse<IEnumerable<RubricResponse>>> GetRubricsByUserIdAsync(int userId)
+        public async Task<BaseResponse<IEnumerable<RubricResponse>>>
+     GetRubricsByUserIdAsync(int userId, int? courseInstanceId)
         {
             try
             {
@@ -476,7 +477,22 @@ namespace Service.Service
                     );
                 }
 
-                // 2️⃣ Lấy các assignment thuộc courseinstance đó
+                // 👉 Nếu có truyền courseInstanceId thì filter lại
+                if (courseInstanceId.HasValue)
+                {
+                    if (!instructorCourseInstanceIds.Contains(courseInstanceId.Value))
+                    {
+                        return new BaseResponse<IEnumerable<RubricResponse>>(
+                            "User is not instructor of this course instance",
+                            StatusCodeEnum.Forbidden_403,
+                            null
+                        );
+                    }
+
+                    instructorCourseInstanceIds = new List<int> { courseInstanceId.Value };
+                }
+
+                // 2️⃣ Lấy rubricId từ Assignment thuộc course instance
                 var rubricIds = await _context.Assignments
                     .Where(a => instructorCourseInstanceIds.Contains(a.CourseInstanceId))
                     .Where(a => a.RubricId != null)
@@ -487,13 +503,13 @@ namespace Service.Service
                 if (!rubricIds.Any())
                 {
                     return new BaseResponse<IEnumerable<RubricResponse>>(
-                        "No rubrics found for assignments created by this instructor",
+                        "No rubrics found for assignments of this instructor",
                         StatusCodeEnum.NotFound_404,
                         null
                     );
                 }
 
-                // 3️⃣ Lấy các rubric
+                // 3️⃣ Lấy Rubric
                 var rubrics = await _context.Rubrics
                     .Include(r => r.Template)
                     .Include(r => r.Criteria)
@@ -509,7 +525,7 @@ namespace Service.Service
                 // 4️⃣ Map sang response
                 var response = _mapper.Map<IEnumerable<RubricResponse>>(rubrics);
 
-                // 5️⃣ Lấy danh sách assignment đang sử dụng rubric
+                // 5️⃣ Lấy assignment đang sử dụng rubric
                 foreach (var rubric in response)
                 {
                     var assignments = await _context.Assignments
@@ -518,6 +534,10 @@ namespace Service.Service
                         .Include(a => a.CourseInstance)
                             .ThenInclude(ci => ci.Campus)
                         .Where(a => a.RubricId == rubric.RubricId)
+                        .Where(a =>
+                            !courseInstanceId.HasValue ||
+                            a.CourseInstanceId == courseInstanceId.Value
+                        )
                         .ToListAsync();
 
                     rubric.AssignmentsUsingTemplate = assignments.Select(a => new AssignmentUsingTemplateResponse
@@ -546,6 +566,7 @@ namespace Service.Service
                 );
             }
         }
+
 
 
 
