@@ -1074,7 +1074,57 @@ namespace Service.Service
                 {
                     return new BaseResponse<AICriteriaResponse>("No text extracted", StatusCodeEnum.BadRequest_400, null);
                 }
+                var student = await _userRepository.GetByIdAsync(submission.UserId);
+                string studentName = student?.FirstName + " " + student?.LastName;
 
+                // Cắt text nếu quá dài trước khi check integrity
+                var textToCheck = extractedText.Length > 5000 ? extractedText.Substring(0, 5000) : extractedText;
+
+                var integrityCheck = await _genAIService.CheckIntegrityAsync(textToCheck, assignment.Title, studentName);
+
+                if (integrityCheck.CheatDetails != "No anomalies detected")
+                {
+                    string violationMessage = integrityCheck.CheatDetails;
+
+                     _logger.LogWarning($"Submission {submission.SubmissionId} flagged: {violationMessage}");
+
+                    var errorFeedbacks = new List<AICriteriaFeedbackItem>();
+
+                    foreach (var criterion in criteria)
+                    {
+                        var errorSummary = new AISummary
+                        {
+                            SubmissionId = request.SubmissionId,
+                            Content = $"Score: 0 | Summary: {violationMessage}",
+                            SummaryType = $"CriteriaFeedback_{criterion.CriteriaId}_Violation",
+                            GeneratedAt = DateTime.UtcNow
+                        };
+                        await _aiSummaryRepository.AddAsync(errorSummary);
+
+                        errorFeedbacks.Add(new AICriteriaFeedbackItem
+                        {
+                            CriteriaId = criterion.CriteriaId,
+                            Title = criterion.Title,
+                            Description = criterion.Description ?? "",
+                            Summary = violationMessage,
+                            Score = 0,
+                            MaxScore = criterion.MaxScore
+                        });
+                    }
+
+                    var errorResponse = new AICriteriaResponse
+                    {
+                        Feedbacks = errorFeedbacks,
+                        IsRelevant = false,
+                        ErrorMessage = violationMessage
+                    };
+
+                    return new BaseResponse<AICriteriaResponse>(
+                        "Submission integrity violation detected",
+                        StatusCodeEnum.OK_200, 
+                        errorResponse
+                    );
+                }
                 var maxTokensConfig = await _systemConfigService.GetSystemConfigAsync("AISummaryMaxTokens");
                 var maxWordsConfig = await _systemConfigService.GetSystemConfigAsync("AISummaryMaxWords");
                 int maxTokens = int.Parse(maxTokensConfig ?? "1000");  
@@ -1092,7 +1142,6 @@ namespace Service.Service
                 {
                     _logger.LogWarning($"Submission {request.SubmissionId} is not relevant to assignment. Returning error criteria feedback.");
 
-                    // Tạo error feedback cho TẤT CẢ các criteria
                     var errorFeedbacks = new List<AICriteriaFeedbackItem>();
 
                     foreach (var criterion in criteria)
@@ -1113,7 +1162,7 @@ namespace Service.Service
                             Title = criterion.Title,
                             Description = criterion.Description ?? "",
                             Summary = errorMessage,
-                            Score = 0, // Điểm 0 vì không liên quan
+                            Score = 0,
                             MaxScore = criterion.MaxScore
                         });
                     }
@@ -1133,7 +1182,6 @@ namespace Service.Service
                     );
                 }
 
-                // Kiểm tra xem đã có feedback chưa
                 var feedbacks = new List<AICriteriaFeedbackItem>();
                 var allExist = true;
 
@@ -1145,7 +1193,6 @@ namespace Service.Service
 
                     if (existingSummary != null)
                     {
-                        // Parse score and summary from existing
                         decimal score = 0;
                         string summaryText = existingSummary.Content;
 
@@ -1177,7 +1224,6 @@ namespace Service.Service
                     }
                 }
 
-                // Nếu đã tồn tại hết feedback, trả về luôn
                 if (allExist)
                 {
                     return new BaseResponse<AICriteriaResponse>(
@@ -1186,13 +1232,10 @@ namespace Service.Service
                         new AICriteriaResponse { Feedbacks = feedbacks, IsRelevant = true });
                 }
 
-                // Nếu không tồn tại hết, generate mới
                 _logger.LogInformation($"Generating new criteria feedback for submission {request.SubmissionId}");
 
-                // Build context
                 var context = BuildEnhancedContext(assignment, rubric, criteria);
 
-                // Generate per criteria
                 feedbacks.Clear();
                 foreach (var criterion in criteria)
                 {
@@ -1200,7 +1243,6 @@ namespace Service.Service
                     {
                         var criteriaSummary = await _genAIService.GenerateCriteriaSummaryAsync(extractedText, criterion, context);
 
-                        // Parse score from AI response (assume "Score: X | Summary: ...")
                         decimal score = 0;
                         string summaryText = criteriaSummary;
 
@@ -1219,7 +1261,6 @@ namespace Service.Service
                         }
                         else
                         {
-                            // Nếu AI không trả về đúng format, log warning
                             _logger.LogWarning($"AI did not return expected format for criteria {criterion.CriteriaId}. Response: {criteriaSummary}");
                             summaryText = criteriaSummary;
                         }
@@ -1229,17 +1270,14 @@ namespace Service.Service
                             summaryText = string.Join(" ", words) + "...";
                         }
 
-                        // Clamp score trong khoảng hợp lệ
                         score = Math.Clamp(score, 0, criterion.MaxScore);
 
-                        // Truncate toàn bộ content để fit database column
                         var fullContent = $"Score: {score} | Summary: {summaryText}";
                         if (fullContent.Length > 2000)
                         {
                             fullContent = fullContent.Substring(0, 2000);
                         }
 
-                        // Lưu vào DB
                         var aiSummary = new AISummary
                         {
                             SubmissionId = request.SubmissionId,
