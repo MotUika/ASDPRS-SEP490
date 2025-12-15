@@ -86,7 +86,7 @@ namespace Service.Service
                     SubmissionId = request.SubmissionId,
                     Content = content,
                     SummaryType = request.SummaryType,
-                    GeneratedAt = DateTime.UtcNow
+                    GeneratedAt = DateTime.UtcNow.AddHours(7)
                 };
 
                 await _aiSummaryRepository.AddAsync(aiSummary);
@@ -390,7 +390,7 @@ namespace Service.Service
                     SubmissionId = request.SubmissionId,
                     Content = analysisResult,
                     SummaryType = request.SummaryType,
-                    GeneratedAt = DateTime.UtcNow
+                    GeneratedAt = DateTime.UtcNow.AddHours(7)
                 };
 
                 await _aiSummaryRepository.AddAsync(aiSummary);
@@ -599,7 +599,7 @@ namespace Service.Service
                     SubmissionId = request.SubmissionId,
                     Content = reviewContent,
                     SummaryType = "EnhancedReview",
-                    GeneratedAt = DateTime.UtcNow
+                    GeneratedAt = DateTime.UtcNow.AddHours(7)
                 };
 
                 await _aiSummaryRepository.AddAsync(aiReview);
@@ -621,7 +621,7 @@ namespace Service.Service
                             SubmissionId = request.SubmissionId,
                             Content = criteriaReviewContent,
                             SummaryType = $"CriteriaReview_{criterion.CriteriaId}",
-                            GeneratedAt = DateTime.UtcNow
+                            GeneratedAt = DateTime.UtcNow.AddHours(7)
                         };
 
                         await _aiSummaryRepository.AddAsync(criteriaReview);
@@ -750,7 +750,7 @@ namespace Service.Service
                     SubmissionId = request.SubmissionId,
                     Content = reviewContent,
                     SummaryType = "EnhancedReview",
-                    GeneratedAt = DateTime.UtcNow
+                    GeneratedAt = DateTime.UtcNow.AddHours(7)
                 };
 
                 await _aiSummaryRepository.AddAsync(aiReview);
@@ -773,7 +773,7 @@ namespace Service.Service
                             SubmissionId = request.SubmissionId,
                             Content = criteriaReviewContent,
                             SummaryType = $"CriteriaReview_{criterion.CriteriaId}",
-                            GeneratedAt = DateTime.UtcNow
+                            GeneratedAt = DateTime.UtcNow.AddHours(7)
                         };
 
                         await _aiSummaryRepository.AddAsync(criteriaReview);
@@ -957,7 +957,7 @@ namespace Service.Service
                         SubmissionId = request.SubmissionId,
                         Content = errorSummary,
                         SummaryType = "OverallSummary_NotRelevant",
-                        GeneratedAt = DateTime.UtcNow
+                        GeneratedAt = DateTime.UtcNow.AddHours(7)
                     };
                     await _aiSummaryRepository.AddAsync(aiSummary);
 
@@ -1015,7 +1015,7 @@ namespace Service.Service
                     SubmissionId = request.SubmissionId,
                     Content = summary,
                     SummaryType = summaryType,
-                    GeneratedAt = DateTime.UtcNow
+                    GeneratedAt = DateTime.UtcNow.AddHours(7)
                 };
                 await _aiSummaryRepository.AddAsync(newAiSummary);
 
@@ -1097,7 +1097,7 @@ namespace Service.Service
                             SubmissionId = request.SubmissionId,
                             Content = $"Score: 0 | Summary: {violationMessage}",
                             SummaryType = $"CriteriaFeedback_{criterion.CriteriaId}_Violation",
-                            GeneratedAt = DateTime.UtcNow
+                            GeneratedAt = DateTime.UtcNow.AddHours(7)
                         };
                         await _aiSummaryRepository.AddAsync(errorSummary);
 
@@ -1152,7 +1152,7 @@ namespace Service.Service
                             SubmissionId = request.SubmissionId,
                             Content = $"Score: 0 | Summary: {errorMessage}",
                             SummaryType = $"CriteriaFeedback_{criterion.CriteriaId}_NotRelevant",
-                            GeneratedAt = DateTime.UtcNow
+                            GeneratedAt = DateTime.UtcNow.AddHours(7)
                         };
                         await _aiSummaryRepository.AddAsync(errorSummary);
 
@@ -1283,7 +1283,7 @@ namespace Service.Service
                             SubmissionId = request.SubmissionId,
                             Content = fullContent,
                             SummaryType = $"CriteriaFeedback_{criterion.CriteriaId}",
-                            GeneratedAt = DateTime.UtcNow
+                            GeneratedAt = DateTime.UtcNow.AddHours(7)
                         };
                         await _aiSummaryRepository.AddAsync(aiSummary);
 
@@ -1325,7 +1325,7 @@ namespace Service.Service
                             SubmissionId = request.SubmissionId,
                             Content = fullContent,
                             SummaryType = $"CriteriaFeedback_{criterion.CriteriaId}_Error",
-                            GeneratedAt = DateTime.UtcNow
+                            GeneratedAt = DateTime.UtcNow.AddHours(7)
                         };
                         await _aiSummaryRepository.AddAsync(errorSummary);
                     }

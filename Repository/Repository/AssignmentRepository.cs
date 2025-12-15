@@ -23,7 +23,7 @@ namespace Repository.Repository
         // *Lấy danh sách assignment theo course instance với ràng buộc timeline
         public async Task<IEnumerable<Assignment>> GetActiveAssignmentsByCourseInstanceAsync(int courseInstanceId)
         {
-            var now = DateTime.UtcNow;
+            var now = DateTime.UtcNow.AddHours(7);
             return await _context.Assignments
                 .Include(a => a.CourseInstance)
                     .ThenInclude(ci => ci.Course)
@@ -74,7 +74,7 @@ namespace Repository.Repository
         // *Lấy ID của các assignment đang active (sử dụng HashSet cho performance)
         public async Task<HashSet<int>> GetActiveAssignmentIdsAsync(int courseInstanceId)
         {
-            var now = DateTime.UtcNow;
+            var now = DateTime.UtcNow.AddHours(7);
             var activeAssignmentIds = await _context.Assignments
                 .Where(a => a.CourseInstanceId == courseInstanceId &&
                            a.Status != "Draft" &&
@@ -90,7 +90,7 @@ namespace Repository.Repository
         // *Lấy assignments sắp đến hạn (cho notification)
         public async Task<IEnumerable<Assignment>> GetUpcomingDeadlineAssignmentsAsync(int daysBefore = 1)
         {
-            var now = DateTime.UtcNow;
+            var now = DateTime.UtcNow.AddHours(7);
             var targetDate = now.AddDays(daysBefore);
 
             return await _context.Assignments
@@ -190,7 +190,7 @@ namespace Repository.Repository
         //*Chỉ lấy assignments active cho student
         public async Task<IEnumerable<Assignment>> GetAssignmentsByStudentAsync(int studentId)
         {
-            var now = DateTime.UtcNow;
+            var now = DateTime.UtcNow.AddHours(7);
             return await _context.Assignments
                 .Include(a => a.CourseInstance)
                     .ThenInclude(ci => ci.Course)
@@ -208,7 +208,7 @@ namespace Repository.Repository
         //*Sử dụng trạng thái mới và timeline 3 mốc
         public async Task<IEnumerable<Assignment>> GetActiveAssignmentsAsync()
         {
-            var now = DateTime.UtcNow;
+            var now = DateTime.UtcNow.AddHours(7);
             return await _context.Assignments
                 .Include(a => a.CourseInstance)
                     .ThenInclude(ci => ci.Course)
@@ -221,7 +221,7 @@ namespace Repository.Repository
         //*Sử dụng trạng thái mới
         public async Task<IEnumerable<Assignment>> GetOverdueAssignmentsAsync()
         {
-            var now = DateTime.UtcNow;
+            var now = DateTime.UtcNow.AddHours(7);
             return await _context.Assignments
                 .Include(a => a.CourseInstance)
                     .ThenInclude(ci => ci.Course)
@@ -234,7 +234,7 @@ namespace Repository.Repository
         // *Cập nhật trạng thái assignment dựa trên timeline
         public async Task UpdateAssignmentStatusBasedOnTimelineAsync()
         {
-            var now = DateTime.UtcNow;
+            var now = DateTime.UtcNow.AddHours(7);
             var assignments = await _context.Assignments
                 .Where(a => a.Status != "Draft" && a.Status != "Archived")
                 .ToListAsync();
@@ -278,7 +278,7 @@ namespace Repository.Repository
 
             if (assignment == null) return false;
 
-            var now = DateTime.UtcNow;
+            var now = DateTime.UtcNow.AddHours(7);
             var isStudentInCourse = assignment.CourseInstance.CourseStudents
                 .Any(cs => cs.UserId == studentId && cs.Status == "Enrolled");
 

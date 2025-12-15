@@ -108,7 +108,7 @@ namespace Service.Service
                     SubmissionId = request.SubmissionId,
                     ReviewerUserId = request.ReviewerUserId,
                     Status = request.Status,
-                    AssignedAt = DateTime.UtcNow,
+                    AssignedAt = DateTime.UtcNow.AddHours(7),
                     Deadline = request.Deadline,
                     IsAIReview = request.IsAIReview
                 };
@@ -163,7 +163,7 @@ namespace Service.Service
                         SubmissionId = request.SubmissionId,
                         ReviewerUserId = reviewerId,
                         Status = "Assigned",
-                        AssignedAt = DateTime.UtcNow,
+                        AssignedAt = DateTime.UtcNow.AddHours(7),
                         Deadline = request.Deadline,
                         IsAIReview = request.IsAIReview
                     };
@@ -380,7 +380,7 @@ namespace Service.Service
         {
             try
             {
-                var overdueAssignments = await _reviewAssignmentRepository.GetOverdueAsync(DateTime.UtcNow);
+                var overdueAssignments = await _reviewAssignmentRepository.GetOverdueAsync(DateTime.UtcNow.AddHours(7));
                 var responses = new List<ReviewAssignmentResponse>();
 
                 foreach (var ra in overdueAssignments)
@@ -419,7 +419,7 @@ namespace Service.Service
                 {
                     if (ra.Status == "Pending" || ra.Status == "Assigned" || ra.Status == "In Progress")
                     {
-                        if (ra.Deadline < DateTime.UtcNow && ra.Status != "Completed")
+                        if (ra.Deadline < DateTime.UtcNow.AddHours(7) && ra.Status != "Completed")
                         {
                             ra.Status = "Overdue";
                             await _reviewAssignmentRepository.UpdateAsync(ra);
@@ -730,7 +730,7 @@ namespace Service.Service
                     var studentUser = await _userRepository.GetByIdAsync(submission.UserId);
                     var studentName = studentUser != null ? $"{studentUser.FirstName} {studentUser.LastName}".Trim() : "Unknown";
 
-                    var overdueCount = reviewAssignments.Count(ra => ra.Deadline < DateTime.UtcNow && ra.Status != "Completed");
+                    var overdueCount = reviewAssignments.Count(ra => ra.Deadline < DateTime.UtcNow.AddHours(7) && ra.Status != "Completed");
                     string penaltyNote = string.Empty;
                     if (overdueCount > 0)
                     {
@@ -782,7 +782,7 @@ namespace Service.Service
                 {
                     if (ra.Status == "Assigned")
                     {
-                        if (ra.Deadline < DateTime.UtcNow && ra.Status != "Completed")
+                        if (ra.Deadline < DateTime.UtcNow.AddHours(7) && ra.Status != "Completed")
                         {
                             ra.Status = "Overdue";
                             await _reviewAssignmentRepository.UpdateAsync(ra);
@@ -885,7 +885,7 @@ namespace Service.Service
                 }
 
                 string penaltyNote = string.Empty;
-                if (reviewAssignment.Deadline < DateTime.UtcNow && reviewAssignment.Status != "Completed")
+                if (reviewAssignment.Deadline < DateTime.UtcNow.AddHours(7) && reviewAssignment.Status != "Completed")
                 {
                     var missPenaltyStr = await GetAssignmentConfig(assignment.AssignmentId, "MissingReviewPenalty");
                     if (decimal.TryParse(missPenaltyStr, out decimal missPenalty))
@@ -933,7 +933,7 @@ namespace Service.Service
                 SubmissionId = submissionId,
                 ReviewerUserId = reviewerId,
                 Status = "Assigned",
-                AssignedAt = DateTime.UtcNow,
+                AssignedAt = DateTime.UtcNow.AddHours(7),
                 Deadline = assignment.ReviewDeadline ?? assignment.Deadline.AddDays(7),
                 IsAIReview = false
             };
@@ -1019,7 +1019,7 @@ namespace Service.Service
             }).ToList();
 
             string penaltyNote = string.Empty;
-            if (reviewAssignment.Deadline < DateTime.UtcNow && reviewAssignment.Status != "Completed")
+            if (reviewAssignment.Deadline < DateTime.UtcNow.AddHours(7) && reviewAssignment.Status != "Completed")
             {
                 var missPenaltyStr = await GetAssignmentConfig(assignment?.AssignmentId ?? 0, "MissingReviewPenalty");
                 if (decimal.TryParse(missPenaltyStr, out decimal missPenalty))
@@ -1153,7 +1153,7 @@ namespace Service.Service
                         SubmissionId = selectedSubmission.SubmissionId,
                         ReviewerUserId = reviewerId,
                         Status = "Assigned",
-                        AssignedAt = DateTime.UtcNow,
+                        AssignedAt = DateTime.UtcNow.AddHours(7),
                         Deadline = assignment.ReviewDeadline ?? assignment.Deadline.AddDays(7),
                         IsAIReview = false
                     };
@@ -1311,8 +1311,8 @@ namespace Service.Service
                         SubmissionId = selectedSubmission.SubmissionId,
                         ReviewerUserId = reviewerId,
                         Status = "Assigned",
-                        AssignedAt = DateTime.UtcNow,
-                        Deadline = assignment.ReviewDeadline ?? DateTime.UtcNow.AddDays(7),
+                        AssignedAt = DateTime.UtcNow.AddHours(7),
+                        Deadline = assignment.ReviewDeadline ?? DateTime.UtcNow.AddHours(7).AddDays(7),
                         IsAIReview = false
                     };
                     await _reviewAssignmentRepository.AddAsync(reviewAssignment);
@@ -1415,8 +1415,8 @@ namespace Service.Service
                         SubmissionId = selectedSubmission.SubmissionId,
                         ReviewerUserId = reviewerId,
                         Status = "Assigned",
-                        AssignedAt = DateTime.UtcNow,
-                        Deadline = assignment.ReviewDeadline ?? DateTime.UtcNow.AddDays(7),
+                        AssignedAt = DateTime.UtcNow.AddHours(7),
+                        Deadline = assignment.ReviewDeadline ?? DateTime.UtcNow.AddHours(7).AddDays(7),
                         IsAIReview = false
                     };
                     await _reviewAssignmentRepository.AddAsync(reviewAssignment);
@@ -1476,8 +1476,8 @@ namespace Service.Service
                         SubmissionId = submission.SubmissionId,
                         ReviewerUserId = studentId,
                         Status = "Available",
-                        AssignedAt = DateTime.UtcNow,
-                        Deadline = assignment.ReviewDeadline ?? DateTime.UtcNow.AddDays(7),
+                        AssignedAt = DateTime.UtcNow.AddHours(7),
+                        Deadline = assignment.ReviewDeadline ?? DateTime.UtcNow.AddHours(7).AddDays(7),
                         IsAIReview = false
                     };
 

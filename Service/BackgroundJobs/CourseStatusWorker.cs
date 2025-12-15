@@ -29,7 +29,7 @@ namespace Service.BackgroundJobs
                     using (var scope = _serviceProvider.CreateScope())
                     {
                         var context = scope.ServiceProvider.GetRequiredService<ASDPRSContext>();
-                        var now = DateTime.UtcNow;
+                        var now = DateTime.UtcNow.AddHours(7);
 
                         var expiredCourses = await context.CourseInstances
                             .Where(c => c.IsActive && c.EndDate < now)

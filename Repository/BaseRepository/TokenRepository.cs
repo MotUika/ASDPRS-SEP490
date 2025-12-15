@@ -75,7 +75,7 @@ namespace Repository.BaseRepository
             var tokenDescriptor = new SecurityTokenDescriptor
             {
                 Subject = new ClaimsIdentity(claims),
-                Expires = DateTime.UtcNow.AddDays(7),
+                Expires = DateTime.UtcNow.AddHours(7).AddDays(7),
                 SigningCredentials = creds,
                 Issuer = _config["JWT:Issuer"],
                 Audience = _config["JWT:Audience"]
@@ -96,8 +96,8 @@ namespace Repository.BaseRepository
                 Token = refreshToken,
                 IsUsed = false,
                 IsRevoked = false,
-                CreateAt = DateTime.UtcNow,
-                ExpiredAt = DateTime.UtcNow.AddDays(7)
+                CreateAt = DateTime.UtcNow.AddHours(7),
+                ExpiredAt = DateTime.UtcNow.AddHours(7).AddDays(7)
             };
 
             await _dbContext.RefreshTokens.AddAsync(refreshTokenEntity);
@@ -155,7 +155,7 @@ namespace Repository.BaseRepository
                 var utcExpireDate = long.Parse(tokenInVerification.Claims.FirstOrDefault(x => x.Type == JwtRegisteredClaimNames.Exp)?.Value ?? "0");
                 var expireDate = ConvertUnixTimeToDateTime(utcExpireDate);
 
-                if (expireDate > DateTime.UtcNow)
+                if (expireDate > DateTime.UtcNow.AddHours(7))
                 {
                     return new ApiResponse { Success = false, Message = "Access token has not yet expired" };
                 }

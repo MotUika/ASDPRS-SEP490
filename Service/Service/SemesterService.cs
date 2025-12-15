@@ -232,7 +232,7 @@ namespace Service.Service
                     return new BaseResponse<IEnumerable<SemesterResponse>>("No semesters found for this academic year", StatusCodeEnum.NotFound_404, null);
                 }
 
-                var now = DateTime.UtcNow;
+                var now = DateTime.UtcNow.AddHours(7);
 
                 var currentSemester = semesters.FirstOrDefault(s => s.StartDate <= now && s.EndDate >= now);
 

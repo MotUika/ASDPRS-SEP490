@@ -90,7 +90,7 @@ namespace Service.Service
                 var campusExists = await _context.Campuses.AnyAsync(c => c.CampusId == request.CampusId);
                 if (!campusExists) return new BaseResponse<CourseInstanceResponse>("Campus not found", StatusCodeEnum.NotFound_404, null);
 
-                var now = DateTime.UtcNow;
+                var now = DateTime.UtcNow.AddHours(7);
                 if (request.StartDate < semester.StartDate) return new BaseResponse<CourseInstanceResponse>("Start date cannot be before semester start date", StatusCodeEnum.BadRequest_400, null);
                 if (request.StartDate <= now) return new BaseResponse<CourseInstanceResponse>("Start date cannot be in the past or present", StatusCodeEnum.BadRequest_400, null);
                 if (request.EndDate <= request.StartDate) return new BaseResponse<CourseInstanceResponse>("End date must be after start date", StatusCodeEnum.BadRequest_400, null);
@@ -256,7 +256,7 @@ namespace Service.Service
                 if (courseInstance == null)
                     return new BaseResponse<bool>("Course instance not found", StatusCodeEnum.NotFound_404, false);
 
-                var now = DateTime.UtcNow;
+                var now = DateTime.UtcNow.AddHours(7);
 
                 if (courseInstance.StartDate <= now && now <= courseInstance.EndDate)
                 {
@@ -347,7 +347,7 @@ namespace Service.Service
         }
         public async Task UpdateAssignmentStatusBasedOnTimeline()
         {
-            var now = DateTime.UtcNow;
+            var now = DateTime.UtcNow.AddHours(7);
             var assignments = await _context.Assignments.ToListAsync();
 
             foreach (var assignment in assignments)
@@ -415,7 +415,7 @@ namespace Service.Service
                     return new BaseResponse<bool>("Course instance not found", StatusCodeEnum.NotFound_404, false);
                 }
 
-                var now = DateTime.UtcNow;
+                var now = DateTime.UtcNow.AddHours(7);
 
                 if (courseInstance.StartDate <= now && now <= courseInstance.EndDate)
                 {

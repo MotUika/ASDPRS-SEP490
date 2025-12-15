@@ -61,7 +61,7 @@ namespace Service.Service
             try
             {
                 var notification = _mapper.Map<Notification>(request);
-                notification.CreatedAt = DateTime.UtcNow;
+                notification.CreatedAt = DateTime.UtcNow.AddHours(7);
                 notification.IsRead = false;
                 var validationContext = new ValidationContext(notification);
                 Validator.ValidateObject(notification, validationContext, true);

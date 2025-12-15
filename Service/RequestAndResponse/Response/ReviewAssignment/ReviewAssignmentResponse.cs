@@ -35,7 +35,7 @@ namespace Service.RequestAndResponse.Response.ReviewAssignment
         public DateTime SubmittedAt { get; set; }
 
         public List<ReviewResponse> Reviews { get; set; } = new List<ReviewResponse>();
-        public bool IsOverdue => DateTime.UtcNow > Deadline && Status != "Completed";
-        public int DaysUntilDeadline => (int)(Deadline - DateTime.UtcNow).TotalDays;
+        public bool IsOverdue => DateTime.UtcNow.AddHours(7) > Deadline && Status != "Completed";
+        public int DaysUntilDeadline => (int)(Deadline - DateTime.UtcNow.AddHours(7)).TotalDays;
     }
 }

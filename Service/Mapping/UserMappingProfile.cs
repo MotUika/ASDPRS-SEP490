@@ -12,7 +12,7 @@ namespace Service.Mapping
         {
             // Request to Entity
             CreateMap<CreateUserRequest, User>()
-            .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(src => DateTime.UtcNow));
+            .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(src => DateTime.UtcNow.AddHours(7)));
 
             CreateMap<UpdateUserRequest, User>()
             .ForMember(dest => dest.PasswordHash, opt => opt.Ignore());

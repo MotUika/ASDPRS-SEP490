@@ -56,7 +56,7 @@ namespace Service.BackgroundJobs
 
         private async Task CheckUpcomingDeadlines(IAssignmentRepository assignmentRepository, INotificationService notificationService, ASDPRSContext context)
         {
-            var now = DateTime.UtcNow;
+            var now = DateTime.UtcNow.AddHours(7);
             var reminderTime = now.AddHours(24); // Nhắc 24h trước deadline
 
             var assignmentsDueSoon = await context.Assignments
@@ -89,7 +89,7 @@ namespace Service.BackgroundJobs
 
         private async Task CheckNewActiveAssignments(IAssignmentRepository assignmentRepository, INotificationService notificationService, ASDPRSContext context)
         {
-            var lastHour = DateTime.UtcNow.AddHours(-1);
+            var lastHour = DateTime.UtcNow.AddHours(7).AddHours(-1);
 
             var newActiveAssignments = await context.Assignments
                 .Where(a => a.Status == "Active" &&

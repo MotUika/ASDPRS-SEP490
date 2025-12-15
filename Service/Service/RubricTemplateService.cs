@@ -145,7 +145,7 @@ namespace Service.Service
                 }
 
                 var rubricTemplate = _mapper.Map<RubricTemplate>(request);
-                rubricTemplate.CreatedAt = DateTime.UtcNow;
+                rubricTemplate.CreatedAt = DateTime.UtcNow.AddHours(7);
                 rubricTemplate.IsPublic = false;
 
                 var createdRubricTemplate = await _rubricTemplateRepository.AddAsync(rubricTemplate);

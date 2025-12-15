@@ -235,7 +235,7 @@ namespace Service.Service
                     Title = request.Title,
                     Description = request.Description,
                     Guidelines = request.Guidelines,
-                    CreatedAt = DateTime.UtcNow,
+                    CreatedAt = DateTime.UtcNow.AddHours(7),
                     StartDate = request.StartDate,
                     Deadline = request.Deadline,
                     FinalDeadline = request.FinalDeadline,
@@ -324,7 +324,7 @@ namespace Service.Service
                     ConfigKey = configKey,
                     ConfigValue = value,
                     Description = "Assignment config",
-                    UpdatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow.AddHours(7),
                     UpdatedByUserId = 1
                 };
                 _context.SystemConfigs.Add(config);
@@ -332,7 +332,7 @@ namespace Service.Service
             else
             {
                 config.ConfigValue = value;
-                config.UpdatedAt = DateTime.UtcNow;
+                config.UpdatedAt = DateTime.UtcNow.AddHours(7);
             }
 
             await _context.SaveChangesAsync();
@@ -1454,7 +1454,7 @@ namespace Service.Service
                 }
 
                 // Check if past review deadline
-                if (!assignment.ReviewDeadline.HasValue || DateTime.UtcNow <= assignment.ReviewDeadline.Value)
+                if (!assignment.ReviewDeadline.HasValue || DateTime.UtcNow.AddHours(7) <= assignment.ReviewDeadline.Value)
                 {
                     return new BaseResponse<bool>(
                         "Cannot publish grades before review deadline",
@@ -1564,8 +1564,8 @@ namespace Service.Service
                 SectionCode = courseInstance?.SectionCode ?? string.Empty,
                 SubmissionCount = submissions.Count(),
                 StudentCount = students.Count(),
-                IsOverdue = DateTime.UtcNow > assignment.Deadline,
-                DaysUntilDeadline = (int)(assignment.Deadline - DateTime.UtcNow).TotalDays,
+                IsOverdue = DateTime.UtcNow.AddHours(7) > assignment.Deadline,
+                DaysUntilDeadline = (int)(assignment.Deadline - DateTime.UtcNow.AddHours(7)).TotalDays,
                 Status = assignment.Status,
                 UiStatus = GetUiStatus(assignment)
             };
@@ -1573,7 +1573,7 @@ namespace Service.Service
 
         private string GetUiStatus(Assignment assignment)
         {
-            var now = DateTime.UtcNow;
+            var now = DateTime.UtcNow.AddHours(7);
 
             // Chỉ hiển thị phụ khi đang Active
             if (assignment.Status == AssignmentStatusEnum.Active.ToString())
@@ -1642,7 +1642,7 @@ namespace Service.Service
         }
         private string CalculateAssignmentStatus(Assignment assignment)
         {
-            var now = DateTime.UtcNow;
+            var now = DateTime.UtcNow.AddHours(7);
 
             // 1. Upcoming - chưa đến StartDate
             if (assignment.StartDate.HasValue && now < assignment.StartDate.Value)
@@ -1674,7 +1674,7 @@ namespace Service.Service
                     .ToListAsync();
 
                 // Filter assignments based on timeline và trạng thái
-                var now = DateTime.UtcNow;
+                var now = DateTime.UtcNow.AddHours(7);
                 var activeAssignments = assignments
                     .Where(a =>
                         (a.StartDate == null || a.StartDate <= now) &&
@@ -1750,7 +1750,7 @@ namespace Service.Service
                     IncludeAIScore = sourceAssignment.IncludeAIScore,
                     Status = AssignmentStatusEnum.Draft.ToString(),
                     ClonedFromAssignmentId = sourceAssignmentId,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.UtcNow.AddHours(7)
                 };
 
                 // Clone rubric nếu có
@@ -1941,7 +1941,7 @@ namespace Service.Service
                     .Where(a => a.CourseInstanceId == courseInstanceId)
                     .ToListAsync();
 
-                var now = DateTime.UtcNow;
+                var now = DateTime.UtcNow.AddHours(7);
                 var summary = new AssignmentStatusSummaryResponse
                 {
                     TotalAssignments = assignments.Count,
@@ -2000,7 +2000,7 @@ namespace Service.Service
         {
             try
             {
-                var now = DateTime.UtcNow;
+                var now = DateTime.UtcNow.AddHours(7);
 
                 var assignments = await _context.Assignments
                     .Include(a => a.CourseInstance)
@@ -2119,7 +2119,7 @@ namespace Service.Service
                     );
                 }
                 // Kiểm tra logic chuyển trạng thái
-                if (assignment.StartDate.HasValue && DateTime.UtcNow < assignment.StartDate.Value)
+                if (assignment.StartDate.HasValue && DateTime.UtcNow.AddHours(7) < assignment.StartDate.Value)
                 {
                     assignment.Status = AssignmentStatusEnum.Upcoming.ToString();
                 }
@@ -2148,7 +2148,7 @@ namespace Service.Service
 
         public async Task AutoUpdateUpcomingAssignmentsAsync()
         {
-            var now = DateTime.UtcNow;
+            var now = DateTime.UtcNow.AddHours(7);
             var UpcomingAssignments = await _context.Assignments
                 .Where(a => a.Status == AssignmentStatusEnum.Upcoming.ToString() &&
                             a.StartDate.HasValue &&
@@ -2168,7 +2168,7 @@ namespace Service.Service
 
         private string ValidateAssignmentDates(DateTime? startDate, DateTime deadline, DateTime? reviewDeadline, DateTime? finalDeadline)
         {
-            var now = DateTime.UtcNow;
+            var now = DateTime.UtcNow.AddHours(7);
 
             // Phải là ngày hiện tại hoặc tương lai
             if (startDate.HasValue && startDate.Value.Date < now.Date)
