@@ -258,46 +258,45 @@ namespace Service.Service
         }
         public async Task<string> CheckSubmissionRelevanceAsync(string documentText, string context, string assignmentTitle)
         {
-            var prompt = $@"**STRICT SUBMISSION RELEVANCE CHECK**
+            var prompt = $@"**STRICT ASSIGNMENT RELEVANCE & DOMAIN CHECK**
 
-ASSIGNMENT TITLE: {assignmentTitle}
+ASSIGNMENT META:
+- Title: {assignmentTitle}
+- Requirements/Context: {context}
 
-ASSIGNMENT CONTEXT & REQUIREMENTS:
-{context}
-
-SUBMITTED DOCUMENT CONTENT:
+SUBMITTED DOCUMENT CONTENT (Snippet):
 {documentText}
 
-**YOUR TASK:**
-Determine if this submission is RELEVANT to the assignment requirements.
+**YOUR ROLE:**
+You are a strict exam proctor. Your ONLY job is to verify if the student submitted the correct file for the correct subject.
 
-**EVALUATION CRITERIA:**
-1. Topic Match: Does the content address the assignment topic?
-2. Content Type Match: Does it match expected format (e.g., code for programming assignments, essay for writing assignments)?
-3. Technical Requirements: Does it attempt to fulfill technical requirements mentioned?
-4. Relevance Level: Is this a genuine attempt at the assignment or completely unrelated content?
+**CRITICAL CHECKS (Step-by-Step):**
+1. **Identify Assignment Domain:** What is the subject of the assignment? (e.g., PR, Marketing, History, Coding, Math).
+2. **Identify Submission Domain:** What is the subject of the document? (e.g., Java Code, OOP, Cooking, Essay).
+3. **Compare Domains:** Do they match? 
+   - Public Relations (PR) != Computer Science (Java/OOP)
+   - Marketing != Cooking
+   - History != Mathematics
 
-**STRICT RULES:**
-- Programming assignments MUST contain actual code implementation
-- Analysis assignments MUST contain analysis, not just requirements/use cases
-- If submission is about a different topic entirely → NOT RELEVANT
-- If submission is just requirements/planning for a different system → NOT RELEVANT
-- Random text, lorem ipsum, or placeholder content → NOT RELEVANT
+**STRICT RULES FOR 'NOT_RELEVANT':**
+- If the Assignment is about **Social Sciences/Business** (PR, Marketing, Econ) and the Submission contains **Programming Code** (Java, C#, Python) -> **NOT_RELEVANT** (Wrong Subject).
+- If the Assignment requires an **Essay/Case Study** and the Submission is **Technical Documentation/Code** -> **NOT_RELEVANT**.
+- Even if the submission is a *high-quality* paper, if it is for the WRONG SUBJECT, it is **NOT_RELEVANT**.
+- If the submission discusses 'Classes', 'Objects', 'Code', 'Functions' but the assignment asks for 'Strategies', 'Campaigns', 'Theories' -> **NOT_RELEVANT**.
 
-**RESPONSE FORMAT (YOU MUST FOLLOW EXACTLY):**
+**RESPONSE FORMAT:**
 Return ONLY ONE of these two responses:
 
-RELEVANT|[Brief reason why it matches the assignment]
+RELEVANT|[Brief reason]
 
 OR
 
-NOT_RELEVANT|[Specific reason why it doesn't match - be clear about what's wrong]
+NOT_RELEVANT|[Specific reason: Mention the Subject Mismatch. E.g., 'Assignment is PR but submission is Java Code']
 
 **EXAMPLES:**
-- Assignment about Java Banking System, submission contains Python web scraping code → NOT_RELEVANT|Wrong topic and wrong programming language
-- Assignment about OOP Banking System, submission contains use case diagrams only → NOT_RELEVANT|Missing code implementation, only contains requirements analysis
-- Assignment about Marketing Strategy, submission contains C++ code → NOT_RELEVANT|Completely different topic and content type
-- Assignment about Banking System OOP, submission contains Account class implementation → RELEVANT|Contains relevant OOP code for banking domain
+- Assign: 'PR Case Study', Sub: 'Java OOP Patterns' -> NOT_RELEVANT|Domain mismatch: Assignment is Public Relations, Submission is Computer Science (Java Code).
+- Assign: 'Intro to C#', Sub: 'History of Rome' -> NOT_RELEVANT|Domain mismatch: Assignment is Programming, Submission is History.
+- Assign: 'PR Case Study', Sub: 'Analysis of Pepsi Crisis' -> RELEVANT|Matches topic and format (PR Case Study).
 
 NOW EVALUATE THE SUBMISSION ABOVE:";
 
@@ -342,7 +341,7 @@ REQUIREMENTS: Evaluate this criterion. Return format: Score: X | Summary: [conci
         public async Task<(bool IsRelevant, string CheatDetails)> CheckIntegrityAsync(string documentText, string assignmentTitle, string studentName)
         {
             var prompt = $@"
-**SUBMISSION INTEGRITY & ANONYMITY CHECK**
+**STRICT BLIND REVIEW & ANONYMITY CHECK**
 
 ASSIGNMENT TITLE: {assignmentTitle}
 
@@ -351,18 +350,18 @@ DOCUMENT CONTENT:
 
 **YOUR TASKS:**
 1. **Relevance Check:** Determine if the content is RELEVANT to the assignment title (Yes/No).
-2. **Identity/Anonymity Check:** Scan the document (especially headers, footers, first page) for ANY Student Name or Student ID/Code.
-   - This is a **BLIND REVIEW** process. 
-   - The presence of ANY student name or student ID is strictly PROHIBITED and considered cheating/violation of anonymity rules.
-   - Do NOT compare with '{studentName}'. Just find IF there is ANY name or ID.
+2. **Anonymity Check (CRITICAL):** - This submission allows **NO PERSONAL IDENTIFIERS**.
+   - Scan the document for **ANY** Student Name or Student ID/Code appearing in headers, footers, titles, or signatures.
+   - **RULE:** If you find ANY name (even if it looks like the author's name) or ANY ID, set 'hasIdentityIssue' to true.
+   - Ignore names of famous people, authors of cited books, or names in coding examples (e.g., 'String name = ""John"";'). ONLY flag names that identify the submitter.
 
 **RESPONSE FORMAT:**
 Return a valid JSON object ONLY. No markdown.
 {{
   ""isRelevant"": true/false,
   ""hasIdentityIssue"": true/false,
-  ""foundName"": ""[Extract the Name found, or empty if none]"",
-  ""foundId"": ""[Extract the Student ID found, or empty if none]""
+  ""foundName"": ""[The specific name found in the document, or empty]"",
+  ""foundId"": ""[The specific ID found in the document, or empty]""
 }}";
 
             try
