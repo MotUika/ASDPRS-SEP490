@@ -120,7 +120,7 @@ namespace Repository.Repository
 
             if (submission != null)
             {
-                submission.GradedAt = DateTime.UtcNow;
+                submission.GradedAt = DateTime.UtcNow.AddHours(7);
                 await _context.SaveChangesAsync();
             }
         }

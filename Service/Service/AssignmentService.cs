@@ -2107,7 +2107,7 @@ namespace Service.Service
                 }
 
                 // 🔥 UPCOMING = chưa tới StartDate
-                if (DateTime.UtcNow < courseInstance.StartDate)
+                if (DateTime.UtcNow.AddHours(7) < courseInstance.StartDate)
                 {
                     return new BaseResponse<AssignmentResponse>(
                         "Cannot publish assignment because the course has not started yet.",
