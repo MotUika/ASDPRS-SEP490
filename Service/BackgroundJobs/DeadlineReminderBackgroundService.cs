@@ -9,7 +9,7 @@ using Service.RequestAndResponse.Request.Notification;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Service.BackgroundJobs
@@ -35,12 +35,15 @@ namespace Service.BackgroundJobs
                 {
                     using (var scope = _services.CreateScope())
                     {
-                        var assignmentRepository = scope.ServiceProvider.GetRequiredService<IAssignmentRepository>();
+
                         var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
                         var context = scope.ServiceProvider.GetRequiredService<ASDPRSContext>();
 
-                        await CheckUpcomingDeadlines(assignmentRepository, notificationService, context);
-                        await CheckNewActiveAssignments(assignmentRepository, notificationService, context);
+                        await CheckNewActiveAssignments(notificationService, context);
+
+                        await CheckDeadlineReminder(notificationService, context, hoursBeforeDeadline: 48, notificationType: "DeadlineReminder_48h");
+
+                        await CheckDeadlineReminder(notificationService, context, hoursBeforeDeadline: 24, notificationType: "DeadlineReminder_24h");
                     }
 
                     // Chạy mỗi 30 phút
@@ -49,51 +52,66 @@ namespace Service.BackgroundJobs
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Error in Deadline Reminder Background Service");
-                    await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken); // Chờ 5 phút nếu có lỗi
+                    await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);
                 }
             }
         }
 
-        private async Task CheckUpcomingDeadlines(IAssignmentRepository assignmentRepository, INotificationService notificationService, ASDPRSContext context)
+        private async Task CheckDeadlineReminder(INotificationService notificationService, ASDPRSContext context, int hoursBeforeDeadline, string notificationType)
         {
             var now = DateTime.UtcNow.AddHours(7);
-            var reminderTime = now.AddHours(24); // Nhắc 24h trước deadline
+            var limitTime = now.AddHours(hoursBeforeDeadline);
 
-            var assignmentsDueSoon = await context.Assignments
-                .Where(a => a.Deadline <= reminderTime &&
-                           a.Deadline > now &&
-                           a.Status == "Active")
+            var assignments = await context.Assignments
+                .Where(a => a.Deadline <= limitTime && 
+                            a.Deadline > now &&        
+                            a.Status == "Active")
                 .Include(a => a.CourseInstance)
                 .ThenInclude(ci => ci.CourseStudents)
                 .ToListAsync();
 
-            foreach (var assignment in assignmentsDueSoon)
+            foreach (var assignment in assignments)
             {
+                // Chỉ nhắc những sinh viên chưa nộp bài
                 foreach (var student in assignment.CourseInstance.CourseStudents)
                 {
+                    bool hasSubmitted = await context.Submissions.AnyAsync(s =>
+                        s.AssignmentId == assignment.AssignmentId &&
+                        s.UserId == student.UserId);
+
+                    if (hasSubmitted) continue;
+
+                    bool alreadySent = await context.Notifications.AnyAsync(n =>
+                        n.UserId == student.UserId &&
+                        n.AssignmentId == assignment.AssignmentId &&
+                        n.Type == notificationType);
+
+                    if (alreadySent) continue;
+
+                    // 3. Gửi thông báo
+                    var timeText = hoursBeforeDeadline == 24 ? "1 day" : "2 days";
                     var notificationRequest = new CreateNotificationRequest
                     {
                         UserId = student.UserId,
                         Title = "Assignment Deadline Reminder",
-                        Message = $"Assignment '{assignment.Title}' is due on {assignment.Deadline:dd/MM/yyyy HH:mm}. Please submit your work before the deadline.",
-                        Type = "DeadlineReminder",
+                        Message = $"Reminder: You have less than {timeText} to submit assignment '{assignment.Title}'. Deadline: {assignment.Deadline:dd/MM/yyyy HH:mm}.",
+                        Type = notificationType,
                         AssignmentId = assignment.AssignmentId
                     };
 
                     await notificationService.CreateNotificationAsync(notificationRequest);
                 }
 
-                _logger.LogInformation($"Sent deadline reminders for assignment {assignment.AssignmentId} to {assignment.CourseInstance.CourseStudents.Count} students");
             }
         }
 
-        private async Task CheckNewActiveAssignments(IAssignmentRepository assignmentRepository, INotificationService notificationService, ASDPRSContext context)
+        private async Task CheckNewActiveAssignments(INotificationService notificationService, ASDPRSContext context)
         {
             var lastHour = DateTime.UtcNow.AddHours(7).AddHours(-1);
 
             var newActiveAssignments = await context.Assignments
                 .Where(a => a.Status == "Active" &&
-                           a.CreatedAt >= lastHour)
+                            a.CreatedAt >= lastHour)
                 .Include(a => a.CourseInstance)
                 .ThenInclude(ci => ci.CourseStudents)
                 .ToListAsync();
@@ -102,6 +120,13 @@ namespace Service.BackgroundJobs
             {
                 foreach (var student in assignment.CourseInstance.CourseStudents)
                 {
+                    bool alreadySent = await context.Notifications.AnyAsync(n =>
+                        n.UserId == student.UserId &&
+                        n.AssignmentId == assignment.AssignmentId &&
+                        n.Type == "AssignmentActive");
+
+                    if (alreadySent) continue;
+
                     var notificationRequest = new CreateNotificationRequest
                     {
                         UserId = student.UserId,
@@ -114,7 +139,7 @@ namespace Service.BackgroundJobs
                     await notificationService.CreateNotificationAsync(notificationRequest);
                 }
 
-                _logger.LogInformation($"Sent new assignment notifications for assignment {assignment.AssignmentId} to {assignment.CourseInstance.CourseStudents.Count} students");
+                _logger.LogInformation($"Processed new assignment notifications for assignment {assignment.AssignmentId}");
             }
         }
     }
