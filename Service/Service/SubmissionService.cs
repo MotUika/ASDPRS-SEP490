@@ -83,7 +83,6 @@ namespace Service.Service
                 if (assignment == null)
                     return new BaseResponse<SubmissionResponse>("Assignment not found", StatusCodeEnum.NotFound_404, null);
 
-
                 if (assignment.Status != AssignmentStatusEnum.Active.ToString())
                 {
                     return new BaseResponse<SubmissionResponse>(
@@ -105,10 +104,10 @@ namespace Service.Service
                         null);
                 }
 
-                if (now > (assignment.FinalDeadline ?? assignment.Deadline))
+                if (now > assignment.Deadline)
                 {
                     return new BaseResponse<SubmissionResponse>(
-                        $"Cannot submit assignment after final deadline: {assignment.FinalDeadline ?? assignment.Deadline}",
+                        $"Cannot submit assignment after deadline: {assignment.Deadline}. Late submissions are not allowed.",
                         StatusCodeEnum.BadRequest_400,
                         null);
                 }
@@ -129,11 +128,11 @@ namespace Service.Service
                 {
                     AssignmentId = request.AssignmentId,
                     UserId = request.UserId,
-                    FileUrl = uploadResult.FileUrl,        // URL to serve (public or signed)
-                    FileName = uploadResult.FileName,      // object path in bucket (useful to delete)
+                    FileUrl = uploadResult.FileUrl,
+                    FileName = uploadResult.FileName,
                     OriginalFileName = request.File.FileName,
                     Keywords = request.Keywords,
-                    SubmittedAt = DateTime.UtcNow.AddHours(7),
+                    SubmittedAt = now,
                     Status = "Submitted",
                     IsPublic = request.IsPublic
                 };
@@ -142,14 +141,6 @@ namespace Service.Service
                 var response = await MapToSubmissionResponse(createdSubmission);
 
                 _logger.LogInformation($"Submission created successfully. SubmissionId: {createdSubmission.SubmissionId}");
-
-                // Late check
-                if (submission.SubmittedAt > assignment.Deadline && submission.SubmittedAt <= (assignment.FinalDeadline ?? DateTime.MaxValue))
-                {
-                    submission.Status = "Late";
-                    await _submissionRepository.UpdateAsync(submission);
-                }
-
                 return new BaseResponse<SubmissionResponse>("Submission created successfully", StatusCodeEnum.Created_201, response);
             }
             catch (Exception ex)
