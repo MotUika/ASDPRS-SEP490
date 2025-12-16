@@ -1457,7 +1457,7 @@ namespace Service.Service
                 if (!assignment.ReviewDeadline.HasValue || DateTime.UtcNow.AddHours(7) <= assignment.ReviewDeadline.Value)
                 {
                     return new BaseResponse<bool>(
-                        "Cannot publish grades before review deadline",
+                        "Cannot publish scores before review deadline",
                         StatusCodeEnum.BadRequest_400,
                         false);
                 }
@@ -1467,14 +1467,14 @@ namespace Service.Service
 
 
                 return new BaseResponse<bool>(
-                    "Grades published successfully",
+                    "Scores published successfully",
                     StatusCodeEnum.OK_200,
                     true);
             }
             catch (Exception ex)
             {
                 return new BaseResponse<bool>(
-                    $"Error publishing grades: {ex.Message}",
+                    $"Error publishing scores: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
                     false);
             }
@@ -2059,15 +2059,15 @@ namespace Service.Service
 
                 return new BaseResponse<List<PublishedGradeAssignmentResponse>>(
                     response.Any()
-                        ? "Published grades retrieved successfully"
-                        : "No published grades available",
+                        ? "Published scores retrieved successfully"
+                        : "No published scores available",
                     StatusCodeEnum.OK_200,
                     response);
             }
             catch (Exception ex)
             {
                 return new BaseResponse<List<PublishedGradeAssignmentResponse>>(
-                    $"Error retrieving published grades: {ex.Message}",
+                    $"Error retrieving published scores: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
                     null);
             }

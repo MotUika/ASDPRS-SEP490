@@ -472,7 +472,13 @@ namespace Service.Service
             return new BaseResponse<bool>(message, StatusCodeEnum.OK_200, true);
         }
 
-        public async Task SendGradesPublishedNotificationToStudents(int assignmentId)
+        public async Task Send
+            
+            
+            
+            
+            
+            sPublishedNotificationToStudents(int assignmentId)
         {
             var assignment = await _assignmentRepository.GetByIdAsync(assignmentId);
             if (assignment == null) return;
@@ -484,9 +490,9 @@ namespace Service.Service
                 var request = new CreateNotificationRequest
                 {
                     UserId = student.UserId,
-                    Title = "Grades Published",
-                    Message = $"The grades for assignment '{assignment.Title}' have been published.",
-                    Type = "GradesPublished",
+                    Title = "Scores Published",
+                    Message = $"The scores for assignment '{assignment.Title}' have been published.",
+                    Type = "ScoresPublished",
                     AssignmentId = assignment.AssignmentId
                 };
 

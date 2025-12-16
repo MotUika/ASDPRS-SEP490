@@ -74,7 +74,7 @@ namespace Service.Service
                 if (assignment == null || assignment.Status != "GradesPublished")
                 {
                     return new BaseResponse<RegradeRequestResponse>(
-                        "Cannot request regrade before grades are published",
+                        "Cannot request regrade before scores are published",
                         StatusCodeEnum.BadRequest_400,
                         null);
                 }
@@ -95,7 +95,7 @@ namespace Service.Service
                     if (DateTime.UtcNow.AddHours(7) > requestDeadline)
                     {
                         return new BaseResponse<RegradeRequestResponse>(
-                            $"Regrade request deadline has passed. Students must submit requests within {requestDeadlineDays} days after grades are published (Deadline: {requestDeadline:yyyy-MM-dd HH:mm})",
+                            $"Regrade request deadline has passed. Students must submit requests within {requestDeadlineDays} days after scores are published (Deadline: {requestDeadline:yyyy-MM-dd HH:mm})",
                             StatusCodeEnum.BadRequest_400,
                             null);
                     }
