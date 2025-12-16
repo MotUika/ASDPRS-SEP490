@@ -128,14 +128,21 @@ namespace Service.Service
         {
             try
             {
-                // Validate if user exists
                 var userExists = await _context.Users.AnyAsync(u => u.Id == request.CreatedByUserId);
                 if (!userExists)
                 {
                     return new BaseResponse<RubricTemplateResponse>("User not found", StatusCodeEnum.NotFound_404, null);
                 }
 
-                // Check for duplicate title for the same user
+                if (request.CourseId.HasValue && request.CourseId > 0)
+                {
+                    var courseExists = await _context.Courses.AnyAsync(c => c.CourseId == request.CourseId);
+                    if (!courseExists)
+                    {
+                        return new BaseResponse<RubricTemplateResponse>($"Course with Id {request.CourseId} not found", StatusCodeEnum.NotFound_404, null);
+                    }
+                }
+
                 var duplicateTemplate = await _context.RubricTemplates
                     .AnyAsync(rt => rt.CreatedByUserId == request.CreatedByUserId && rt.Title == request.Title);
 
@@ -145,20 +152,24 @@ namespace Service.Service
                 }
 
                 var rubricTemplate = _mapper.Map<RubricTemplate>(request);
+
+                rubricTemplate.CourseId = request.CourseId;
+
                 rubricTemplate.CreatedAt = DateTime.UtcNow.AddHours(7);
                 rubricTemplate.IsPublic = false;
 
                 var createdRubricTemplate = await _rubricTemplateRepository.AddAsync(rubricTemplate);
 
-                // Reload with related data for response
                 var rubricTemplateWithDetails = await _context.RubricTemplates
                     .Include(rt => rt.CreatedByUser)
                     .Include(rt => rt.Rubrics)
                     .Include(rt => rt.CriteriaTemplates)
-                     .Include(rt => rt.Major)
+                    .Include(rt => rt.Major)
+                    .Include(rt => rt.Course)
                     .FirstOrDefaultAsync(rt => rt.TemplateId == createdRubricTemplate.TemplateId);
 
                 var response = _mapper.Map<RubricTemplateResponse>(rubricTemplateWithDetails);
+
                 return new BaseResponse<RubricTemplateResponse>("Rubric template created successfully", StatusCodeEnum.Created_201, response);
             }
             catch (Exception ex)
@@ -171,12 +182,12 @@ namespace Service.Service
         {
             try
             {
-                // Lấy RubricTemplate hiện tại với các navigation property
                 var existingRubricTemplate = await _context.RubricTemplates
                     .Include(rt => rt.CreatedByUser)
                     .Include(rt => rt.Rubrics)
                     .Include(rt => rt.CriteriaTemplates)
                     .Include(rt => rt.Major)
+                    .Include(rt => rt.Course)
                     .FirstOrDefaultAsync(rt => rt.TemplateId == request.TemplateId);
 
                 if (existingRubricTemplate == null)
@@ -184,13 +195,12 @@ namespace Service.Service
                     return new BaseResponse<RubricTemplateResponse>("Rubric template not found", StatusCodeEnum.NotFound_404, null);
                 }
 
-                // Check duplicate title nếu Title được thay đổi
                 if (!string.IsNullOrEmpty(request.Title) && request.Title != existingRubricTemplate.Title)
                 {
                     var duplicateTemplate = await _context.RubricTemplates
                         .AnyAsync(rt => rt.CreatedByUserId == existingRubricTemplate.CreatedByUserId &&
-                                       rt.Title == request.Title &&
-                                       rt.TemplateId != request.TemplateId);
+                                         rt.Title == request.Title &&
+                                         rt.TemplateId != request.TemplateId);
 
                     if (duplicateTemplate)
                     {
@@ -200,9 +210,6 @@ namespace Service.Service
                     existingRubricTemplate.Title = request.Title;
                 }
 
-                // Bỏ update IsPublic ở đây
-
-                // Update MajorId nếu được cung cấp và khác với MajorId hiện tại
                 if (request.MajorId.HasValue && request.MajorId.Value != existingRubricTemplate.MajorId)
                 {
                     // Kiểm tra MajorId hợp lệ
@@ -213,15 +220,29 @@ namespace Service.Service
                     existingRubricTemplate.MajorId = request.MajorId.Value;
                 }
 
-                // Lưu thay đổi
+
+                if (request.CourseId != existingRubricTemplate.CourseId)
+                {
+                    if (request.CourseId.HasValue)
+                    {
+                        var courseExists = await _context.Courses.AnyAsync(c => c.CourseId == request.CourseId.Value);
+                        if (!courseExists)
+                        {
+                            return new BaseResponse<RubricTemplateResponse>("Course not found", StatusCodeEnum.NotFound_404, null);
+                        }
+                    }
+
+                    existingRubricTemplate.CourseId = request.CourseId;
+                }
+
                 await _rubricTemplateRepository.UpdateAsync(existingRubricTemplate);
 
-                // Reload entity với navigation properties để map đầy đủ dữ liệu
                 var rubricTemplateWithDetails = await _context.RubricTemplates
                     .Include(rt => rt.CreatedByUser)
                     .Include(rt => rt.Rubrics)
                     .Include(rt => rt.CriteriaTemplates)
                     .Include(rt => rt.Major)
+                    .Include(rt => rt.Course)
                     .FirstOrDefaultAsync(rt => rt.TemplateId == existingRubricTemplate.TemplateId);
 
                 var response = _mapper.Map<RubricTemplateResponse>(rubricTemplateWithDetails);
