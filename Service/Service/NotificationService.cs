@@ -142,9 +142,12 @@ namespace Service.Service
 
         private bool ShouldSendEmail(Notification notification)
         {
+            if (notification.Type.StartsWith("DeadlineReminder"))
+            {
+                return true;
+            }
             return notification.Type switch
             {
-                "DeadlineReminder" => true,
                 "GradesPublished" => true,
                 "AssignmentActive" => true,
                 "InstructorAssigned" => true,
