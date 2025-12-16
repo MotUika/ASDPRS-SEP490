@@ -758,7 +758,7 @@ namespace Service.Service
                             OriginalFileName = null,
                             Keywords = null,
 
-                            SubmittedAt = null, 
+                            SubmittedAt = null,
                             Status = "Not Submitted",
 
                             IsPublic = false,
@@ -1205,10 +1205,10 @@ namespace Service.Service
                 if (submission.FileUrl == "Not Submitted"
                     && submission.FinalScore == 0
                     && submission.Feedback != null
-                    && submission.Feedback.Contains("auto score zero"))
+                    && submission.Feedback.Contains("auto grade zero"))
                 {
                     return new BaseResponse<GradeSubmissionResponse>(
-                        "This submission was automatically scored with zero and cannot be manually scored.",
+                        "This submission was automatically graded with zero and cannot be manually graded.",
                         StatusCodeEnum.BadRequest_400,
                         null
                     );
@@ -1229,7 +1229,7 @@ namespace Service.Service
                     if (latestRegradeRequest == null || latestRegradeRequest.Status != "Approved")
                     {
                         return new BaseResponse<GradeSubmissionResponse>(
-                            "Cannot regrade: scores already published and no approved regrade request found.",
+                            "Cannot regrade: grades already published and no approved regrade request found.",
                             StatusCodeEnum.Forbidden_403,
                             null
                         );
@@ -1484,19 +1484,19 @@ namespace Service.Service
                     AssignmentTitle = submission.Assignment?.Title
                 };
 
-                _logger.LogInformation($"✅ Submission {submission.SubmissionId} scored successfully. FinalScore: {finalScore}");
+                _logger.LogInformation($"✅ Submission {submission.SubmissionId} graded successfully. FinalScore: {finalScore}");
 
                 return new BaseResponse<GradeSubmissionResponse>(
-                    "Submission scored successfully",
+                    "Submission graded successfully",
                     StatusCodeEnum.OK_200,
                     response
                 );
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error scoring submission");
+                _logger.LogError(ex, "Error grading submission");
                 return new BaseResponse<GradeSubmissionResponse>(
-                    "An error occurred while scoring submission",
+                    "An error occurred while grading submission",
                     StatusCodeEnum.InternalServerError_500,
                     null
                 );
@@ -1716,14 +1716,14 @@ namespace Service.Service
                 if (assignment.Status == AssignmentStatusEnum.GradesPublished.ToString())
                 {
                     return new BaseResponse<PublishGradesResponse>(
-                        "Scores have already been published for this assignment.",
+                        "Grades have already been published for this assignment.",
                         StatusCodeEnum.BadRequest_400,
                         new PublishGradesResponse
                         {
                             AssignmentId = assignment.AssignmentId,
                             AssignmentTitle = assignment.Title ?? "Unknown",
                             IsPublished = true,
-                            Note = "Assignment is already in 'ScoresPublished' status."
+                            Note = "Assignment is already in 'GradesPublished' status."
                         });
                 }
                 var now = DateTime.UtcNow.AddHours(7);
@@ -1766,10 +1766,10 @@ namespace Service.Service
 
                 // Check conditions
                 if (ungradedCount > 0 && !request.ForcePublish)
-                    blockingReasons.Add($"{ungradedCount} submissions are not scored.");
+                    blockingReasons.Add($"{ungradedCount} submissions are not graded.");
 
                 if (notSubmittedCount > 0 && !request.ForcePublish)
-                    blockingReasons.Add($"{notSubmittedCount} students did not submit. Use auto-score-zero.");
+                    blockingReasons.Add($"{notSubmittedCount} students did not submit. Use auto-grade-zero.");
 
                 if (!isPastDeadline && !request.ForcePublish)
                     blockingReasons.Add("The deadline has not passed yet.");
@@ -1777,7 +1777,7 @@ namespace Service.Service
                 // Cannot publish → return error
                 if (blockingReasons.Any() && !request.ForcePublish)
                 {
-                    response.Note = "Unable to publish scores.";
+                    response.Note = "Unable to publish grades.";
                     response.BlockingReasons = blockingReasons;
 
                     return new BaseResponse<PublishGradesResponse>(
@@ -1835,9 +1835,9 @@ namespace Service.Service
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, $"Error sending scores published notifications for assignment {assignment.AssignmentId}");
+                    _logger.LogError(ex, $"Error sending grades published notifications for assignment {assignment.AssignmentId}");
                 }
-                _logger.LogInformation($"Scores published for assignment {request.AssignmentId}, status set to ScoresPublished.");
+                _logger.LogInformation($"Grades published for assignment {request.AssignmentId}, status set to GradesPublished.");
 
                 return new BaseResponse<PublishGradesResponse>(
                     response.Note,
@@ -1846,7 +1846,7 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error publishing scores");
+                _logger.LogError(ex, "Error publishing grades");
                 return new BaseResponse<PublishGradesResponse>(
                     "Lỗi hệ thống", StatusCodeEnum.InternalServerError_500, null);
             }
@@ -1865,7 +1865,7 @@ namespace Service.Service
 
                 if (assignment.Status != "GradesPublished")
                 {
-                    return new BaseResponse<decimal?>("Scores not yet published", StatusCodeEnum.Forbidden_403, null);
+                    return new BaseResponse<decimal?>("Grades not yet published", StatusCodeEnum.Forbidden_403, null);
                 }
 
                 var submission = await _submissionRepository.GetByAssignmentAndUserAsync(assignmentId, studentId);
@@ -1876,7 +1876,7 @@ namespace Service.Service
 
                 if (submission.Status != "Graded")
                 {
-                    return new BaseResponse<decimal?>("Submission not scored", StatusCodeEnum.BadRequest_400, null);
+                    return new BaseResponse<decimal?>("Submission not graded", StatusCodeEnum.BadRequest_400, null);
                 }
 
                 return new BaseResponse<decimal?>("Score retrieved successfully", StatusCodeEnum.OK_200, submission.FinalScore);
@@ -1900,7 +1900,7 @@ namespace Service.Service
                 }
                 if (assignment.Status != "GradesPublished")
                 {
-                    return new BaseResponse<MyScoreDetailsResponse>("Scores not yet published", StatusCodeEnum.Forbidden_403, null);
+                    return new BaseResponse<MyScoreDetailsResponse>("Grades not yet published", StatusCodeEnum.Forbidden_403, null);
                 }
 
                 var submission = await _submissionRepository.GetByAssignmentAndUserAsync(assignmentId, studentId);
@@ -1911,7 +1911,7 @@ namespace Service.Service
 
                 if (submission.Status != "Graded")
                 {
-                    return new BaseResponse<MyScoreDetailsResponse>("Submission not scored", StatusCodeEnum.BadRequest_400, null);
+                    return new BaseResponse<MyScoreDetailsResponse>("Submission not graded", StatusCodeEnum.BadRequest_400, null);
                 }
 
                 // Lấy regrade requests nếu có
@@ -2128,7 +2128,7 @@ namespace Service.Service
                 // 1. Confirm
                 if (!request.ConfirmZeroGrade)
                     return new BaseResponse<AutoGradeZeroResponse>(
-                        "You must confirm (ConfirmZeroGrade = true) to apply zero scores.",
+                        "You must confirm (ConfirmZeroGrade = true) to apply zero grades.",
                         StatusCodeEnum.BadRequest_400, null);
 
                 // 2. Get assignment
@@ -2170,7 +2170,7 @@ namespace Service.Service
                 var nonSubmitters = enrolledStudentIds.Except(submittedUserIds).ToList();
                 if (!nonSubmitters.Any())
                     return new BaseResponse<AutoGradeZeroResponse>(
-                        "All student have submitted or scored zero.",
+                        "All student have submitted or graded zero.",
                         StatusCodeEnum.OK_200,
                         new AutoGradeZeroResponse { Success = true, NonSubmittedCount = 0 });
 
@@ -2204,7 +2204,7 @@ namespace Service.Service
                         SubmittedAt = submittedAt,
                         Status = "Graded",
                         FinalScore = 0,
-                        Feedback = "Not Submitted, auto score zero",
+                        Feedback = "Not Submitted, auto grade zero",
                         GradedAt = now,
                         IsPublic = true
                     };
@@ -2242,12 +2242,12 @@ namespace Service.Service
                     GradedZeroCount = newSubmissions.Count,
                     StudentCodes = studentCodes,
                     Success = true,
-                    Message = $"Assigned zero score to {newSubmissions.Count} students who did not submit.",
+                    Message = $"Assigned zero grade to {newSubmissions.Count} students who did not submit.",
                     ProcessedAt = now
                 };
 
                 _logger.LogInformation(
-                    "AutoGradeZero SUCCESS | Assignment {AssignmentId} | Zero score for {Count} students",
+                    "AutoGradeZero SUCCESS | Assignment {AssignmentId} | Zero graded for {Count} students",
                     request.AssignmentId, newSubmissions.Count);
 
                 return new BaseResponse<AutoGradeZeroResponse>(
@@ -2538,8 +2538,7 @@ namespace Service.Service
 
         //        var assignment = submission.Assignment;
 
-        //        // 🔥 Nếu assignment đã publish → yêu cầu re
-        //        
+        //        // 🔥 Nếu assignment đã publish → yêu cầu regrade
         //        if (assignment.Status == "GradesPublished")
         //        {
         //            var latestRegrade = await _context.RegradeRequests

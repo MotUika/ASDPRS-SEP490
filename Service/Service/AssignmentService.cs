@@ -225,7 +225,7 @@ namespace Service.Service
                     }
                 }
 
-                bool isBlindReviewFinal = true;     
+                bool isBlindReviewFinal = true;
                 bool includeAIScoreFinal = false;
                 var assignment = new Assignment
                 {
@@ -296,7 +296,7 @@ namespace Service.Service
                     }
                 }
 
-               // await _notificationService.SendNewAssignmentNotificationAsync(assignment.AssignmentId, assignment.CourseInstanceId);
+                // await _notificationService.SendNewAssignmentNotificationAsync(assignment.AssignmentId, assignment.CourseInstanceId);
                 var response = await MapToResponse(assignment);
                 return new BaseResponse<AssignmentResponse>(
                     "Assignment created successfully",
@@ -1457,7 +1457,7 @@ namespace Service.Service
                 if (!assignment.ReviewDeadline.HasValue || DateTime.UtcNow.AddHours(7) <= assignment.ReviewDeadline.Value)
                 {
                     return new BaseResponse<bool>(
-                        "Cannot publish scores before review deadline",
+                        "Cannot publish grades before review deadline",
                         StatusCodeEnum.BadRequest_400,
                         false);
                 }
@@ -1467,14 +1467,14 @@ namespace Service.Service
 
 
                 return new BaseResponse<bool>(
-                    "Scores published successfully",
+                    "Grades published successfully",
                     StatusCodeEnum.OK_200,
                     true);
             }
             catch (Exception ex)
             {
                 return new BaseResponse<bool>(
-                    $"Error publishing scores: {ex.Message}",
+                    $"Error publishing grades: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
                     false);
             }
@@ -2038,8 +2038,8 @@ namespace Service.Service
                     return new PublishedGradeAssignmentResponse
                     {
                         AssignmentId = a.AssignmentId,
-                        CourseInstanceId = a.CourseInstanceId,           
-                        SubmissionId = submission?.SubmissionId,      
+                        CourseInstanceId = a.CourseInstanceId,
+                        SubmissionId = submission?.SubmissionId,
 
                         Title = a.Title,
                         CourseName = $"{a.CourseInstance?.Course?.CourseName} ({a.CourseInstance?.SectionCode})",
@@ -2059,15 +2059,15 @@ namespace Service.Service
 
                 return new BaseResponse<List<PublishedGradeAssignmentResponse>>(
                     response.Any()
-                        ? "Published scores retrieved successfully"
-                        : "No published scores available",
+                        ? "Published grades retrieved successfully"
+                        : "No published grades available",
                     StatusCodeEnum.OK_200,
                     response);
             }
             catch (Exception ex)
             {
                 return new BaseResponse<List<PublishedGradeAssignmentResponse>>(
-                    $"Error retrieving published scores: {ex.Message}",
+                    $"Error retrieving published grades: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
                     null);
             }
@@ -2150,7 +2150,7 @@ namespace Service.Service
 
                 await _assignmentRepository.UpdateAsync(assignment);
                 //Gửi notification ngay khi publish
-               await _notificationService.SendNewAssignmentNotificationAsync(assignment.AssignmentId, assignment.CourseInstanceId);
+                await _notificationService.SendNewAssignmentNotificationAsync(assignment.AssignmentId, assignment.CourseInstanceId);
                 var response = await MapToResponse(assignment);
                 return new BaseResponse<AssignmentResponse>(
                     $"Assignment published successfully (Status: {assignment.Status})",
@@ -2213,7 +2213,7 @@ namespace Service.Service
             if (finalDeadline.HasValue && reviewDeadline.HasValue && reviewDeadline.Value >= finalDeadline.Value)
                 return "Review deadline must be before final deadline";
 
-            return null; 
+            return null;
         }
 
         private async Task<string> ValidateAssignmentDatesWithinCourseInstanceAsync(
