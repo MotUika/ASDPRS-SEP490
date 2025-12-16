@@ -23,7 +23,7 @@ namespace Service.RequestAndResponse.Request.Submission
 
         public bool PublishImmediately { get; set; } = false;
 
-        // 👇 Thêm phần rubric criteria
+        // Thêm phần rubric criteria
         public List<SubmissionCriteriaFeedbackRequest>? CriteriaFeedbacks { get; set; }
     }
 }
