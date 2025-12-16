@@ -14,6 +14,7 @@ namespace Service.RequestAndResponse.Request.Submission
     {
         public int SubmissionId { get; set; }
         public int InstructorId { get; set; }
+        public string FinalFeedback { get; set; } // cột Feedback tổng
         public List<ImportCriteriaScore> CriteriaScores { get; set; } = new();
     }
 
