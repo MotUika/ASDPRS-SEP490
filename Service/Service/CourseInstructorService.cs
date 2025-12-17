@@ -53,24 +53,32 @@ namespace Service.Service
                         null);
                 }
 
-                var user = await _userRepository.GetByIdAsync(request.UserId);
+
+                var user = await _userManager.FindByNameAsync(request.UserName);
+
+                if (user == null)
+                {
+                    user = await _userManager.FindByEmailAsync(request.UserName);
+                }
+
                 if (user == null)
                 {
                     return new BaseResponse<CourseInstructorResponse>(
-                        "User not found",
-                        StatusCodeEnum.BadRequest_400,
+                        $"User with username/email '{request.UserName}' not found",
+                        StatusCodeEnum.NotFound_404,
                         null);
                 }
+
                 if (!await _userManager.IsInRoleAsync(user, "Instructor"))
                 {
                     return new BaseResponse<CourseInstructorResponse>(
-                        "User does not have the Instructor role",
+                        "User exists but does not have the Instructor role",
                         StatusCodeEnum.BadRequest_400,
                         null);
                 }
 
                 var existing = (await _courseInstructorRepository.GetByCourseInstanceIdAsync(request.CourseInstanceId))
-                    .FirstOrDefault(ci => ci.UserId == request.UserId);
+                    .FirstOrDefault(ci => ci.UserId == user.Id);
 
                 if (existing != null)
                 {
@@ -83,14 +91,15 @@ namespace Service.Service
                 var courseInstructor = new CourseInstructor
                 {
                     CourseInstanceId = request.CourseInstanceId,
-                    UserId = request.UserId
+                    UserId = user.Id
                 };
 
                 await _courseInstructorRepository.AddAsync(courseInstructor);
+
                 await _notificationService.SendInstructorAssignedNotificationAsync(
                     user.Id,
                     courseInstance.CourseInstanceId
-);
+                );
 
 
                 var response = await MapToResponseAsync(courseInstructor);
@@ -107,7 +116,6 @@ namespace Service.Service
                     null);
             }
         }
-
         // 🔴 Xóa instructor khỏi lớp
         public async Task<BaseResponse<bool>> DeleteCourseInstructorAsync(int courseInstructorId, int courseInstanceId, int instructorId)
         {

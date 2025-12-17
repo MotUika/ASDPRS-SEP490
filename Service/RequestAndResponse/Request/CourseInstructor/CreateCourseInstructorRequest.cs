@@ -8,7 +8,7 @@ namespace Service.RequestAndResponse.Request.CourseInstructor
         public int CourseInstanceId { get; set; }
 
         [Required]
-        public int UserId { get; set; }
+        public string UserName { get; set; }
 
         [Required]
         public bool IsMainInstructor { get; set; } = false;
