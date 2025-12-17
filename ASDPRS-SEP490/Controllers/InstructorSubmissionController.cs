@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Service.Interface;
 using Service.IService;
 using Service.RequestAndResponse.BaseResponse;
@@ -334,6 +335,29 @@ namespace ASDPRS_SEP490.Controllers
             return StatusCode((int)result.StatusCode, result);
         }
 
+        [HttpPut("override-final-score")]
+        public async Task<IActionResult> OverrideFinalScore(
+       [FromBody] OverrideFinalScoreRequest request)
+        {
+            if (request.SubmissionId <= 0)
+            {
+                return BadRequest(new BaseResponse<object>(
+                    "SubmissionId is required",
+                    StatusCodeEnum.BadRequest_400,
+                    null));
+            }
+
+            var result = await _submissionService.OverrideFinalScoreAsync(request);
+
+            return result.StatusCode switch
+            {
+                StatusCodeEnum.OK_200 => Ok(result),
+                StatusCodeEnum.BadRequest_400 => BadRequest(result),
+                StatusCodeEnum.Forbidden_403 => StatusCode(403, result),
+                StatusCodeEnum.NotFound_404 => NotFound(result),
+                _ => StatusCode(500, result)
+            };
+        }
 
     }
 }
