@@ -3171,6 +3171,114 @@ namespace Service.Service
         }
 
 
+        public async Task<BaseResponse<OverrideFinalScoreResponse>> OverrideFinalScoreAsync(
+     OverrideFinalScoreRequest request)
+        {
+            try
+            {
+                var submission = await _submissionRepository.GetByIdAsync(request.SubmissionId);
+                if (submission == null)
+                {
+                    return new BaseResponse<OverrideFinalScoreResponse>(
+                        "Submission not found",
+                        StatusCodeEnum.NotFound_404,
+                        null
+                    );
+                }
+
+                var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
+                if (assignment == null)
+                {
+                    return new BaseResponse<OverrideFinalScoreResponse>(
+                        "Assignment not found",
+                        StatusCodeEnum.NotFound_404,
+                        null
+                    );
+                }
+
+                if (assignment.Status != AssignmentStatusEnum.GradesPublished.ToString())
+                {
+                    return new BaseResponse<OverrideFinalScoreResponse>(
+                        "Cannot override final score before grades are published",
+                        StatusCodeEnum.Forbidden_403,
+                        null
+                    );
+                }
+
+                var approvedRegrade = await _context.RegradeRequests
+                    .AnyAsync(r =>
+                        r.SubmissionId == submission.SubmissionId &&
+                        r.Status == "Approved");
+
+                if (!approvedRegrade)
+                {
+                    return new BaseResponse<OverrideFinalScoreResponse>(
+                        "No approved regrade request found for this submission",
+                        StatusCodeEnum.Forbidden_403,
+                        null
+                    );
+                }
+
+                if (request.NewFinalScore < 0 || request.NewFinalScore > 10)
+                {
+                    return new BaseResponse<OverrideFinalScoreResponse>(
+                        "Final score must be between 0 and 10",
+                        StatusCodeEnum.BadRequest_400,
+                        null
+                    );
+                }
+
+                if (submission.OldScore == null)
+                {
+                    submission.OldScore = submission.FinalScore;
+                }
+
+                submission.FinalScore = Math.Round(request.NewFinalScore, 2);
+                submission.GradedAt = DateTime.UtcNow.AddHours(7);
+                submission.Status = "Graded";
+
+                _logger.LogWarning(
+                    "FINAL SCORE OVERRIDDEN | SubmissionId={SubmissionId} | Old={Old} | New={New} | By={InstructorId}",
+                    submission.SubmissionId,
+                    submission.OldScore,
+                    submission.FinalScore,
+                    request.InstructorId
+                );
+
+                await _context.SaveChangesAsync();
+
+                var response = new OverrideFinalScoreResponse
+                {
+                    SubmissionId = submission.SubmissionId,
+                    OldFinalScore = submission.OldScore,
+                    NewFinalScore = submission.FinalScore.Value,
+                    OverriddenAt = submission.GradedAt.Value
+                };
+
+                _logger.LogInformation(
+                    "Final score overridden. SubmissionId={SubmissionId}, Old={Old}, New={New}",
+                    submission.SubmissionId,
+                    submission.OldScore,
+                    submission.FinalScore
+                );
+
+                return new BaseResponse<OverrideFinalScoreResponse>(
+                    "Final score overridden successfully",
+                    StatusCodeEnum.OK_200,
+                    response
+                );
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error overriding final score");
+                return new BaseResponse<OverrideFinalScoreResponse>(
+                    "An error occurred while overriding final score",
+                    StatusCodeEnum.InternalServerError_500,
+                    null
+                );
+            }
+        }
+
 
 
 

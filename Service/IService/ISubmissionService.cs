@@ -42,5 +42,7 @@ namespace Service.Interface
      GetAllSubmissionDetailsForExportAsync(int assignmentId);
         //Task<BaseResponse<GradeSubmissionResponse>> ImportGradeAsync(ImportGradeRequest request);
         Task<BaseResponse<List<GradeSubmissionResponse>>> ImportGradesFromExcelAsync(IFormFile file);
+        Task<BaseResponse<OverrideFinalScoreResponse>> OverrideFinalScoreAsync(
+    OverrideFinalScoreRequest request);
     }
 }
