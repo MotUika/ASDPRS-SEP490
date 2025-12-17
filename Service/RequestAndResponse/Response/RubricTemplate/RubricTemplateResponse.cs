@@ -16,6 +16,8 @@ namespace Service.RequestAndResponse.Response.RubricTemplate
         public int CriteriaTemplateCount { get; set; }
         public int? MajorId { get; set; }         
         public string? MajorName { get; set; }
+        public int? CourseId { get; set; }
+        public string? CourseName { get; set; }
         public List<CriteriaTemplateResponse> CriteriaTemplates { get; set; }
 
         // Thêm danh sách assignment đang dùng rubric template này

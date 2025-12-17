@@ -26,11 +26,9 @@ public class RubricTemplate
     [ForeignKey(nameof(MajorId))]
     public Major? Major { get; set; }
 
-    [NotMapped]
     public int? CourseId { get; set; }
 
     [ForeignKey(nameof(CourseId))]
-    [NotMapped]
     public Course? Course { get; set; }
 
     public ICollection<Rubric> Rubrics { get; set; }
