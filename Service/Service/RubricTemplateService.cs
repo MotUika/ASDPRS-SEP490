@@ -113,6 +113,7 @@ namespace Service.Service
                     .Include(rt => rt.Rubrics)
                     .Include(rt => rt.CriteriaTemplates)
                     .Include(rt => rt.Major)
+                    .Include(rt => rt.Course)
                     .ToListAsync();
 
                 var response = _mapper.Map<IEnumerable<RubricTemplateResponse>>(rubricTemplates);
@@ -409,6 +410,7 @@ namespace Service.Service
                     .Include(rt => rt.CreatedByUser)
                     .Include(rt => rt.Rubrics)
                     .Include(rt => rt.CriteriaTemplates)
+                    .Include(rt => rt.Course)
                     .Where(rt => rt.Title.Contains(searchTerm) ||
                                  (rt.CreatedByUser.FirstName + " " + rt.CreatedByUser.LastName).Contains(searchTerm))
                     .ToListAsync();
