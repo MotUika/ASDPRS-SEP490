@@ -46,7 +46,8 @@ public class SupabaseFileStorageService : IFileStorageService
             await _client.InitializeAsync();
             var storage = _client.Storage.From(_bucket);
 
-            var fileName = $"{Guid.NewGuid()}_{SanitizeFilename(file.FileName)}";
+            var fileExt = Path.GetExtension(file.FileName);
+            var fileName = $"{Guid.NewGuid()}{fileExt}";
             var path = string.IsNullOrEmpty(folder) ? fileName : $"{folder}/{fileName}";
 
             using var stream = file.OpenReadStream();
@@ -77,7 +78,6 @@ public class SupabaseFileStorageService : IFileStorageService
             };
         }
     }
-
     public async Task<string> CreateSignedDownloadUrlAsync(string path, int expireInSeconds = 3600)
     {
         await _client.InitializeAsync();
