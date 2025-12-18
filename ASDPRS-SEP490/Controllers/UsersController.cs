@@ -26,18 +26,20 @@ namespace ASDPRS_SEP490.Controllers
         private readonly UserManager<User> _userManager;
         private readonly INotificationService _announcementService;
         private readonly IDashboardService _dashboardService;
-        public UsersController(IUserService userService, UserManager<User> userManager, IDashboardService dashboardService)
+
+        public UsersController(IUserService userService, UserManager<User> userManager, IDashboardService dashboardService, INotificationService announcementService)
         {
             _userService = userService;
             _userManager = userManager;
             _dashboardService = dashboardService;
+            _announcementService = announcementService;
         }
 
         [HttpGet("{id}")]
         [SwaggerOperation(
-        Summary = "Lấy thông tin người dùng theo ID",
-        Description = "Trả về thông tin chi tiết của người dùng dựa trên ID được cung cấp"
-    )]
+            Summary = "Lấy thông tin người dùng theo ID",
+            Description = "Trả về thông tin chi tiết của người dùng dựa trên ID được cung cấp"
+        )]
         [SwaggerResponse(200, "Thành công", typeof(BaseResponse<UserResponse>))]
         [SwaggerResponse(404, "Không tìm thấy người dùng")]
         public async Task<IActionResult> GetUser(int id)
@@ -48,9 +50,9 @@ namespace ASDPRS_SEP490.Controllers
 
         [HttpGet("{id}/detail")]
         [SwaggerOperation(
-        Summary = "Lấy thông tin chi tiết người dùng theo ID",
-        Description = "Trả về thông tin chi tiết đầy đủ của người dùng bao gồm lịch sử lớp học, điểm số, submissions, reviews dựa trên ID được cung cấp"
-    )]
+            Summary = "Lấy thông tin chi tiết người dùng theo ID",
+            Description = "Trả về thông tin chi tiết đầy đủ của người dùng bao gồm lịch sử lớp học, điểm số, submissions, reviews dựa trên ID được cung cấp"
+        )]
         [SwaggerResponse(200, "Thành công", typeof(BaseResponse<UserDetailResponse>))]
         [SwaggerResponse(404, "Không tìm thấy người dùng")]
         public async Task<IActionResult> GetUserDetail(int id)
@@ -62,9 +64,9 @@ namespace ASDPRS_SEP490.Controllers
         [HttpGet]
         [Authorize(Roles = "Admin")]
         [SwaggerOperation(
-        Summary = "Lấy danh sách tất cả người dùng",
-        Description = "Trả về danh sách toàn bộ người dùng trong hệ thống (chỉ dành cho Admin)"
-    )]
+            Summary = "Lấy danh sách tất cả người dùng",
+            Description = "Trả về danh sách toàn bộ người dùng trong hệ thống (chỉ dành cho Admin)"
+        )]
         [SwaggerResponse(200, "Thành công", typeof(BaseResponse<IEnumerable<UserResponse>>))]
         [SwaggerResponse(403, "Không có quyền truy cập")]
         public async Task<IActionResult> GetAllUsers()
@@ -76,9 +78,9 @@ namespace ASDPRS_SEP490.Controllers
         [HttpPost]
         [Authorize(Roles = "Admin")]
         [SwaggerOperation(
-        Summary = "Tạo người dùng mới",
-        Description = "Tạo tài khoản người dùng mới với vai trò được chỉ định. Mật khẩu sẽ được gửi qua email nếu không được cung cấp"
-    )]
+            Summary = "Tạo người dùng mới",
+            Description = "Tạo tài khoản người dùng mới với vai trò được chỉ định. Mật khẩu sẽ được gửi qua email nếu không được cung cấp"
+        )]
         [SwaggerResponse(201, "Tạo thành công", typeof(BaseResponse<UserResponse>))]
         [SwaggerResponse(400, "Dữ liệu không hợp lệ")]
         [SwaggerResponse(409, "Email hoặc username đã tồn tại")]
@@ -91,9 +93,9 @@ namespace ASDPRS_SEP490.Controllers
         [HttpPut("{id}")]
         [Authorize]
         [SwaggerOperation(
-        Summary = "Cập nhật thông tin người dùng",
-        Description = "Cập nhật thông tin cá nhân của người dùng. Người dùng chỉ có thể cập nhật thông tin của chính mình, trừ khi là Admin"
-    )]
+            Summary = "Cập nhật thông tin người dùng",
+            Description = "Cập nhật thông tin cá nhân của người dùng. Người dùng chỉ có thể cập nhật thông tin của chính mình, trừ khi là Admin"
+        )]
         [SwaggerResponse(200, "Cập nhật thành công", typeof(BaseResponse<UserResponse>))]
         [SwaggerResponse(400, "Dữ liệu không hợp lệ hoặc ID không khớp")]
         [SwaggerResponse(404, "Không tìm thấy người dùng")]
@@ -109,9 +111,9 @@ namespace ASDPRS_SEP490.Controllers
         [HttpDelete("{id}")]
         [Authorize(Roles = "Admin")]
         [SwaggerOperation(
-        Summary = "Xóa người dùng (không khuyến khích xài)",
-        Description = "Xóa vĩnh viễn người dùng khỏi hệ thống (chỉ dành cho Admin)"
-    )]
+            Summary = "Xóa người dùng (không khuyến khích xài)",
+            Description = "Xóa vĩnh viễn người dùng khỏi hệ thống (chỉ dành cho Admin)"
+        )]
         [SwaggerResponse(200, "Xóa thành công", typeof(BaseResponse<bool>))]
         [SwaggerResponse(404, "Không tìm thấy người dùng")]
         public async Task<IActionResult> DeleteUser(int id)
@@ -123,9 +125,9 @@ namespace ASDPRS_SEP490.Controllers
         [HttpGet("email/{email}")]
         [Authorize]
         [SwaggerOperation(
-        Summary = "Tìm người dùng theo email",
-        Description = "Tìm kiếm thông tin người dùng dựa trên địa chỉ email"
-    )]
+            Summary = "Tìm người dùng theo email",
+            Description = "Tìm kiếm thông tin người dùng dựa trên địa chỉ email"
+        )]
         [SwaggerResponse(200, "Thành công", typeof(BaseResponse<UserResponse>))]
         [SwaggerResponse(404, "Không tìm thấy người dùng")]
         public async Task<IActionResult> GetUserByEmail(string email)
@@ -137,9 +139,9 @@ namespace ASDPRS_SEP490.Controllers
         [HttpGet("username/{username}")]
         [Authorize]
         [SwaggerOperation(
-        Summary = "Tìm người dùng theo username",
-        Description = "Tìm kiếm thông tin người dùng dựa trên username"
-    )]
+            Summary = "Tìm người dùng theo username",
+            Description = "Tìm kiếm thông tin người dùng dựa trên username"
+        )]
         [SwaggerResponse(200, "Thành công", typeof(BaseResponse<UserResponse>))]
         [SwaggerResponse(404, "Không tìm thấy người dùng")]
         public async Task<IActionResult> GetUserByUsername(string username)
@@ -151,9 +153,9 @@ namespace ASDPRS_SEP490.Controllers
         [HttpGet("role/{roleName}")]
         [Authorize(Roles = "Admin")]
         [SwaggerOperation(
-        Summary = "Lấy danh sách người dùng theo vai trò",
-        Description = "Trả về danh sách tất cả người dùng có vai trò được chỉ định"
-    )]
+            Summary = "Lấy danh sách người dùng theo vai trò",
+            Description = "Trả về danh sách tất cả người dùng có vai trò được chỉ định"
+        )]
         [SwaggerResponse(200, "Thành công", typeof(BaseResponse<IEnumerable<UserResponse>>))]
         public async Task<IActionResult> GetUsersByRole(string roleName)
         {
@@ -164,9 +166,9 @@ namespace ASDPRS_SEP490.Controllers
         [HttpGet("campus/{campusId}")]
         [Authorize(Roles = "Admin")]
         [SwaggerOperation(
-        Summary = "Lấy danh sách người dùng theo campus",
-        Description = "Trả về danh sách người dùng thuộc campus được chỉ định"
-    )]
+            Summary = "Lấy danh sách người dùng theo campus",
+            Description = "Trả về danh sách người dùng thuộc campus được chỉ định"
+        )]
         [SwaggerResponse(200, "Thành công", typeof(BaseResponse<IEnumerable<UserResponse>>))]
         public async Task<IActionResult> GetUsersByCampus(int campusId)
         {
@@ -176,11 +178,10 @@ namespace ASDPRS_SEP490.Controllers
 
         [HttpPut("{id}/avatar")]
         [Authorize]
-        [Authorize]
         [SwaggerOperation(
-        Summary = "Cập nhật avatar người dùng",
-        Description = "Cập nhật URL avatar cho người dùng"
-    )]
+            Summary = "Cập nhật avatar người dùng",
+            Description = "Cập nhật URL avatar cho người dùng"
+        )]
         [SwaggerResponse(200, "Cập nhật thành công", typeof(BaseResponse<string>))]
         [SwaggerResponse(400, "URL avatar không hợp lệ")]
         [SwaggerResponse(404, "Không tìm thấy người dùng")]
@@ -199,9 +200,9 @@ namespace ASDPRS_SEP490.Controllers
         [HttpPut("{id}/password")]
         [Authorize]
         [SwaggerOperation(
-        Summary = "Đổi mật khẩu người dùng",
-        Description = "Đổi mật khẩu cho người dùng (cần xác thực mật khẩu hiện tại)"
-    )]
+            Summary = "Đổi mật khẩu người dùng",
+            Description = "Đổi mật khẩu cho người dùng (cần xác thực mật khẩu hiện tại)"
+        )]
         [SwaggerResponse(200, "Đổi mật khẩu thành công", typeof(BaseResponse<bool>))]
         [SwaggerResponse(400, "Mật khẩu hiện tại không đúng")]
         public async Task<IActionResult> ChangePassword(int id, [FromBody] ChangePasswordRequest request)
@@ -214,9 +215,9 @@ namespace ASDPRS_SEP490.Controllers
         [HttpPut("{id}/deactivate")]
         [Authorize(Roles = "Admin")]
         [SwaggerOperation(
-        Summary = "Vô hiệu hóa tài khoản người dùng (khuyến khích xài)",
-        Description = "Vô hiệu hóa tài khoản người dùng, ngăn không cho đăng nhập"
-    )]
+            Summary = "Vô hiệu hóa tài khoản người dùng (khuyến khích xài)",
+            Description = "Vô hiệu hóa tài khoản người dùng, ngăn không cho đăng nhập"
+        )]
         [SwaggerResponse(200, "Vô hiệu hóa thành công", typeof(BaseResponse<bool>))]
         [SwaggerResponse(404, "Không tìm thấy người dùng")]
         public async Task<IActionResult> DeactivateUser(int id)
@@ -319,6 +320,47 @@ namespace ASDPRS_SEP490.Controllers
 
             using var stream = file.OpenReadStream();
             var result = await _userService.ImportUsersFromExcelAsync(stream);
+
+            return StatusCode((int)result.StatusCode, result);
+        }
+
+
+        [HttpPost("import-students")]
+        [Authorize(Roles = "Admin")]
+        [SwaggerOperation(
+            Summary = "Import Students from Excel",
+            Description = "Import multiple Students from Excel. Requires 'Major' column. Validates 'StudentCode' uniqueness. Existing users are updated (except Role)."
+        )]
+        [SwaggerResponse(201, "Import successful", typeof(BaseResponse<List<UserResponse>>))]
+        [SwaggerResponse(400, "Invalid file or missing requirements")]
+        [SwaggerResponse(500, "Server error")]
+        public async Task<IActionResult> ImportStudents(IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest(new { message = "File is required" });
+
+            using var stream = file.OpenReadStream();
+            var result = await _userService.ImportStudentsFromExcelAsync(stream);
+
+            return StatusCode((int)result.StatusCode, result);
+        }
+
+        [HttpPost("import-instructors")]
+        [Authorize(Roles = "Admin")]
+        [SwaggerOperation(
+            Summary = "Import Instructors from Excel",
+            Description = "Import multiple Instructors from Excel. Ignores 'Major' column (sets to null). Validates 'StudentCode' uniqueness."
+        )]
+        [SwaggerResponse(201, "Import successful", typeof(BaseResponse<List<UserResponse>>))]
+        [SwaggerResponse(400, "Invalid file")]
+        [SwaggerResponse(500, "Server error")]
+        public async Task<IActionResult> ImportInstructors(IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest(new { message = "File is required" });
+
+            using var stream = file.OpenReadStream();
+            var result = await _userService.ImportInstructorsFromExcelAsync(stream);
 
             return StatusCode((int)result.StatusCode, result);
         }

@@ -78,7 +78,7 @@ namespace Service.Service
                 bool isPastDeadline = DateTime.UtcNow.AddHours(7) > deadline;
 
                 var results = new List<CourseStudentResponse>();
-                var skippedUsers = new List<string>();
+                var errors = new List<string>();
                 int instructorCount = 0;
 
                 User changedBy = null;
@@ -91,98 +91,181 @@ namespace Service.Service
 
                     for (int row = 2; row <= rowCount; row++)
                     {
-                        // Đọc dữ liệu từ Excel
                         var code = worksheet.Cells[row, 2].Value?.ToString().Trim();
                         var surname = worksheet.Cells[row, 3].Value?.ToString().Trim();
                         var middle = worksheet.Cells[row, 4].Value?.ToString().Trim();
                         var given = worksheet.Cells[row, 5].Value?.ToString().Trim();
                         var email = worksheet.Cells[row, 6].Value?.ToString().Trim();
                         var majorCode = worksheet.Cells[row, 7].Value?.ToString().Trim();
-                        var role = worksheet.Cells[row, 8].Value?.ToString().Trim(); // Cột Role: Student hoặc Instructor
+                        var excelRole = worksheet.Cells[row, 8].Value?.ToString().Trim();
                         var campusVal = worksheet.Cells[row, 9].Value?.ToString()?.Trim();
 
-                        if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(email)) continue;
+                        if (string.IsNullOrEmpty(email)) continue;
 
-                        // Check Campus
                         if (int.TryParse(campusVal, out int excelCampusId))
                         {
                             if (excelCampusId != courseInstance.CampusId)
                             {
-                                skippedUsers.Add($"{email} (Campus mismatch: File {excelCampusId} vs Class {courseInstance.CampusId})");
+                                errors.Add($"{email}: Campus mismatch (File {excelCampusId} vs Class {courseInstance.CampusId})");
                                 continue;
                             }
                         }
 
-                        // 1. Tạo hoặc Lấy User
-                        var user = await _userManager.FindByEmailAsync(email);
-                        if (user == null)
+                        int? majorId = null;
+                        if (!string.IsNullOrEmpty(majorCode))
                         {
-                            // Tạo user mới (Student hoặc Instructor) và gửi mail
-                            user = await CreateUserFromImportAsync(code, surname, middle, given, email, courseInstance.CampusId, role, majorCode);
+                            var major = await _context.Majors.FirstOrDefaultAsync(m => m.MajorCode == majorCode);
+                            if (major != null) majorId = major.MajorId;
                         }
+
+                        var user = await _userManager.FindByEmailAsync(email);
+                        bool isNewUser = false;
+                        string generatedPassword = null;
 
                         if (user != null)
                         {
-                            if (user.CampusId != courseInstance.CampusId)
+
+                            if (!string.IsNullOrEmpty(code) && user.StudentCode != code)
                             {
-                                skippedUsers.Add($"{email} (User Campus mismatch)");
+                                var duplicate = await _context.Users.FirstOrDefaultAsync(u => u.StudentCode == code);
+                                if (duplicate != null)
+                                {
+                                    errors.Add($"{email}: Cannot update code. StudentCode '{code}' belongs to another user.");
+                                    continue;
+                                }
+                                user.StudentCode = code;
+                            }
+
+                            user.FirstName = given;
+                            user.LastName = $"{surname} {middle}".Trim();
+                            user.CampusId = courseInstance.CampusId;
+
+                            var isSystemInstructor = await _userManager.IsInRoleAsync(user, "Instructor");
+                            if (isSystemInstructor)
+                            {
+
+                            }
+                            else
+                            {
+                                if (majorId.HasValue) user.MajorId = majorId.Value;
+                            }
+
+                            await _userManager.UpdateAsync(user);
+                        }
+                        else
+                        {
+
+                            if (!string.IsNullOrEmpty(code))
+                            {
+                                var duplicate = await _context.Users.FirstOrDefaultAsync(u => u.StudentCode == code);
+                                if (duplicate != null)
+                                {
+                                    errors.Add($"{email}: StudentCode '{code}' already exists.");
+                                    continue;
+                                }
+                            }
+
+
+                            string roleToAssign = string.Equals(excelRole, "Instructor", StringComparison.OrdinalIgnoreCase) ? "Instructor" : "Student";
+
+                            if (roleToAssign == "Instructor")
+                            {
+                                majorId = null;
+                            }
+                            else
+                            {
+                                if (!majorId.HasValue)
+                                {
+                                    errors.Add($"{email}: Major is required for new Students.");
+                                    continue;
+                                }
+                            }
+
+                            user = new User
+                            {
+                                UserName = email.Split('@')[0],
+                                Email = email,
+                                StudentCode = code,
+                                FirstName = given,
+                                LastName = $"{surname} {middle}".Trim(),
+                                CampusId = courseInstance.CampusId,
+                                MajorId = majorId,
+                                IsActive = true,
+                                CreatedAt = DateTime.UtcNow.AddHours(7)
+                            };
+
+                            generatedPassword = GenerateRandomPassword();
+                            var result = await _userManager.CreateAsync(user, generatedPassword);
+
+                            if (!result.Succeeded)
+                            {
+                                errors.Add($"{email}: Failed to create user - {result.Errors.First().Description}");
                                 continue;
                             }
 
-                            // 2. Phân loại xử lý dựa trên Role
-                            if (string.Equals(role, "Instructor", StringComparison.OrdinalIgnoreCase))
-                            {
-                                // --- XỬ LÝ INSTRUCTOR ---
-                                var existingInstructor = await _context.CourseInstructors
-                                    .FirstOrDefaultAsync(ci => ci.CourseInstanceId == courseInstanceId && ci.UserId == user.Id);
+                            await _userManager.AddToRoleAsync(user, roleToAssign);
+                            isNewUser = true;
+                        }
 
-                                if (existingInstructor == null)
+                        if (isNewUser && !string.IsNullOrEmpty(generatedPassword))
+                        {
+                            var roleForEmail = (await _userManager.GetRolesAsync(user)).FirstOrDefault() ?? "Student";
+                            await SendWelcomeEmailAsync(user, generatedPassword, roleForEmail);
+                        }
+
+                        var currentRoles = await _userManager.GetRolesAsync(user);
+                        bool isInstructor = currentRoles.Contains("Instructor");
+
+                        if (isInstructor)
+                        {
+                            var existingInstructor = await _context.CourseInstructors
+                                .FirstOrDefaultAsync(ci => ci.CourseInstanceId == courseInstanceId && ci.UserId == user.Id);
+
+                            if (existingInstructor == null)
+                            {
+                                var ci = new CourseInstructor
                                 {
-                                    var ci = new CourseInstructor
-                                    {
-                                        CourseInstanceId = courseInstanceId,
-                                        UserId = user.Id
-                                    };
-                                    await _courseInstructorRepository.AddAsync(ci);
-                                    instructorCount++;
-                                }
+                                    CourseInstanceId = courseInstanceId,
+                                    UserId = user.Id
+                                };
+                                await _courseInstructorRepository.AddAsync(ci);
+                                instructorCount++;
                             }
-                            else // Mặc định là Student
+                        }
+                        else
+                        {
+                            if (isPastDeadline)
                             {
-                                // --- XỬ LÝ STUDENT ---
-                                if (isPastDeadline)
-                                {
-                                    skippedUsers.Add($"{email} (Past enrollment deadline)");
-                                    continue;
-                                }
+                                errors.Add($"{email}: Past enrollment deadline.");
+                                continue;
+                            }
 
-                                var existingStudent = await _context.CourseStudents
-                                    .FirstOrDefaultAsync(cs => cs.CourseInstanceId == courseInstanceId && cs.UserId == user.Id);
+                            var existingStudent = await _context.CourseStudents
+                                .FirstOrDefaultAsync(cs => cs.CourseInstanceId == courseInstanceId && cs.UserId == user.Id);
 
-                                if (existingStudent == null)
+                            if (existingStudent == null)
+                            {
+                                var cs = new CourseStudent
                                 {
-                                    var cs = new CourseStudent
-                                    {
-                                        CourseInstanceId = courseInstanceId,
-                                        UserId = user.Id,
-                                        EnrolledAt = DateTime.UtcNow.AddHours(7),
-                                        Status = "Pending",
-                                        ChangedByUserId = changedByUserId
-                                    };
-                                    var created = await _courseStudentRepository.AddAsync(cs);
-                                    results.Add(MapToResponse(created, courseInstance, user, changedBy));
-                                }
+                                    CourseInstanceId = courseInstanceId,
+                                    UserId = user.Id,
+                                    EnrolledAt = DateTime.UtcNow.AddHours(7),
+                                    Status = "Enrolled",
+                                    ChangedByUserId = changedByUserId
+                                };
+                                cs.Status = "Pending";
+
+                                var created = await _courseStudentRepository.AddAsync(cs);
+                                var response = MapToResponse(created, courseInstance, user, changedBy);
+                                response.Role = "Student";
+                                results.Add(response);
                             }
                         }
                     }
                 }
 
-                string message = $"Successfully imported {results.Count} students and {instructorCount} instructors.";
-
-                if (skippedUsers.Any())
-                {
-                    message += $" Skipped {skippedUsers.Count} entries: {string.Join(", ", skippedUsers.Take(5))}...";
-                }
+                string message = $"Processed. Added {results.Count} students, {instructorCount} instructors.";
+                if (errors.Any()) message += $" Skipped: {string.Join("; ", errors.Take(3))}";
 
                 return new BaseResponse<List<CourseStudentResponse>>(message, StatusCodeEnum.Created_201, results);
             }
@@ -224,8 +307,6 @@ namespace Service.Service
                             continue;
                         }
 
-                        // Check deadline logic if needed (optional)
-
                         sheetResult.CourseInstanceId = courseInstance.CourseInstanceId;
                         sheetResult.CourseName = courseInstance.Course?.CourseName;
 
@@ -242,7 +323,7 @@ namespace Service.Service
                             var given = worksheet.Cells[row, 5].Value?.ToString().Trim();
                             var email = worksheet.Cells[row, 6].Value?.ToString().Trim();
                             var majorCode = worksheet.Cells[row, 7].Value?.ToString().Trim();
-                            var role = worksheet.Cells[row, 8].Value?.ToString().Trim(); // Đọc Role
+                            var role = worksheet.Cells[row, 8].Value?.ToString().Trim();
                             var campusVal = worksheet.Cells[row, 9].Value?.ToString()?.Trim();
 
                             if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(email)) continue;
@@ -1011,6 +1092,7 @@ namespace Service.Service
                 StudentName = user?.FirstName + " " + user?.LastName,
                 StudentEmail = user?.Email,
                 StudentCode = user?.StudentCode,
+                Role = "Student",
                 EnrolledAt = courseStudent.EnrolledAt,
                 Status = courseStudent.Status,
                 FinalGrade = courseStudent.FinalGrade,

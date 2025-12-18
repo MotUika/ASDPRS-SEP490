@@ -22,5 +22,6 @@ namespace Service.RequestAndResponse.Response.CourseInstance
         public int InstructorCount { get; set; }
         public int StudentCount { get; set; }
         public int AssignmentCount { get; set; }
+        public string CourseInstanceStatus { get; set; }
     }
 }

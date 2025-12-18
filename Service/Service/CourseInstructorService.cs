@@ -333,31 +333,18 @@ namespace Service.Service
         // 🔹 Helper: Map dữ liệu sang response (có đếm SV & trạng thái lớp)
         private async Task<CourseInstructorResponse> MapToResponseAsync(CourseInstructor courseInstructor)
         {
-           // var courseInstance = await _courseInstanceRepository.GetByIdAsync(courseInstructor.CourseInstanceId);
             var courseInstance = await _courseInstanceRepository.GetByIdWithRelationsAsync(courseInstructor.CourseInstanceId);
             var user = await _userRepository.GetByIdAsync(courseInstructor.UserId);
-
-
-            // 🔸 Đếm sinh viên trong lớp
             var studentCount = await _courseStudentRepository.CountByCourseInstanceIdAsync(courseInstructor.CourseInstanceId);
 
-            string courseStatus; 
-            // 🔸 Xác định trạng thái lớp học
-            if (courseInstance.StartDate > DateTime.UtcNow.AddHours(7))
-            {
-                courseStatus = "Upcoming"; // Chưa bắt đầu
-            }
-            else if (courseInstance.EndDate < DateTime.UtcNow.AddHours(7))
-            {
-                courseStatus = "Completed"; // Đã kết thúc
-            }
-            else
-            {
-                courseStatus = "Ongoing"; // Đang diễn ra
-            }
+            string courseStatus;
+            if (courseInstance.StartDate > DateTime.UtcNow.AddHours(7)) courseStatus = "Upcoming";
+            else if (courseInstance.EndDate < DateTime.UtcNow.AddHours(7)) courseStatus = "Completed";
+            else courseStatus = "Ongoing";
 
-            var courseName = courseInstance?.Course?.CourseName ?? string.Empty;
-            var semesterName = courseInstance?.Semester?.Name ?? string.Empty;
+            // Get Role
+            var roles = await _userManager.GetRolesAsync(user);
+            string roleStr = roles.FirstOrDefault() ?? "Instructor";
 
             return new CourseInstructorResponse
             {
@@ -365,13 +352,14 @@ namespace Service.Service
                 CourseInstanceId = courseInstructor.CourseInstanceId,
                 CourseInstanceName = courseInstance?.SectionCode ?? string.Empty,
                 CourseCode = courseInstance?.Course?.CourseCode ?? string.Empty,
-                CourseName = courseName,
-                SemesterName = semesterName,
+                CourseName = courseInstance?.Course?.CourseName ?? string.Empty,
+                SemesterName = courseInstance?.Semester?.Name ?? string.Empty,
                 StartDate = courseInstance.StartDate,
                 EndDate = courseInstance.EndDate,
                 UserId = courseInstructor.UserId,
                 InstructorName = user?.FirstName ?? string.Empty,
                 InstructorEmail = user?.Email ?? string.Empty,
+                Role = roleStr, // Populated
                 IsMainInstructor = false,
                 CreatedAt = DateTime.UtcNow.AddHours(7),
                 StudentCount = studentCount,

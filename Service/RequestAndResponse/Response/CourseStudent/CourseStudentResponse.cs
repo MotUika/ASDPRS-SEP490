@@ -14,6 +14,7 @@ namespace Service.RequestAndResponse.Response.CourseStudent
         public string StudentName { get; set; }
         public string StudentEmail { get; set; }
         public string StudentCode { get; set; }
+        public string Role { get; set; }
         public DateTime EnrolledAt { get; set; }
         public string Status { get; set; }
 
