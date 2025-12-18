@@ -22,6 +22,9 @@ namespace Service.RequestAndResponse.Response.Review
 
         // Additional info from related entities
         public int SubmissionId { get; set; }
+        public string FileUrl { get; set; }
+        public string FileName { get; set; }
+        public string PreviewUrl { get; set; }
 
         // 🧍 Reviewer Info (THÊM DÒNG NÀY)
         public int? ReviewerId { get; set; }

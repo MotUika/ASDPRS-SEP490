@@ -34,6 +34,8 @@ namespace Service.RequestAndResponse.Response.RegradeRequest
     {
         public int SubmissionId { get; set; }
         public string FileName { get; set; }
+        public string FileUrl { get; set; }
+        public string PreviewUrl { get; set; }
         public DateTime SubmittedAt { get; set; }
         public string Status { get; set; }
 

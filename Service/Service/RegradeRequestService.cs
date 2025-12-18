@@ -276,29 +276,26 @@ namespace Service.Service
                 }
                 else
                 {
-                    // Get all requests with pagination
-                    var allRequests = await _regradeRequestRepository.GetAllAsync();
-                    requests = allRequests
-                        .OrderByDescending(r => r.RequestedAt)
-                        .Skip((request.PageNumber - 1) * request.PageSize)
-                        .Take(request.PageSize);
+                    requests = await _regradeRequestRepository.GetAllAsync();
                 }
-
-                // Nếu có cả StudentId và AssignmentId, filter thêm
                 if (request.StudentId.HasValue && request.AssignmentId.HasValue)
                 {
                     requests = requests.Where(r => r.Submission.AssignmentId == request.AssignmentId.Value && r.Submission.UserId == request.StudentId.Value);
                 }
 
-                var requestList = requests.ToList();
-                var responseList = new List<RegradeRequestResponse>();
+                var totalCount = requests.Count();
 
-                foreach (var req in requestList)
+                var pagedRequests = requests
+                    .OrderByDescending(r => r.RequestedAt)
+                    .Skip((request.PageNumber - 1) * request.PageSize)
+                    .Take(request.PageSize)
+                    .ToList();
+
+                var responseList = new List<RegradeRequestResponse>();
+                foreach (var req in pagedRequests)
                 {
                     responseList.Add(await MapToRegradeRequestResponse(req));
                 }
-
-                var totalCount = await GetTotalCountByFilter(request);
 
                 var response = new RegradeRequestListResponse
                 {
@@ -481,12 +478,13 @@ namespace Service.Service
         {
             var response = _mapper.Map<RegradeRequestResponse>(regradeRequest);
 
-            // Load additional data if needed
             if (regradeRequest.Submission != null)
             {
                 var submission = regradeRequest.Submission;
                 response.Submission = _mapper.Map<SubmissionInfoResponse>(regradeRequest.Submission);
-
+                response.Submission.FileUrl = regradeRequest.Submission.FileUrl;
+                response.Submission.FileName = regradeRequest.Submission.FileName;
+                response.Submission.PreviewUrl = GeneratePreviewUrl(regradeRequest.Submission.FileUrl);
                 response.Submission.InstructorScore = regradeRequest.Submission.InstructorScore;
                 response.Submission.PeerAverageScore = regradeRequest.Submission.PeerAverageScore;
                 response.Submission.FinalScore = regradeRequest.Submission.FinalScore;
@@ -521,12 +519,10 @@ namespace Service.Service
                     response.CourseName = assignment.CourseInstance?.Course?.CourseName;
                     response.ClassName = assignment.CourseInstance?.SectionCode;
 
-
                     if (response.Assignment != null)
                     {
                         response.CourseName = assignment.CourseInstance?.Course?.CourseName;
                         response.ClassName = assignment.CourseInstance?.SectionCode;
-
                     }
                 }
             }
@@ -547,7 +543,6 @@ namespace Service.Service
 
             return response;
         }
-
 
         private async Task<int> GetTotalCountByFilter(GetRegradeRequestsByFilterRequest request)
         {
@@ -839,6 +834,37 @@ namespace Service.Service
             {
                 _logger.LogError(ex, "Error sending regrade notifications to instructors");
                 // Không throw exception để không ảnh hưởng đến flow chính
+            }
+        }
+
+        private string GeneratePreviewUrl(string fileUrl)
+        {
+            if (string.IsNullOrEmpty(fileUrl) || fileUrl == "Not Submitted")
+                return null;
+
+            try
+            {
+                string encodedUrl = Uri.EscapeDataString(fileUrl);
+                string extension = Path.GetExtension(fileUrl).ToLower();
+
+                // 1. Ảnh -> Link gốc
+                if (new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp" }.Contains(extension))
+                {
+                    return fileUrl;
+                }
+
+                // 2. Office -> MS Office Viewer
+                if (new[] { ".docx", ".doc", ".xlsx", ".xls", ".pptx", ".ppt" }.Contains(extension))
+                {
+                    return $"https://view.officeapps.live.com/op/view.aspx?src={encodedUrl}";
+                }
+
+                // 3. PDF/Khác -> Google Docs Viewer
+                return $"https://docs.google.com/viewer?url={encodedUrl}&embedded=true";
+            }
+            catch
+            {
+                return null;
             }
         }
     }
