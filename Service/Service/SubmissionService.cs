@@ -2468,6 +2468,7 @@ namespace Service.Service
                             {
                                 CriteriaId = c.CriteriaId,
                                 CriteriaName = c.Title,
+                                Weight = c.Weight,
                                 Score = fb?.ScoreAwarded,
                                 Feedback = fb?.Feedback
                             };
@@ -2758,23 +2759,23 @@ namespace Service.Service
                 }
 
                 // ==============================
-                // 1️⃣ Header
+                // 1️⃣ Header config
                 // ==============================
                 int headerRow = 1;
 
-                // Criteria bắt đầu từ cột F = 6
-                int startCriteriaCol = 6;
+                // Criteria bắt đầu từ cột 7
+                int startCriteriaCol = 7;
 
                 // Cột cuối = Final Feedback
                 int finalFeedbackCol = ws.Dimension.End.Column;
 
                 // ==============================
-                // 2️⃣ Load rubric
+                // 2️⃣ Load rubric từ submission đầu tiên
                 // ==============================
                 if (!int.TryParse(ws.Cells[2, 3].Text, out int firstSubmissionId))
                 {
                     return new BaseResponse<List<GradeSubmissionResponse>>(
-                        "Invalid submissionId",
+                        "Invalid submissionId in Excel",
                         StatusCodeEnum.BadRequest_400,
                         null
                     );
@@ -2795,19 +2796,21 @@ namespace Service.Service
                     );
                 }
 
+                // Map: Criteria Title -> CriteriaId
                 var criteriaMap = firstSubmission.Assignment.Rubric.Criteria
                     .ToDictionary(c => c.Title.Trim(), c => c.CriteriaId);
 
                 // ==============================
-                // 3️⃣ Read rows
+                // 3️⃣ Read data rows
                 // ==============================
                 var results = new List<GradeSubmissionResponse>();
                 int row = 2;
 
                 while (!string.IsNullOrWhiteSpace(ws.Cells[row, 3].Text))
                 {
+                    // SubmissionId (col 3) | InstructorId (col 5)
                     if (!int.TryParse(ws.Cells[row, 3].Text, out int submissionId) ||
-                        !int.TryParse(ws.Cells[row, 4].Text, out int instructorId))
+                        !int.TryParse(ws.Cells[row, 5].Text, out int instructorId))
                     {
                         row++;
                         continue;
@@ -2818,15 +2821,28 @@ namespace Service.Service
                         SubmissionId = submissionId,
                         InstructorId = instructorId,
                         CriteriaScores = new List<ImportCriteriaScore>(),
-                        FinalFeedback = ws.Cells[row, finalFeedbackCol].Text // ⭐ FINAL FEEDBACK
+                        FinalFeedback = ws.Cells[row, finalFeedbackCol].Text
                     };
 
-                    // ==== Read criteria (score + feedback) ====
+                    // ==============================
+                    // 4️⃣ Read criteria (Score + Feedback)
+                    // ==============================
                     for (int col = startCriteriaCol; col < finalFeedbackCol; col += 2)
                     {
-                        string criteriaTitle = ws.Cells[headerRow, col].Text.Trim();
+                        string rawHeader = ws.Cells[headerRow, col].Text?.Trim();
 
-                        if (!criteriaMap.ContainsKey(criteriaTitle))
+                        if (string.IsNullOrEmpty(rawHeader))
+                            continue;
+
+                        // Remove "(xx%)" from header
+                        string criteriaTitle = rawHeader;
+                        int percentIndex = rawHeader.LastIndexOf("(");
+                        if (percentIndex > 0)
+                        {
+                            criteriaTitle = rawHeader.Substring(0, percentIndex).Trim();
+                        }
+
+                        if (!criteriaMap.TryGetValue(criteriaTitle, out int criteriaId))
                             continue;
 
                         if (!decimal.TryParse(ws.Cells[row, col].Text, out decimal score))
@@ -2836,12 +2852,15 @@ namespace Service.Service
 
                         req.CriteriaScores.Add(new ImportCriteriaScore
                         {
-                            CriteriaId = criteriaMap[criteriaTitle],
+                            CriteriaId = criteriaId,
                             Score = score,
                             Feedback = criteriaFeedback
                         });
                     }
 
+                    // ==============================
+                    // 5️⃣ Import từng submission
+                    // ==============================
                     var result = await ImportSingleSubmissionAsync(req);
 
                     if (result.StatusCode != StatusCodeEnum.OK_200)
@@ -2872,6 +2891,7 @@ namespace Service.Service
                 );
             }
         }
+
 
 
 
