@@ -907,6 +907,7 @@ namespace Service.Service
                     AssignmentGuidelines = assignment.Guidelines,
                     StudentName = "Anonymous",
                     FileUrl = submission.FileUrl ?? string.Empty,
+                    PreviewUrl = GeneratePreviewUrl(submission.FileUrl),
                     FileName = submission.FileName ?? string.Empty,
                     Rubric = rubricResponse
                 };
@@ -1054,6 +1055,7 @@ namespace Service.Service
                 StudentName = studentName,
                 StudentCode = studentCode,
                 FileUrl = submission?.FileUrl ?? string.Empty,
+                PreviewUrl = GeneratePreviewUrl(submission?.FileUrl),
                 FileName = submission?.FileName ?? string.Empty,
                 Keywords = submission?.Keywords ?? string.Empty,
                 SubmittedAt = submission?.SubmittedAt ?? DateTime.MinValue,
@@ -1548,6 +1550,39 @@ namespace Service.Service
                     $"Error retrieving completed reviews: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
                     null);
+            }
+        }
+        // Thêm thư viện System.IO nếu chưa có ở trên cùng: using System.IO;
+
+        private string GeneratePreviewUrl(string fileUrl)
+        {
+            if (string.IsNullOrEmpty(fileUrl) || fileUrl == "Not Submitted")
+                return null;
+
+            try
+            {
+                // Encode URL để tránh lỗi ký tự đặc biệt
+                string encodedUrl = Uri.EscapeDataString(fileUrl);
+                string extension = Path.GetExtension(fileUrl).ToLower();
+
+                // 1. Ảnh -> Trả về link gốc
+                if (new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp" }.Contains(extension))
+                {
+                    return fileUrl;
+                }
+
+                // 2. Office -> Dùng MS Office Viewer
+                if (new[] { ".docx", ".doc", ".xlsx", ".xls", ".pptx", ".ppt" }.Contains(extension))
+                {
+                    return $"https://view.officeapps.live.com/op/view.aspx?src={encodedUrl}";
+                }
+
+                // 3. PDF/Khác -> Dùng Google Docs Viewer
+                return $"https://docs.google.com/viewer?url={encodedUrl}&embedded=true";
+            }
+            catch
+            {
+                return null;
             }
         }
     }

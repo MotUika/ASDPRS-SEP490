@@ -20,6 +20,7 @@ namespace Service.RequestAndResponse.Response.ReviewAssignment
         public string AssignmentGuidelines { get; set; }
         public string StudentName { get; set; }
         public string FileUrl { get; set; }
+        public string PreviewUrl { get; set; }
         public string FileName { get; set; }
         public RubricResponse Rubric { get; set; }
     }

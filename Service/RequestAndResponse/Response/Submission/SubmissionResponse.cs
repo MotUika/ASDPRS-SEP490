@@ -29,6 +29,7 @@ namespace Service.RequestAndResponse.Response.Submission
         // 🗒️ Thông tin feedback
         public string? Feedback { get; set; }
         public DateTime? GradedAt { get; set; }
+        public string PreviewUrl { get; set; }
 
 
         // Navigation properties
