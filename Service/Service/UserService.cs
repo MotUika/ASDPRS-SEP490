@@ -881,5 +881,178 @@ namespace Service.Service
                 return new BaseResponse<List<UserResponse>>($"Error importing users: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
+        public async Task<BaseResponse<List<UserResponse>>> ImportStudentsFromExcelAsync(Stream fileStream)
+        {
+            return await ImportUsersInternalAsync(fileStream, "Student");
+        }
+
+        public async Task<BaseResponse<List<UserResponse>>> ImportInstructorsFromExcelAsync(Stream fileStream)
+        {
+            return await ImportUsersInternalAsync(fileStream, "Instructor");
+        }
+
+        private async Task<BaseResponse<List<UserResponse>>> ImportUsersInternalAsync(Stream fileStream, string targetRole)
+        {
+            try
+            {
+                var importedUsers = new List<UserResponse>();
+                var errors = new List<string>();
+                var warnings = new List<string>();
+
+                using (var package = new ExcelPackage(fileStream))
+                {
+                    var worksheet = package.Workbook.Worksheets[0];
+                    var rowCount = worksheet.Dimension?.Rows ?? 0;
+
+                    if (rowCount < 2)
+                        return new BaseResponse<List<UserResponse>>("File is empty or missing headers", StatusCodeEnum.BadRequest_400, null);
+
+                    for (int row = 2; row <= rowCount; row++)
+                    {
+                        // Mapping: Index(1), Code(2), Surname(3), Middle(4), Given(5), Email(6), Major(7), Role(8), Campus(9)
+                        var code = worksheet.Cells[row, 2].Value?.ToString()?.Trim();
+                        var surname = worksheet.Cells[row, 3].Value?.ToString()?.Trim();
+                        var middleName = worksheet.Cells[row, 4].Value?.ToString()?.Trim();
+                        var givenName = worksheet.Cells[row, 5].Value?.ToString()?.Trim();
+                        var email = worksheet.Cells[row, 6].Value?.ToString()?.Trim();
+                        var majorCode = worksheet.Cells[row, 7].Value?.ToString()?.Trim();
+                        var excelRole = worksheet.Cells[row, 8].Value?.ToString()?.Trim();
+                        var campusVal = worksheet.Cells[row, 9].Value?.ToString()?.Trim();
+
+                        if (string.IsNullOrEmpty(email)) continue;
+
+                        if (!string.IsNullOrEmpty(excelRole) && !string.Equals(excelRole, targetRole, StringComparison.OrdinalIgnoreCase))
+                        {
+                            warnings.Add($"Row {row}: Skipped {email} because role '{excelRole}' does not match target '{targetRole}'.");
+                            continue;
+                        }
+
+                        if (!int.TryParse(campusVal, out int campusId)) campusId = 1;
+
+                        int? majorId = null;
+                        if (targetRole == "Instructor")
+                        {
+                            majorId = null;
+                        }
+                        else
+                        {
+                            if (string.IsNullOrEmpty(majorCode))
+                            {
+                                errors.Add($"Row {row}: Major code is required for Students ({email}).");
+                                continue;
+                            }
+                            var major = await _context.Majors.FirstOrDefaultAsync(m => m.MajorCode == majorCode);
+                            if (major == null)
+                            {
+                                errors.Add($"Row {row}: Major code '{majorCode}' not found.");
+                                continue;
+                            }
+                            majorId = major.MajorId;
+                        }
+
+                        var user = await _userManager.FindByEmailAsync(email);
+                        bool isNew = false;
+
+                        if (user != null)
+                        {
+                            if (!string.IsNullOrEmpty(code) && user.StudentCode != code)
+                            {
+                                var duplicateCodeUser = await _context.Users.FirstOrDefaultAsync(u => u.StudentCode == code);
+                                if (duplicateCodeUser != null)
+                                {
+                                    errors.Add($"Row {row}: StudentCode '{code}' already exists.");
+                                    continue;
+                                }
+                                user.StudentCode = code;
+                            }
+
+                            user.FirstName = givenName;
+                            user.LastName = $"{surname} {middleName}".Trim();
+                            user.CampusId = campusId;
+
+                            if (!await _userManager.IsInRoleAsync(user, "Instructor"))
+                            {
+                                user.MajorId = majorId;
+                            }
+
+                            var updateResult = await _userManager.UpdateAsync(user);
+                            if (!updateResult.Succeeded)
+                            {
+                                errors.Add($"Row {row}: Failed to update {email} - {updateResult.Errors.First().Description}");
+                                continue;
+                            }
+                        }
+                        else
+                        {
+                            if (!string.IsNullOrEmpty(code))
+                            {
+                                var duplicateCodeUser = await _context.Users.FirstOrDefaultAsync(u => u.StudentCode == code);
+                                if (duplicateCodeUser != null)
+                                {
+                                    errors.Add($"Row {row}: StudentCode '{code}' already exists.");
+                                    continue;
+                                }
+                            }
+
+                            user = new User
+                            {
+                                UserName = email.Split('@')[0],
+                                Email = email,
+                                StudentCode = code,
+                                FirstName = givenName,
+                                LastName = $"{surname} {middleName}".Trim(),
+                                CampusId = campusId,
+                                MajorId = majorId, // Set Major here
+                                IsActive = true,
+                                CreatedAt = DateTime.UtcNow.AddHours(7)
+                            };
+
+                            string password = GenerateStrongPassword();
+                            var result = await _userManager.CreateAsync(user, password);
+
+                            if (result.Succeeded)
+                            {
+                                isNew = true;
+                                await _userManager.AddToRoleAsync(user, targetRole);
+                                _ = SendWelcomeEmail(user, password, targetRole);
+
+                                if (majorId.HasValue && user.MajorId != majorId)
+                                {
+                                    user.MajorId = majorId;
+                                    await _context.SaveChangesAsync();
+                                }
+                            }
+                            else
+                            {
+                                errors.Add($"Row {row}: Error creating user - {string.Join(", ", result.Errors.Select(e => e.Description))}");
+                                continue;
+                            }
+                        }
+
+                        var response = _mapper.Map<UserResponse>(user);
+
+                        response.Roles = (await _userManager.GetRolesAsync(user)).ToList();
+                        if (majorId.HasValue && string.IsNullOrEmpty(response.MajorName))
+                        {
+                            var m = await _context.Majors.FindAsync(majorId);
+                            response.MajorName = m?.MajorName;
+                        }
+
+                        importedUsers.Add(response);
+                    }
+                }
+
+                string message = $"Processed users successfully.";
+                if (importedUsers.Count > 0) message += $" Total: {importedUsers.Count}.";
+                if (warnings.Any()) message += $" Warnings: {warnings.Count}.";
+                if (errors.Any()) message += $" Errors: {errors.Count}.";
+
+                return new BaseResponse<List<UserResponse>>(message, StatusCodeEnum.Created_201, importedUsers);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<List<UserResponse>>($"Error importing users: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
+            }
+        }
     }
 }

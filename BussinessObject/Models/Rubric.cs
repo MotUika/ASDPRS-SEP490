@@ -15,7 +15,6 @@ public class Rubric
     [StringLength(100)]
     public string Title { get; set; }
 
-    // REMOVED: Description field
     [Required]
     public bool IsModified { get; set; } = false;
 

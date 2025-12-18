@@ -47,6 +47,9 @@ namespace Service.Service
                 }
 
                 var response = _mapper.Map<CourseInstanceResponse>(courseInstance);
+
+                response.CourseInstanceStatus = CalculateCourseStatus(response.StartDate, response.EndDate);
+
                 return new BaseResponse<CourseInstanceResponse>("Course instance retrieved successfully", StatusCodeEnum.OK_200, response);
             }
             catch (Exception ex)
@@ -69,6 +72,10 @@ namespace Service.Service
                     .ToListAsync();
 
                 var response = _mapper.Map<IEnumerable<CourseInstanceResponse>>(courseInstances);
+                foreach (var item in response)
+                {
+                    item.CourseInstanceStatus = CalculateCourseStatus(item.StartDate, item.EndDate);
+                }
                 return new BaseResponse<IEnumerable<CourseInstanceResponse>>("Course instances retrieved successfully", StatusCodeEnum.OK_200, response);
             }
             catch (Exception ex)
@@ -154,7 +161,6 @@ namespace Service.Service
                     return new BaseResponse<string>("Không tìm thấy lớp học", StatusCodeEnum.NotFound_404, null);
                 }
 
-                // Kiểm tra instructor có thuộc lớp không (CourseInstructor)
                 var isInstructorInCourse = await _context.CourseInstructors
                     .AnyAsync(ci => ci.CourseInstanceId == courseInstanceId && ci.UserId == userId);
 
@@ -163,7 +169,6 @@ namespace Service.Service
                     return new BaseResponse<string>("Bạn không có quyền đổi mã lớp này", StatusCodeEnum.Forbidden_403, null);
                 }
 
-                // Cập nhật mã mới
                 courseInstance.EnrollmentPassword = newKey;
                 await _courseInstanceRepository.UpdateAsync(courseInstance);
 
@@ -215,10 +220,10 @@ namespace Service.Service
 
                     var duplicateSection = await _context.CourseInstances
                         .AnyAsync(ci => ci.CourseId == targetCourseId &&
-                                       ci.SemesterId == targetSemesterId &&
-                                       ci.SectionCode == request.SectionCode &&
-                                       ci.CampusId == targetCampusId && // Thêm check CampusId
-                                       ci.CourseInstanceId != request.CourseInstanceId); // Loại trừ chính nó
+                                             ci.SemesterId == targetSemesterId &&
+                                             ci.SectionCode == request.SectionCode &&
+                                             ci.CampusId == targetCampusId &&
+                                             ci.CourseInstanceId != request.CourseInstanceId);
 
                     if (duplicateSection)
                     {
@@ -247,7 +252,6 @@ namespace Service.Service
             try
             {
                 var courseInstance = await _context.CourseInstances
-                    // Include các bảng liên quan để check constraint
                     .Include(ci => ci.CourseInstructors)
                     .Include(ci => ci.CourseStudents)
                     .Include(ci => ci.Assignments)
@@ -337,7 +341,13 @@ namespace Service.Service
                     .Where(ci => ci.CampusId == campusId)
                     .ToListAsync();
 
-                var response = _mapper.Map<IEnumerable<CourseInstanceResponse>>(courseInstances);
+                var response = _mapper.Map<IEnumerable<CourseInstanceResponse>>(courseInstances).ToList();
+
+                foreach (var item in response)
+                {
+                    item.CourseInstanceStatus = CalculateCourseStatus(item.StartDate, item.EndDate);
+                }
+
                 return new BaseResponse<IEnumerable<CourseInstanceResponse>>("Course instances retrieved successfully", StatusCodeEnum.OK_200, response);
             }
             catch (Exception ex)
@@ -372,7 +382,6 @@ namespace Service.Service
         {
             try
             {
-                // 🟩 Bắt đầu query từ CourseInstances
                 var query = _context.CourseInstances
                     .Include(ci => ci.Course)
                     .Include(ci => ci.Semester)
@@ -382,11 +391,9 @@ namespace Service.Service
                     .Include(ci => ci.Assignments)
                     .Where(ci => ci.CourseInstructors.Any(ciu => ciu.UserId == userId));
 
-                // 🟩 Nếu có lọc theo CourseId thì thêm điều kiện
                 if (courseId.HasValue && courseId > 0)
                     query = query.Where(ci => ci.CourseId == courseId);
 
-                // 🟩 Lấy danh sách
                 var courseInstances = await query.ToListAsync();
 
                 if (!courseInstances.Any())
@@ -394,9 +401,11 @@ namespace Service.Service
                     return new BaseResponse<IEnumerable<CourseInstanceResponse>>("No classes found for this user", StatusCodeEnum.NoContent_204, null);
                 }
 
-                // 🟩 Map sang Response
                 var response = _mapper.Map<IEnumerable<CourseInstanceResponse>>(courseInstances);
-
+                foreach (var item in response)
+                {
+                    item.CourseInstanceStatus = CalculateCourseStatus(item.StartDate, item.EndDate);
+                }
                 return new BaseResponse<IEnumerable<CourseInstanceResponse>>("Classes retrieved successfully", StatusCodeEnum.OK_200, response);
             }
             catch (Exception ex)
@@ -432,6 +441,23 @@ namespace Service.Service
             catch (Exception ex)
             {
                 return new BaseResponse<bool>($"Error changing status: {ex.Message}", StatusCodeEnum.InternalServerError_500, false);
+            }
+        }
+        private string CalculateCourseStatus(DateTime startDate, DateTime endDate)
+        {
+            var now = DateTime.UtcNow.AddHours(7);
+
+            if (startDate > now)
+            {
+                return "Upcoming";
+            }
+            else if (endDate < now)
+            {
+                return "Completed";
+            }
+            else
+            {
+                return "Ongoing";
             }
         }
     }

@@ -33,7 +33,6 @@ namespace Service.Service
         {
             try
             {
-                // 🧩 Lấy rubric template đầy đủ thông tin (CreatedByUser, Rubrics, CriteriaTemplates)
                 var rubricTemplate = await _rubricTemplateRepository.GetByIdWithDetailsAsync(id);
 
                 if (rubricTemplate == null)
@@ -44,13 +43,10 @@ namespace Service.Service
                         null);
                 }
 
-                // 🧠 Dùng AutoMapper để map toàn bộ dữ liệu gốc
                 var response = _mapper.Map<RubricTemplateResponse>(rubricTemplate);
 
-                // 📘 Lấy danh sách assignments đang sử dụng rubric template này qua repository
                 var assignments = await _rubricTemplateRepository.GetAssignmentsUsingTemplateAsync(id);
 
-                // 🧩 Gán danh sách assignments vào response (luôn trả về [] thay vì null)
                 response.AssignmentsUsingTemplate = (assignments != null && assignments.Any())
                     ? assignments.Select(a => new AssignmentUsingTemplateResponse
                     {
