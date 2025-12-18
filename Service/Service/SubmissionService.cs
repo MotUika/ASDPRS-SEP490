@@ -3080,7 +3080,7 @@ namespace Service.Service
                 }
 
                 decimal instructorNorm = instructorScore;
-                decimal peerNorm = peerAvg / 10m;
+                decimal peerNorm = peerAvg;
 
                 decimal finalScore = noPeer
                     ? instructorNorm
