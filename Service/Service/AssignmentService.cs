@@ -1519,6 +1519,7 @@ namespace Service.Service
                 Guidelines = assignment.Guidelines,
                 FileUrl = assignment.FileUrl,
                 FileName = assignment.FileName,
+                PreviewUrl = GeneratePreviewUrl(assignment.FileUrl),
                 CreatedAt = assignment.CreatedAt,
                 StartDate = assignment.StartDate,
                 Deadline = assignment.Deadline,
@@ -2252,6 +2253,37 @@ namespace Service.Service
             return null; // ✅ OK
         }
 
+        private string GeneratePreviewUrl(string fileUrl)
+        {
+            if (string.IsNullOrEmpty(fileUrl))
+                return null;
+
+            try
+            {
+                // Encode URL để tránh lỗi ký tự đặc biệt
+                string encodedUrl = Uri.EscapeDataString(fileUrl);
+                string extension = Path.GetExtension(fileUrl).ToLower();
+
+                // 1. Ảnh -> Trả về link gốc
+                if (new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp" }.Contains(extension))
+                {
+                    return fileUrl;
+                }
+
+                // 2. Office (Word, Excel, PowerPoint) -> Dùng MS Office Viewer
+                if (new[] { ".docx", ".doc", ".xlsx", ".xls", ".pptx", ".ppt" }.Contains(extension))
+                {
+                    return $"https://view.officeapps.live.com/op/view.aspx?src={encodedUrl}";
+                }
+
+                // 3. PDF và các loại khác -> Dùng Google Docs Viewer
+                return $"https://docs.google.com/viewer?url={encodedUrl}&embedded=true";
+            }
+            catch
+            {
+                return null;
+            }
+        }
 
     }
 }

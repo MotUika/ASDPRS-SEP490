@@ -16,6 +16,7 @@ namespace Service.RequestAndResponse.Response.Assignment
         // File info
         public string? FileUrl { get; set; }
         public string? FileName { get; set; }
+        public string? PreviewUrl { get; set; }
 
         public DateTime CreatedAt { get; set; }
         public DateTime? StartDate { get; set; }

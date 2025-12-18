@@ -883,6 +883,11 @@ namespace Service.Service
                 ReviewType = review.ReviewType,
                 FeedbackSource = review.FeedbackSource,
                 SubmissionId = reviewAssignment?.SubmissionId ?? 0,
+
+                FileUrl = submission?.FileUrl ?? string.Empty,
+                FileName = submission?.FileName ?? string.Empty,
+                PreviewUrl = GeneratePreviewUrl(submission?.FileUrl),
+
                 ReviewerName = review.FeedbackSource == "AI" ? "AI System" : (reviewerUser != null ? $"{reviewerUser.FirstName} {reviewerUser.LastName}".Trim() : string.Empty),
                 ReviewerEmail = review.FeedbackSource == "AI" ? string.Empty : (reviewerUser?.Email ?? string.Empty),
                 AssignmentTitle = assignment?.Title ?? string.Empty,
@@ -891,7 +896,6 @@ namespace Service.Service
                 CriteriaFeedbacks = criteriaFeedbackResponses
             };
         }
-
         public async Task<IEnumerable<ReviewResponse>> GetPeerReviewsBySubmissionIdAsync(int submissionId)
         {
             try
@@ -971,6 +975,36 @@ namespace Service.Service
             catch (Exception ex)
             {
                 return new BaseResponse<ReviewResponse>($"Error retrieving review details: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
+            }
+        }
+        private string GeneratePreviewUrl(string fileUrl)
+        {
+            if (string.IsNullOrEmpty(fileUrl) || fileUrl == "Not Submitted")
+                return null;
+
+            try
+            {
+                string encodedUrl = Uri.EscapeDataString(fileUrl);
+                string extension = Path.GetExtension(fileUrl).ToLower();
+
+                // 1. Ảnh -> Link gốc
+                if (new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp" }.Contains(extension))
+                {
+                    return fileUrl;
+                }
+
+                // 2. Office -> MS Office Viewer
+                if (new[] { ".docx", ".doc", ".xlsx", ".xls", ".pptx", ".ppt" }.Contains(extension))
+                {
+                    return $"https://view.officeapps.live.com/op/view.aspx?src={encodedUrl}";
+                }
+
+                // 3. PDF/Khác -> Google Docs Viewer
+                return $"https://docs.google.com/viewer?url={encodedUrl}&embedded=true";
+            }
+            catch
+            {
+                return null;
             }
         }
     }
