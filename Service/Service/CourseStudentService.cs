@@ -155,14 +155,10 @@ namespace Service.Service
                         else
                         {
 
-                            if (!string.IsNullOrEmpty(code))
+                            if (!string.IsNullOrEmpty(code) && user.StudentCode != code)
                             {
-                                var duplicate = await _context.Users.FirstOrDefaultAsync(u => u.StudentCode == code);
-                                if (duplicate != null)
-                                {
-                                    errors.Add($"{email}: StudentCode '{code}' already exists.");
-                                    continue;
-                                }
+                                errors.Add($"{email}: StudentCode mismatch. Cannot change from '{user.StudentCode}' to '{code}'.");
+                                continue;
                             }
 
 

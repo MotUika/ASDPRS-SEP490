@@ -132,46 +132,6 @@ namespace ASDPRS_SEP490.Controllers
                 return StatusCode((int)result.StatusCode, result);
             });
         }
-        // Tạo submission mới với kiểm tra
-        [HttpPost("with-check")]
-        [SwaggerOperation(
-            Summary = "Tạo bài nộp mới với kiểm tra",
-            Description = "Sinh viên nộp file bài làm lần đầu cho một Assignment cụ thể với kiểm tra bổ sung"
-        )]
-        [SwaggerResponse(201, "Tạo bài nộp thành công", typeof(BaseResponse<SubmissionResponse>))]
-        [SwaggerResponse(400, "Dữ liệu không hợp lệ hoặc lỗi upload")]
-        [SwaggerResponse(404, "Không tìm thấy Assignment hoặc User")]
-        [SwaggerResponse(500, "Lỗi server")]
-        public async Task<IActionResult> CreateSubmissionWithCheck([FromForm] CreateSubmissionRequest request)
-        {
-            return await CheckEnrollmentByAssignmentAndExecute(request.AssignmentId, async () =>
-            {
-                var result = await _submissionService.CreateSubmissionWithCheckAsync(request);
-                return result.StatusCode switch
-                {
-                    StatusCodeEnum.Created_201 => CreatedAtAction(nameof(GetSubmissionById),
-                        new { id = result.Data?.SubmissionId }, result),
-                    _ => StatusCode((int)result.StatusCode, result)
-                };
-            });
-        }
-
-        // Sinh viên nộp bài (flow khác với CreateSubmissionWithCheck)
-        [HttpPost("submit-with-check")]
-        [SwaggerOperation(
-            Summary = "Sinh viên nộp bài",
-            Description = "Dành cho sinh viên nộp bài làm (tương tự CreateSubmission nhưng flow rút gọn)"
-        )]
-        [SwaggerResponse(200, "Nộp bài thành công", typeof(BaseResponse<SubmissionResponse>))]
-        [SwaggerResponse(400, "File hoặc dữ liệu không hợp lệ")]
-        public async Task<IActionResult> SubmitAssignmentWithCheck([FromForm] SubmitAssignmentRequest request)
-        {
-            return await CheckEnrollmentByAssignmentAndExecute(request.AssignmentId, async () =>
-            {
-                var result = await _submissionService.SubmitAssignmentWithCheckAsync(request);
-                return StatusCode((int)result.StatusCode, result);
-            });
-        }
 
         // Lấy submission theo ID
         [HttpGet("{id}")]
@@ -223,20 +183,6 @@ namespace ASDPRS_SEP490.Controllers
         public async Task<IActionResult> UpdateSubmission([FromForm] UpdateSubmissionRequest request)
         {
             var result = await _submissionService.UpdateSubmissionAsync(request);
-            return StatusCode((int)result.StatusCode, result);
-        }
-        // Cập nhật submission với kiểm tra
-        [HttpPut("with-check")]
-        [SwaggerOperation(
-            Summary = "Cập nhật bài nộp với kiểm tra",
-            Description = "Cho phép sinh viên hoặc giảng viên cập nhật file, từ khóa hoặc trạng thái của bài nộp với kiểm tra bổ sung"
-        )]
-        [SwaggerResponse(200, "Cập nhật thành công", typeof(BaseResponse<SubmissionResponse>))]
-        [SwaggerResponse(404, "Không tìm thấy bài nộp")]
-        [SwaggerResponse(500, "Lỗi server")]
-        public async Task<IActionResult> UpdateSubmissionWithCheck([FromForm] UpdateSubmissionRequest request)
-        {
-            var result = await _submissionService.UpdateSubmissionWithCheckAsync(request);
             return StatusCode((int)result.StatusCode, result);
         }
 

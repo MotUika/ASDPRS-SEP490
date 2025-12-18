@@ -593,7 +593,7 @@ public class StudentReviewController : ControllerBase
             }
 
             var request = new GenerateAICriteriaRequest { SubmissionId = submissionId };
-            var result = await _aISummaryService.GenerateCriteriaFeedbackAsync(request);  // Method đã modify để lưu
+            var result = await _aISummaryService.GenerateCriteriaFeedbackAsync(request);
             return StatusCode((int)result.StatusCode, result);
         }
         catch (Exception ex)

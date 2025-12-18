@@ -957,13 +957,8 @@ namespace Service.Service
                         {
                             if (!string.IsNullOrEmpty(code) && user.StudentCode != code)
                             {
-                                var duplicateCodeUser = await _context.Users.FirstOrDefaultAsync(u => u.StudentCode == code);
-                                if (duplicateCodeUser != null)
-                                {
-                                    errors.Add($"Row {row}: StudentCode '{code}' already exists.");
-                                    continue;
-                                }
-                                user.StudentCode = code;
+                                errors.Add($"Row {row}: Cannot change StudentCode for user {email}. Existing: '{user.StudentCode}', Input: '{code}'.");
+                                continue;
                             }
 
                             user.FirstName = givenName;

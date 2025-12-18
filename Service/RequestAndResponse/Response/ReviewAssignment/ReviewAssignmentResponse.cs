@@ -30,6 +30,7 @@ namespace Service.RequestAndResponse.Response.ReviewAssignment
         public string CourseCode { get; set; }
         public string SectionCode { get; set; }
         public string FileUrl { get; set; }
+        public string PreviewUrl { get; set; }
         public string FileName { get; set; }
         public string Keywords { get; set; }
         public DateTime SubmittedAt { get; set; }

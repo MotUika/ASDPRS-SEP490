@@ -1074,6 +1074,7 @@ namespace Service.Service
 
             response.CourseName = submission.Assignment?.CourseInstance?.Course?.CourseName;
             response.ClassName = submission.Assignment?.CourseInstance?.SectionCode;
+            response.PreviewUrl = GeneratePreviewUrl(submission.FileUrl);
 
             return response;
         }
@@ -3279,9 +3280,23 @@ namespace Service.Service
             }
         }
 
+        private string GeneratePreviewUrl(string fileUrl)
+        {
+            string encodedUrl = Uri.EscapeDataString(fileUrl);
+            string extension = Path.GetExtension(fileUrl).ToLower();
 
+            if (extension == ".pdf")
+            {
+                return $"https://docs.google.com/viewer?url={encodedUrl}&embedded=true";
+            }
 
+            if (new[] { ".docx", ".doc", ".xlsx", ".xls", ".pptx", ".ppt" }.Contains(extension))
+            {
+                return $"https://view.officeapps.live.com/op/view.aspx?src={encodedUrl}";
+            }
 
+            return $"https://docs.google.com/viewer?url={encodedUrl}&embedded=true";
+        }
 
 
 
