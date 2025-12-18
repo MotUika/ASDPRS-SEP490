@@ -37,6 +37,7 @@ namespace Service.RequestAndResponse.Response.Submission
         public string CriteriaName { get; set; }
         public decimal? Score { get; set; }
         public string Feedback { get; set; }
+        public decimal Weight { get; set; }
     }
 
 }
