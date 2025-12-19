@@ -42,6 +42,8 @@ namespace Service.RequestAndResponse.Response.Assignment
         public string CourseCode { get; set; }
         public string SectionCode { get; set; }
         public string CampusName { get; set; }
+        public string? InstructorName { get; set; }
+        public string? InstructorEmail { get; set; }
         public RubricResponse Rubric { get; set; }
         public int SubmissionCount { get; set; }
         public int ReviewCount { get; set; }

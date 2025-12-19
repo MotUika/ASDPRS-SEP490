@@ -1482,19 +1482,20 @@ namespace Service.Service
         private async Task<AssignmentResponse> MapToResponse(Assignment assignment)
         {
             var courseInstance = await _courseInstanceRepository.GetByIdAsync(assignment.CourseInstanceId);
-            RubricResponse rubricResponse = null;
 
+            var courseInstructors = await _courseInstructorRepository.GetByCourseInstanceIdAsync(assignment.CourseInstanceId);
+            var mainInstructor = courseInstructors.FirstOrDefault();
+
+            RubricResponse rubricResponse = null;
             if (assignment.RubricId.HasValue)
             {
                 var rubric = await _rubricRepository.GetByIdAsync(assignment.RubricId.Value);
                 if (rubric != null)
                 {
-                    // Map rubric to RubricResponse (you'll need to create this mapping)
                     rubricResponse = new RubricResponse
                     {
                         RubricId = rubric.RubricId,
                         Title = rubric.Title,
-                        // Add other rubric properties as needed
                     };
                 }
             }
@@ -1535,10 +1536,17 @@ namespace Service.Service
                 PassThreshold = assignment.PassThreshold,
                 MissingReviewPenalty = assignment.MissingReviewPenalty,
                 IncludeAIScore = assignment.IncludeAIScore,
+
                 CourseName = courseInstance?.Course?.CourseName ?? string.Empty,
                 CourseCode = courseInstance?.Course?.CourseCode ?? string.Empty,
                 SectionCode = courseInstance?.SectionCode ?? string.Empty,
                 CampusName = courseInstance?.Campus?.CampusName ?? string.Empty,
+
+                InstructorName = mainInstructor?.User != null
+                    ? $"{mainInstructor.User.FirstName} {mainInstructor.User.LastName}".Trim()
+                    : null,
+                InstructorEmail = mainInstructor?.User?.Email,
+
                 Rubric = rubricResponse,
                 SubmissionCount = submissions.Count(),
                 ReviewCount = reviews.Count,
