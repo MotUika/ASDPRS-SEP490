@@ -329,5 +329,23 @@ namespace Repository.Repository
         {
             return DeleteAsync(assignment);
         }
+
+        public async Task<IEnumerable<Assignment>> GetAssignmentsByStudentAndSemesterAndStatusAsync(int studentId, int semesterId, List<string> statuses)
+        {
+            var now = DateTime.UtcNow.AddHours(7);
+
+            return await _context.Assignments
+                .Include(a => a.CourseInstance)
+                    .ThenInclude(ci => ci.Course)
+                .Include(a => a.CourseInstance)
+                    .ThenInclude(ci => ci.Campus)
+                .Where(a =>
+                    a.CourseInstance.SemesterId == semesterId &&
+                    a.CourseInstance.CourseStudents.Any(cs => cs.UserId == studentId && cs.Status == "Enrolled") &&
+                    statuses.Contains(a.Status)
+                )
+                .OrderBy(a => a.Deadline)
+                .ToListAsync();
+        }
     }
 }

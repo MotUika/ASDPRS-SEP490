@@ -1556,6 +1556,7 @@ namespace Service.Service
             return new AssignmentSummaryResponse
             {
                 AssignmentId = assignment.AssignmentId,
+                CourseInstanceId = assignment.CourseInstanceId,
                 Title = assignment.Title,
                 Description = assignment.Description,
                 Deadline = assignment.Deadline,
@@ -2166,7 +2167,39 @@ namespace Service.Service
                     null);
             }
         }
+        public async Task<BaseResponse<List<AssignmentSummaryResponse>>> GetStudentAssignmentStatusesBySemesterAsync(int studentId, int semesterId)
+        {
+            try
+            {
+                var allowedStatuses = new List<string>
+            {
+                AssignmentStatusEnum.Active.ToString(),         
+                AssignmentStatusEnum.InReview.ToString(),       
+                "GradesPublished"                               
+            };
 
+                var assignments = await _assignmentRepository.GetAssignmentsByStudentAndSemesterAndStatusAsync(studentId, semesterId, allowedStatuses);
+
+                var responses = new List<AssignmentSummaryResponse>();
+                foreach (var assignment in assignments)
+                {
+                    var summary = await MapToSummaryResponse(assignment);
+                    responses.Add(summary);
+                }
+
+                return new BaseResponse<List<AssignmentSummaryResponse>>(
+                    "Success",
+                    StatusCodeEnum.OK_200,
+                    responses);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<List<AssignmentSummaryResponse>>(
+                    $"Error retrieving student assignment statuses: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
+            }
+        }
         public async Task AutoUpdateUpcomingAssignmentsAsync()
         {
             var now = DateTime.UtcNow.AddHours(7);
@@ -2260,23 +2293,19 @@ namespace Service.Service
 
             try
             {
-                // Encode URL để tránh lỗi ký tự đặc biệt
                 string encodedUrl = Uri.EscapeDataString(fileUrl);
                 string extension = Path.GetExtension(fileUrl).ToLower();
 
-                // 1. Ảnh -> Trả về link gốc
                 if (new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp" }.Contains(extension))
                 {
                     return fileUrl;
                 }
 
-                // 2. Office (Word, Excel, PowerPoint) -> Dùng MS Office Viewer
                 if (new[] { ".docx", ".doc", ".xlsx", ".xls", ".pptx", ".ppt" }.Contains(extension))
                 {
                     return $"https://view.officeapps.live.com/op/view.aspx?src={encodedUrl}";
                 }
 
-                // 3. PDF và các loại khác -> Dùng Google Docs Viewer
                 return $"https://docs.google.com/viewer?url={encodedUrl}&embedded=true";
             }
             catch
