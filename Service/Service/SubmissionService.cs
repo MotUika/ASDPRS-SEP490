@@ -890,7 +890,6 @@ namespace Service.Service
         {
             try
             {
-                // 1️⃣ Gọi lại hàm core lấy Submission
                 var request = new GetSubmissionByIdRequest
                 {
                     SubmissionId = submissionId,
@@ -905,7 +904,6 @@ namespace Service.Service
 
                 var response = baseResponse.Data;
 
-                // 2️⃣ Chỉ lấy CriteriaFeedback của Instructor
                 var instructorFeedbacks = await _context.CriteriaFeedbacks
                     .Where(cf =>
                         cf.Review.ReviewAssignment.SubmissionId == submissionId &&
@@ -921,7 +919,6 @@ namespace Service.Service
 
                 response.CriteriaFeedbacks = instructorFeedbacks;
 
-                // 3️⃣ Đảm bảo các field KHÔNG BAO GIỜ null
                 response.InstructorScore ??= 0;
                 response.PeerAverageScore ??= 0;
                 response.FinalScore ??= 0;
@@ -1034,7 +1031,7 @@ namespace Service.Service
         {
             var response = _mapper.Map<SubmissionResponse>(submission);
 
-            // Load assignment info
+            response.PreviewURL = GeneratePreviewUrl(submission.FileUrl);
             if (submission.Assignment != null)
             {
                 response.Assignment = _mapper.Map<AssignmentInfoResponse>(submission.Assignment);
@@ -1074,7 +1071,6 @@ namespace Service.Service
 
             response.CourseName = submission.Assignment?.CourseInstance?.Course?.CourseName;
             response.ClassName = submission.Assignment?.CourseInstance?.SectionCode;
-            response.PreviewUrl = GeneratePreviewUrl(submission.FileUrl);
 
             return response;
         }

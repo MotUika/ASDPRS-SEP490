@@ -16,23 +16,20 @@ namespace Service.RequestAndResponse.Response.Submission
 
         public string FileUrl { get; set; }
         public string FileName { get; set; }
+        public string PreviewURL { get; set; }
         public string OriginalFileName { get; set; }
         public string Keywords { get; set; }
         public DateTime? SubmittedAt { get; set; }
         public string Status { get; set; }
         public bool IsPublic { get; set; }
-        // 🎯 Thông tin điểm số
         public decimal? InstructorScore { get; set; }
         public decimal? PeerAverageScore { get; set; }
         public decimal? FinalScore { get; set; }
 
-        // 🗒️ Thông tin feedback
         public string? Feedback { get; set; }
         public DateTime? GradedAt { get; set; }
-        public string PreviewUrl { get; set; }
 
 
-        // Navigation properties
         public List<SubmissionCriteriaFeedbackResponse> CriteriaFeedbacks { get; set; } = new();
         public AssignmentInfoResponse Assignment { get; set; }
         public UserInfoResponse User { get; set; }
