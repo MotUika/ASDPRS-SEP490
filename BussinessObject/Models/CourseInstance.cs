@@ -57,7 +57,3 @@ namespace BussinessObject.Models
         public virtual ICollection<Assignment> Assignments { get; set; } = new List<Assignment>();
     }
 }
-
-
-
-

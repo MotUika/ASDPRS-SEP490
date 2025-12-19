@@ -760,6 +760,31 @@ public class StudentReviewController : ControllerBase
         return StatusCode((int)result.StatusCode, result);
     }
 
+    [HttpGet("student/{studentId}/semester/{semesterId}/assignments-status")]
+    [Authorize] 
+    [SwaggerOperation(
+        Summary = "Lấy trạng thái các bài tập của sinh viên trong kỳ học",
+        Description = "Chỉ trả về các bài tập có trạng thái: Active, InReview, GradesPublished của sinh viên trong một kỳ học cụ thể."
+    )]
+    [SwaggerResponse(200, "Thành công", typeof(BaseResponse<List<AssignmentSummaryResponse>>))]
+    [SwaggerResponse(403, "Không có quyền truy cập dữ liệu của sinh viên khác")]
+    [SwaggerResponse(500, "Lỗi server")]
+    public async Task<IActionResult> GetStudentAssignmentStatuses(int studentId, int semesterId)
+    {
+        var currentStudentId = GetCurrentStudentId();
+        if (studentId != currentStudentId)
+        {
+            return StatusCode(403, new BaseResponse<object>(
+                "Access denied: Cannot access other student's data",
+                StatusCodeEnum.Forbidden_403,
+                null
+            ));
+        }
+
+        var result = await _assignmentService.GetStudentAssignmentStatusesBySemesterAsync(studentId, semesterId);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
     [HttpPost("assignment/{assignmentId}/check-plagiarism")]
     [SwaggerOperation(
         Summary = "Kiểm tra bài nộp (AI + Similarity)",

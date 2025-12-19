@@ -5,6 +5,7 @@ namespace Service.RequestAndResponse.Response.Assignment
     public class AssignmentSummaryResponse
     {
         public int AssignmentId { get; set; }
+        public int CourseInstanceId { get; set; }
         public string Title { get; set; }
         public string Description { get; set; }
         public DateTime Deadline { get; set; }
