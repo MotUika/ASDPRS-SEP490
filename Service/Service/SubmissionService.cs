@@ -2740,7 +2740,7 @@ namespace Service.Service
         //    }
         //}
 
-        public async Task<BaseResponse<List<GradeSubmissionResponse>>> ImportGradesFromExcelAsync(IFormFile file)
+        public async Task<BaseResponse<object>> ImportGradesFromExcelAsync(IFormFile file)
         {
             try
             {
@@ -2752,7 +2752,7 @@ namespace Service.Service
 
                 if (ws == null)
                 {
-                    return new BaseResponse<List<GradeSubmissionResponse>>(
+                    return new BaseResponse<object>(
                         "Invalid Excel file",
                         StatusCodeEnum.BadRequest_400,
                         null
@@ -2760,25 +2760,34 @@ namespace Service.Service
                 }
 
                 // ==============================
-                // 1️⃣ Header config
+                // CONFIG
                 // ==============================
                 int headerRow = 1;
+                int startRow = 2;
 
-                // Criteria bắt đầu từ cột 7
+                int submissionIdCol = 3;
+                int instructorIdCol = 5;
                 int startCriteriaCol = 7;
-
-                // Cột cuối = Final Feedback
                 int finalFeedbackCol = ws.Dimension.End.Column;
 
+                var excelErrors = new List<ExcelValidationError>();
+
                 // ==============================
-                // 2️⃣ Load rubric từ submission đầu tiên
+                // LOAD RUBRIC (FROM FIRST ROW)
                 // ==============================
-                if (!int.TryParse(ws.Cells[2, 3].Text, out int firstSubmissionId))
+                if (!int.TryParse(ws.Cells[startRow, submissionIdCol].Text, out int firstSubmissionId))
                 {
-                    return new BaseResponse<List<GradeSubmissionResponse>>(
-                        "Invalid submissionId in Excel",
+                    excelErrors.Add(new ExcelValidationError
+                    {
+                        Row = startRow,
+                        Column = "SubmissionId",
+                        Message = "SubmissionId is required and must be a number"
+                    });
+
+                    return new BaseResponse<object>(
+                        "Excel validation failed",
                         StatusCodeEnum.BadRequest_400,
-                        null
+                        excelErrors
                     );
                 }
 
@@ -2790,84 +2799,168 @@ namespace Service.Service
 
                 if (firstSubmission?.Assignment?.Rubric == null)
                 {
-                    return new BaseResponse<List<GradeSubmissionResponse>>(
-                        "Assignment or rubric not found",
+                    excelErrors.Add(new ExcelValidationError
+                    {
+                        Row = startRow,
+                        Column = "SubmissionId",
+                        Message = "Assignment or rubric not found for this submission"
+                    });
+
+                    return new BaseResponse<object>(
+                        "Excel validation failed",
                         StatusCodeEnum.NotFound_404,
-                        null
+                        excelErrors
                     );
                 }
 
-                // Map: Criteria Title -> CriteriaId
                 var criteriaMap = firstSubmission.Assignment.Rubric.Criteria
                     .ToDictionary(c => c.Title.Trim(), c => c.CriteriaId);
 
                 // ==============================
-                // 3️⃣ Read data rows
+                // PHASE 1️⃣ VALIDATE
                 // ==============================
-                var results = new List<GradeSubmissionResponse>();
-                int row = 2;
+                int row = startRow;
 
-                while (!string.IsNullOrWhiteSpace(ws.Cells[row, 3].Text))
+                while (!string.IsNullOrWhiteSpace(ws.Cells[row, submissionIdCol].Text))
                 {
-                    // SubmissionId (col 3) | InstructorId (col 5)
-                    if (!int.TryParse(ws.Cells[row, 3].Text, out int submissionId) ||
-                        !int.TryParse(ws.Cells[row, 5].Text, out int instructorId))
+                    // ---- SubmissionId
+                    if (!int.TryParse(ws.Cells[row, submissionIdCol].Text, out _))
                     {
-                        row++;
-                        continue;
-                    }
-
-                    var req = new ImportGradeRequest
-                    {
-                        SubmissionId = submissionId,
-                        InstructorId = instructorId,
-                        CriteriaScores = new List<ImportCriteriaScore>(),
-                        FinalFeedback = ws.Cells[row, finalFeedbackCol].Text
-                    };
-
-                    // ==============================
-                    // 4️⃣ Read criteria (Score + Feedback)
-                    // ==============================
-                    for (int col = startCriteriaCol; col < finalFeedbackCol; col += 2)
-                    {
-                        string rawHeader = ws.Cells[headerRow, col].Text?.Trim();
-
-                        if (string.IsNullOrEmpty(rawHeader))
-                            continue;
-
-                        // Remove "(xx%)" from header
-                        string criteriaTitle = rawHeader;
-                        int percentIndex = rawHeader.LastIndexOf("(");
-                        if (percentIndex > 0)
+                        excelErrors.Add(new ExcelValidationError
                         {
-                            criteriaTitle = rawHeader.Substring(0, percentIndex).Trim();
-                        }
-
-                        if (!criteriaMap.TryGetValue(criteriaTitle, out int criteriaId))
-                            continue;
-
-                        if (!decimal.TryParse(ws.Cells[row, col].Text, out decimal score))
-                            continue;
-
-                        string criteriaFeedback = ws.Cells[row, col + 1].Text;
-
-                        req.CriteriaScores.Add(new ImportCriteriaScore
-                        {
-                            CriteriaId = criteriaId,
-                            Score = score,
-                            Feedback = criteriaFeedback
+                            Row = row,
+                            Column = "SubmissionId",
+                            Message = "SubmissionId is required and must be a number"
                         });
                     }
 
-                    // ==============================
-                    // 5️⃣ Import từng submission
-                    // ==============================
-                    var result = await ImportSingleSubmissionAsync(req);
+                    // ---- InstructorId
+                    if (!int.TryParse(ws.Cells[row, instructorIdCol].Text, out _))
+                    {
+                        excelErrors.Add(new ExcelValidationError
+                        {
+                            Row = row,
+                            Column = "InstructorId",
+                            Message = "InstructorId is required and must be a number"
+                        });
+                    }
 
+                    // ---- Criteria
+                    for (int col = startCriteriaCol; col < finalFeedbackCol; col += 2)
+                    {
+                        string rawHeader = ws.Cells[headerRow, col].Text?.Trim();
+                        if (string.IsNullOrEmpty(rawHeader)) continue;
+
+                        string criteriaTitle = rawHeader;
+                        int idx = rawHeader.LastIndexOf("(");
+                        if (idx > 0)
+                            criteriaTitle = rawHeader.Substring(0, idx).Trim();
+
+                        if (!criteriaMap.ContainsKey(criteriaTitle))
+                        {
+                            excelErrors.Add(new ExcelValidationError
+                            {
+                                Row = row,
+                                Column = rawHeader,
+                                Message = "Criteria does not exist in rubric"
+                            });
+                            continue;
+                        }
+
+                        // Score
+                        var scoreText = ws.Cells[row, col].Text;
+                        if (string.IsNullOrWhiteSpace(scoreText))
+                        {
+                            excelErrors.Add(new ExcelValidationError
+                            {
+                                Row = row,
+                                Column = rawHeader,
+                                Message = "Score is required"
+                            });
+                        }
+                        else if (!decimal.TryParse(scoreText, out _))
+                        {
+                            excelErrors.Add(new ExcelValidationError
+                            {
+                                Row = row,
+                                Column = rawHeader,
+                                Message = "Score must be a number"
+                            });
+                        }
+
+                        // Feedback
+                        var feedbackText = ws.Cells[row, col + 1].Text;
+                        if (string.IsNullOrWhiteSpace(feedbackText))
+                        {
+                            excelErrors.Add(new ExcelValidationError
+                            {
+                                Row = row,
+                                Column = $"{rawHeader} Feedback",
+                                Message = "Feedback is required"
+                            });
+                        }
+                    }
+
+                    // ---- Final Feedback
+                    if (string.IsNullOrWhiteSpace(ws.Cells[row, finalFeedbackCol].Text))
+                    {
+                        excelErrors.Add(new ExcelValidationError
+                        {
+                            Row = row,
+                            Column = "Final Feedback",
+                            Message = "Final Feedback is required"
+                        });
+                    }
+
+                    row++;
+                }
+
+                // ❌ STOP nếu có lỗi
+                if (excelErrors.Any())
+                {
+                    return new BaseResponse<object>(
+                        "Excel validation failed",
+                        StatusCodeEnum.BadRequest_400,
+                        excelErrors
+                    );
+                }
+
+                // ==============================
+                // PHASE 2️⃣ IMPORT
+                // ==============================
+                var results = new List<GradeSubmissionResponse>();
+                row = startRow;
+
+                while (!string.IsNullOrWhiteSpace(ws.Cells[row, submissionIdCol].Text))
+                {
+                    var req = new ImportGradeRequest
+                    {
+                        SubmissionId = int.Parse(ws.Cells[row, submissionIdCol].Text),
+                        InstructorId = int.Parse(ws.Cells[row, instructorIdCol].Text),
+                        FinalFeedback = ws.Cells[row, finalFeedbackCol].Text,
+                        CriteriaScores = new List<ImportCriteriaScore>()
+                    };
+
+                    for (int col = startCriteriaCol; col < finalFeedbackCol; col += 2)
+                    {
+                        string rawHeader = ws.Cells[headerRow, col].Text.Trim();
+                        string criteriaTitle = rawHeader.Contains("(")
+                            ? rawHeader.Substring(0, rawHeader.LastIndexOf("(")).Trim()
+                            : rawHeader;
+
+                        req.CriteriaScores.Add(new ImportCriteriaScore
+                        {
+                            CriteriaId = criteriaMap[criteriaTitle],
+                            Score = decimal.Parse(ws.Cells[row, col].Text),
+                            Feedback = ws.Cells[row, col + 1].Text
+                        });
+                    }
+
+                    var result = await ImportSingleSubmissionAsync(req);
                     if (result.StatusCode != StatusCodeEnum.OK_200)
                     {
-                        return new BaseResponse<List<GradeSubmissionResponse>>(
-                            $"Import failed at submission {submissionId}: {result.Message}",
+                        return new BaseResponse<object>(
+                            $"Import failed at submission {req.SubmissionId}: {result.Message}",
                             result.StatusCode,
                             null
                         );
@@ -2877,7 +2970,7 @@ namespace Service.Service
                     row++;
                 }
 
-                return new BaseResponse<List<GradeSubmissionResponse>>(
+                return new BaseResponse<object>(
                     "Imported grades successfully",
                     StatusCodeEnum.OK_200,
                     results
@@ -2885,13 +2978,14 @@ namespace Service.Service
             }
             catch (Exception ex)
             {
-                return new BaseResponse<List<GradeSubmissionResponse>>(
+                return new BaseResponse<object>(
                     $"Error importing Excel: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
                     null
                 );
             }
         }
+
 
 
 
@@ -3018,7 +3112,7 @@ namespace Service.Service
                     ReviewAssignmentId = raInstructor.ReviewAssignmentId,
                     ReviewedAt = DateTime.UtcNow.AddHours(7),
                     ReviewType = "Instructor",
-                    FeedbackSource = "Import",
+                    FeedbackSource = "Instructor",
                     GeneralFeedback = request.FinalFeedback
                 };
 
@@ -3059,7 +3153,7 @@ namespace Service.Service
                         Feedback = string.IsNullOrWhiteSpace(cs.Feedback)
                             ? "Imported grading"
                             : cs.Feedback,
-                        FeedbackSource = "Import"
+                        FeedbackSource = "Instructor"
                     });
                 }
 

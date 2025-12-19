@@ -2,6 +2,7 @@
 using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Request.Submission;
 using Service.RequestAndResponse.Response.Submission;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace Service.Interface
@@ -41,7 +42,7 @@ namespace Service.Interface
         Task<BaseResponse<List<SubmissionDetailExportResponse>>>
      GetAllSubmissionDetailsForExportAsync(int assignmentId);
         //Task<BaseResponse<GradeSubmissionResponse>> ImportGradeAsync(ImportGradeRequest request);
-        Task<BaseResponse<List<GradeSubmissionResponse>>> ImportGradesFromExcelAsync(IFormFile file);
+        Task<BaseResponse<object>> ImportGradesFromExcelAsync(IFormFile file);
         Task<BaseResponse<OverrideFinalScoreResponse>> OverrideFinalScoreAsync(
     OverrideFinalScoreRequest request);
     }

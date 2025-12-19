@@ -51,4 +51,11 @@ namespace Service.RequestAndResponse.BaseResponse
         public string? Suggestion { get; set; }
     }
 
+    public class ExcelValidationError
+    {
+        public int Row { get; set; }
+        public string Column { get; set; }
+        public string Message { get; set; }
+    }
+
 }
