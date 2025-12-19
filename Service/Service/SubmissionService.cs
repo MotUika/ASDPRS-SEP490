@@ -1924,10 +1924,11 @@ namespace Service.Service
                 var gradedScores = classSubmissions.Where(s => s.Status == "Graded" && s.FinalScore.HasValue).Select(s => s.FinalScore.Value).ToList();
                 decimal classAverage = gradedScores.Any() ? gradedScores.Average() : 0;
                 decimal classMax = gradedScores.Any() ? gradedScores.Max() : 0;
-
                 var response = new MyScoreDetailsResponse
                 {
                     SubmissionId = submission.SubmissionId,
+                    AssignmentId = submission.AssignmentId,
+                    AssignmentTitle = assignment.Title,
                     InstructorScore = submission.InstructorScore ?? 0,
                     PeerAverageScore = submission.PeerAverageScore ?? 0,
                     FinalScore = submission.FinalScore ?? 0,
@@ -1938,6 +1939,7 @@ namespace Service.Service
                     ClassAverageScore = classAverage,
                     ClassMaxScore = classMax,
                     FileUrl = submission.FileUrl,
+                    previewUrl = GeneratePreviewUrl(submission.FileUrl),
                     FileName = submission.FileName,
                     KeyWords = submission.Keywords,
                     Note = GenerateScoreNote(submission.FinalScore ?? 0, classAverage, classMax)
