@@ -22,5 +22,6 @@ namespace Service.IService
         Task<BaseResponse<IEnumerable<CourseInstanceResponse>>> GetClassesByUserIdAsync(int userId, int? courseId);
         Task<BaseResponse<bool>> ToggleCourseStatusAsync(int id);
         Task<BaseResponse<object>> ImportCourseInstancesFromExcelAsync(IFormFile file);
+        Task<BaseResponse<string>> GetEnrollmentPasswordAsync(int courseInstanceId, int userId);
     }
 }

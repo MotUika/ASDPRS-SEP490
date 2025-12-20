@@ -837,5 +837,42 @@ namespace Service.Service
         }
 
 
+        public async Task<BaseResponse<string>> GetEnrollmentPasswordAsync(int courseInstanceId, int userId)
+        {
+            try
+            {
+                // 1. Tìm lớp học và lấy mật khẩu
+                var courseInstance = await _context.CourseInstances
+                    .Where(ci => ci.CourseInstanceId == courseInstanceId)
+                    .Select(ci => new { ci.EnrollmentPassword, ci.CourseInstanceId })
+                    .FirstOrDefaultAsync();
+
+                if (courseInstance == null)
+                {
+                    return new BaseResponse<string>("Không tìm thấy lớp học", StatusCodeEnum.NotFound_404, null);
+                }
+
+                // 2. Kiểm tra xem User này có phải là Instructor của lớp này không
+                // Nếu bạn muốn Admin cũng xem được, có thể check thêm Role ở đây
+                var isInstructor = await _context.CourseInstructors
+                    .AnyAsync(ciu => ciu.CourseInstanceId == courseInstanceId && ciu.UserId == userId);
+
+                if (!isInstructor)
+                {
+                    return new BaseResponse<string>("Bạn không có quyền xem mật khẩu của lớp này", StatusCodeEnum.Forbidden_403, null);
+                }
+
+                return new BaseResponse<string>(
+                    "Lấy mật khẩu thành công",
+                    StatusCodeEnum.OK_200,
+                    courseInstance.EnrollmentPassword
+                );
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<string>($"Lỗi: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
+            }
+        }
+
     }
 }
