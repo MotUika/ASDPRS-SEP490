@@ -15,6 +15,9 @@ namespace Service.IService
         Task<BaseResponse<IEnumerable<NotificationResponse>>> GetNotificationsByUserAsync(int userId, bool unreadOnly = false);
         Task<BaseResponse<bool>> MarkAsReadAsync(int notificationId);
         Task<BaseResponse<bool>> MarkAllAsReadAsync(int userId);
+        Task<BaseResponse<bool>> DeleteNotificationAsync(int notificationId, int userId);
+        Task<BaseResponse<bool>> DeleteAllReadNotificationsAsync(int userId);
+        Task<BaseResponse<bool>> DeleteAllNotificationsAsync(int userId);
         // Methods for specific notifications
         Task SendNewAssignmentNotificationAsync(int assignmentId, int courseInstanceId);
         Task SendDeadlineReminderAsync(int assignmentId);

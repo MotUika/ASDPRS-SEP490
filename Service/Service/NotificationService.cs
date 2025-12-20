@@ -283,6 +283,78 @@ namespace Service.Service
             }
         }
 
+        public async Task<BaseResponse<bool>> DeleteAllReadNotificationsAsync(int userId)
+        {
+            try
+            {
+                var result = await _notificationRepository.DeleteAllReadByUserIdAsync(userId);
+
+                if (result)
+                {
+                    return new BaseResponse<bool>("All read notifications deleted successfully", StatusCodeEnum.OK_200, true);
+                }
+
+                return new BaseResponse<bool>("No read notifications found to delete", StatusCodeEnum.OK_200, false);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<bool>($"Error deleting read notifications: {ex.Message}", StatusCodeEnum.InternalServerError_500, false);
+            }
+        }
+
+        public async Task<BaseResponse<bool>> DeleteAllNotificationsAsync(int userId)
+        {
+            try
+            {
+                var result = await _notificationRepository.DeleteAllByUserIdAsync(userId);
+
+                if (result)
+                {
+                    return new BaseResponse<bool>("All notifications deleted successfully", StatusCodeEnum.OK_200, true);
+                }
+
+                return new BaseResponse<bool>("No notifications found to delete", StatusCodeEnum.OK_200, false);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<bool>($"Error deleting all notifications: {ex.Message}", StatusCodeEnum.InternalServerError_500, false);
+            }
+        }
+        public async Task<BaseResponse<bool>> DeleteNotificationAsync(int notificationId, int userId)
+        {
+            try
+            {
+                // 1. Tìm thông báo
+                var notification = await _notificationRepository.GetByIdAsync(notificationId);
+
+                // 2. Kiểm tra tồn tại
+                if (notification == null)
+                {
+                    return new BaseResponse<bool>("Notification not found", StatusCodeEnum.NotFound_404, false);
+                }
+
+                // 3. Kiểm tra quyền sở hữu (User chỉ được xóa thông báo của chính mình)
+                if (notification.UserId != userId)
+                {
+                    return new BaseResponse<bool>("You do not have permission to delete this notification", StatusCodeEnum.Forbidden_403, false);
+                }
+
+                // 4. Thực hiện xóa
+                var result = await _notificationRepository.DeleteAsync(notificationId);
+
+                if (result)
+                {
+                    return new BaseResponse<bool>("Notification deleted successfully", StatusCodeEnum.OK_200, true);
+                }
+
+                return new BaseResponse<bool>("Failed to delete notification", StatusCodeEnum.InternalServerError_500, false);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<bool>($"Error deleting notification: {ex.Message}", StatusCodeEnum.InternalServerError_500, false);
+            }
+        }
+
         // Specific notification methods
         public async Task SendNewAssignmentNotificationAsync(int assignmentId, int courseInstanceId)
         {
