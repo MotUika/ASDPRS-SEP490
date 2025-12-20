@@ -275,11 +275,6 @@ namespace DataAccessLayer
                 .WithMany(c => c.RubricTemplates)
                 .HasForeignKey(rt => rt.CourseId)
                 .OnDelete(DeleteBehavior.Restrict);
-            modelBuilder.Entity<RubricTemplate>()
-                .HasOne(rt => rt.Major)
-                .WithMany(m => m.RubricTemplates)
-                .HasForeignKey(rt => rt.MajorId)
-                .OnDelete(DeleteBehavior.Restrict);
 
             // Criteria
             modelBuilder.Entity<Criteria>()

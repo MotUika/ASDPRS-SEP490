@@ -21,11 +21,6 @@ public class RubricTemplate
     [ForeignKey("CreatedByUserId")]
     public User CreatedByUser { get; set; }
 
-    public int? MajorId { get; set; }
-
-    [ForeignKey(nameof(MajorId))]
-    public Major? Major { get; set; }
-
     public int? CourseId { get; set; }
 
     [ForeignKey(nameof(CourseId))]

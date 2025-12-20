@@ -301,7 +301,6 @@ namespace DataAccessLayer.Migrations
                     IsPublic = table.Column<bool>(type: "bit", nullable: false),
                     CreatedByUserId = table.Column<int>(type: "int", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    MajorId = table.Column<int>(type: "int", nullable: true),
                     CourseId = table.Column<int>(type: "int", nullable: true)
                 },
                 constraints: table =>
@@ -318,12 +317,6 @@ namespace DataAccessLayer.Migrations
                         column: x => x.CourseId,
                         principalTable: "Courses",
                         principalColumn: "CourseId",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_RubricTemplates_Majors_MajorId",
-                        column: x => x.MajorId,
-                        principalTable: "Majors",
-                        principalColumn: "MajorId",
                         onDelete: ReferentialAction.Restrict);
                 });
 
@@ -1151,11 +1144,6 @@ namespace DataAccessLayer.Migrations
                 name: "IX_RubricTemplates_CreatedByUserId",
                 table: "RubricTemplates",
                 column: "CreatedByUserId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_RubricTemplates_MajorId",
-                table: "RubricTemplates",
-                column: "MajorId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Semesters_AcademicYearId",
