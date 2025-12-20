@@ -100,6 +100,83 @@ public class NotificationsController : ControllerBase
         }
     }
 
+    [HttpDelete("{id}")]
+    [SwaggerOperation(
+        Summary = "Xóa một thông báo",
+        Description = "Xóa vĩnh viễn một thông báo. Người dùng chỉ có thể xóa thông báo của chính mình."
+    )]
+    [SwaggerResponse(200, "Xóa thành công", typeof(BaseResponse<bool>))]
+    [SwaggerResponse(403, "Forbidden - Không có quyền xóa thông báo này")]
+    [SwaggerResponse(404, "Không tìm thấy thông báo")]
+    [SwaggerResponse(500, "Lỗi server")]
+    public async Task<IActionResult> DeleteNotification(int id)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var result = await _notificationService.DeleteNotificationAsync(id, userId);
+            return StatusCode((int)result.StatusCode, result);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new BaseResponse<bool>(
+                $"Lỗi server: {ex.Message}",
+                StatusCodeEnum.InternalServerError_500,
+                false
+            ));
+        }
+    }
+
+    [HttpDelete("delete-read")]
+    [SwaggerOperation(
+        Summary = "Xóa tất cả thông báo đã đọc",
+        Description = "Xóa tất cả các thông báo có trạng thái 'Đã đọc' của người dùng hiện tại"
+    )]
+    [SwaggerResponse(200, "Thành công", typeof(BaseResponse<bool>))]
+    [SwaggerResponse(500, "Lỗi server")]
+    public async Task<IActionResult> DeleteReadNotifications()
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var result = await _notificationService.DeleteAllReadNotificationsAsync(userId);
+            return StatusCode((int)result.StatusCode, result);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new BaseResponse<bool>(
+                $"Lỗi server: {ex.Message}",
+                StatusCodeEnum.InternalServerError_500,
+                false
+            ));
+        }
+    }
+
+    [HttpDelete("delete-all")]
+    [SwaggerOperation(
+        Summary = "Xóa tất cả thông báo",
+        Description = "Xóa sạch toàn bộ thông báo (cả đã đọc và chưa đọc) của người dùng hiện tại. Hành động này không thể hoàn tác."
+    )]
+    [SwaggerResponse(200, "Thành công", typeof(BaseResponse<bool>))]
+    [SwaggerResponse(500, "Lỗi server")]
+    public async Task<IActionResult> DeleteAllNotifications()
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var result = await _notificationService.DeleteAllNotificationsAsync(userId);
+            return StatusCode((int)result.StatusCode, result);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new BaseResponse<bool>(
+                $"Lỗi server: {ex.Message}",
+                StatusCodeEnum.InternalServerError_500,
+                false
+            ));
+        }
+    }
+
     [HttpGet("unread-count")]
     [SwaggerOperation(
         Summary = "Lấy số lượng thông báo chưa đọc",
