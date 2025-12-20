@@ -272,6 +272,30 @@ namespace ASDPRS_SEP490.Controllers
         }
 
 
+        // 🔹 Lấy Enroll Key của lớp học (Dành cho Instructor)
+        [HttpGet("{courseInstanceId}/enroll-key")]
+        [SwaggerOperation(
+            Summary = "Lấy mã Enroll Key của lớp học",
+            Description = "Cho phép giảng viên của lớp xem mã Enroll Key hiện tại. Cần truyền userId để kiểm tra quyền."
+        )]
+        [SwaggerResponse(200, "Thành công", typeof(BaseResponse<string>))]
+        [SwaggerResponse(403, "Không có quyền xem mã lớp")]
+        [SwaggerResponse(404, "Không tìm thấy lớp học")]
+        [SwaggerResponse(500, "Lỗi server")]
+        public async Task<IActionResult> GetEnrollKey(int courseInstanceId, [FromQuery] int userId)
+        {
+            // Gọi hàm service đã viết
+            var result = await _courseInstanceService.GetEnrollmentPasswordAsync(courseInstanceId, userId);
+
+            return result.StatusCode switch
+            {
+                StatusCodeEnum.OK_200 => Ok(result),
+                StatusCodeEnum.Forbidden_403 => StatusCode(403, result), // Hoặc dùng Forbid(result.Message)
+                StatusCodeEnum.NotFound_404 => NotFound(result),
+                _ => StatusCode(500, result)
+            };
+        }
+
 
     }
 }
