@@ -1606,10 +1606,10 @@ namespace Service.Service
 
 
                 var aiCheckTask = _genAIService.CheckIntegrityAsync(
-                    newText.Length > 8000 ? newText.Substring(0, 8000) : newText,
-                    assignment.Title,
-                    studentName
-                );
+                         newText.Length > 4000 ? newText.Substring(0, 4000) : newText,
+                         assignment.Title,
+                         studentName
+                    );
 
                 var plagiarismTask = Task.Run(async () =>
                 {

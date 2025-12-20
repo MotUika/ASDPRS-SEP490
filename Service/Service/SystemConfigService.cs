@@ -167,12 +167,19 @@ namespace Service.Service
             return key switch
             {
                 "ScorePrecision" => ValidateScorePrecision(value),
-                "AISummaryMaxTokens" => ValidatePositiveInteger(value, "AISummaryMaxTokens"),
-                "AISummaryMaxWords" => ValidatePositiveInteger(value, "AISummaryMaxWords"),
+
+                "AISummaryMaxTokens" => ValidateRangeInteger(value, "AISummaryMaxTokens", 100, 12000),
+
+                "AISummaryMaxWords" => ValidateRangeInteger(value, "AISummaryMaxWords", 50, 1000),
+
                 "DefaultPassThreshold" => ValidatePercentage(value),
                 "PlagiarismThreshold" => ValidatePercentage(value),
+
                 "RegradeProcessingDeadlineDays" => ValidatePositiveInteger(value, "RegradeProcessingDeadlineDays"),
                 "RegradeRequestDeadlineDays" => ValidatePositiveInteger(value, "RegradeRequestDeadlineDays"),
+
+                "GeminiModelName" => (true, string.Empty),
+
                 _ => (true, string.Empty)
             };
         }
@@ -201,6 +208,16 @@ namespace Service.Service
         {
             if (!decimal.TryParse(value, out decimal percentage) || percentage < 0 || percentage > 100)
                 return (false, "Value must be a percentage between 0 and 100");
+
+            return (true, string.Empty);
+        }
+        private (bool IsValid, string ErrorMessage) ValidateRangeInteger(string value, string fieldName, int min, int max)
+        {
+            if (!int.TryParse(value, out int intValue))
+                return (false, $"{fieldName} must be an integer number");
+
+            if (intValue < min || intValue > max)
+                return (false, $"{fieldName} must be between {min} and {max}");
 
             return (true, string.Empty);
         }
