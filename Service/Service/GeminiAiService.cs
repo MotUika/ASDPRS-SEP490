@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Service.IService;
+using Service.RequestAndResponse.Response.AISummary;
 using System;
 using System.Net.Http;
 using System.Text;
@@ -255,6 +256,61 @@ namespace Service.Service
             **KEEP UNDER 150 WORDS**";
 
             return await SummarizeAsync(prompt, maxOutputTokens: 300);
+        }
+
+        public async Task<List<AICriteriaFeedbackItem>> GenerateBulkCriteriaFeedbackAsync(string documentText, List<Criteria> criteria, string context)
+        {
+            // Tạo danh sách tiêu chí dạng text rút gọn để gửi vào prompt
+            var criteriaListText = string.Join("\n", criteria.Select(c =>
+                $"- ID:{c.CriteriaId} | Title: {c.Title} | MaxScore: {c.MaxScore} | Desc: {c.Description}"));
+
+            var prompt = $@"**BULK GRADING TASK**
+CONTEXT: {context}
+
+CRITERIA LIST:
+{criteriaListText}
+
+STUDENT SUBMISSION:
+{documentText}
+
+**INSTRUCTION:**
+Evaluate the submission against ALL criteria listed above.
+Return a STRICT JSON ARRAY where each object corresponds to a criteria.
+Format: [ {{ ""CriteriaId"": <int>, ""Score"": <decimal>, ""Summary"": ""<short feedback>"" }}, ... ]
+Rules:
+1. Score must be between 0 and MaxScore.
+2. Summary must be concise (under 40 words per criteria).
+3. Do not include markdown formatting (```json), just the raw JSON string.
+";
+
+            var jsonResponse = await SummarizeAsync(prompt, maxOutputTokens: 1000);
+
+            try
+            {
+                jsonResponse = jsonResponse.Replace("```json", "").Replace("```", "").Trim();
+
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var feedbacks = JsonSerializer.Deserialize<List<AICriteriaFeedbackItem>>(jsonResponse, options);
+
+                foreach (var item in feedbacks)
+                {
+                    var original = criteria.FirstOrDefault(c => c.CriteriaId == item.CriteriaId);
+                    if (original != null)
+                    {
+                        item.Title = original.Title;
+                        item.Description = original.Description;
+                        item.MaxScore = original.MaxScore;
+                        if (item.Score > original.MaxScore) item.Score = original.MaxScore;
+                        if (item.Score < 0) item.Score = 0;
+                    }
+                }
+                return feedbacks ?? new List<AICriteriaFeedbackItem>();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error parsing bulk criteria feedback JSON");
+                return new List<AICriteriaFeedbackItem>();
+            }
         }
         public async Task<string> CheckSubmissionRelevanceAsync(string documentText, string context, string assignmentTitle)
         {

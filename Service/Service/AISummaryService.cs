@@ -1035,17 +1035,12 @@ namespace Service.Service
             {
                 var submission = await _submissionRepository.GetByIdAsync(request.SubmissionId);
                 if (submission == null)
-                {
                     return new BaseResponse<AICriteriaResponse>("Submission not found", StatusCodeEnum.NotFound_404, null);
-                }
 
                 var assignment = await _assignmentRepository.GetByIdAsync(submission.AssignmentId);
                 if (assignment == null)
-                {
                     return new BaseResponse<AICriteriaResponse>("Assignment not found", StatusCodeEnum.NotFound_404, null);
-                }
 
-                // Get rubric & criteria
                 Rubric rubric = null;
                 List<Criteria> criteria = null;
                 if (assignment.RubricId.HasValue)
@@ -1058,156 +1053,56 @@ namespace Service.Service
                 }
 
                 if (criteria == null || !criteria.Any())
-                {
-                    return new BaseResponse<AICriteriaResponse>("No rubric criteria found", StatusCodeEnum.NotFound_404, null);
-                }
+                    return new BaseResponse<AICriteriaResponse>("No rubric criteria found for this assignment", StatusCodeEnum.NotFound_404, null);
 
-                // Extract text từ file
                 using var fileStream = await _fileStorageService.GetFileStreamAsync(submission.FileUrl);
                 if (fileStream == null)
-                {
-                    return new BaseResponse<AICriteriaResponse>("Could not download file", StatusCodeEnum.BadRequest_400, null);
-                }
+                    return new BaseResponse<AICriteriaResponse>("Could not download file from storage", StatusCodeEnum.BadRequest_400, null);
+
                 var fileName = submission.FileName ?? submission.OriginalFileName;
                 var extractedText = await _documentTextExtractor.ExtractTextAsync(fileStream, fileName);
                 if (string.IsNullOrWhiteSpace(extractedText))
-                {
-                    return new BaseResponse<AICriteriaResponse>("No text extracted", StatusCodeEnum.BadRequest_400, null);
-                }
+                    return new BaseResponse<AICriteriaResponse>("No text extracted from document", StatusCodeEnum.BadRequest_400, null);
+
+
+                var maxTokensConfig = await _systemConfigService.GetSystemConfigAsync("AISummaryMaxTokens");
+                int maxInputChars = int.TryParse(maxTokensConfig, out int val) ? val : 6000;
+
+                string textForAI = extractedText.Length > maxInputChars
+                    ? extractedText.Substring(0, maxInputChars) + "\n...[Document truncated for AI processing]"
+                    : extractedText;
+
+                _logger.LogInformation($"Submission {submission.SubmissionId}: Text length {extractedText.Length}, Truncated to {textForAI.Length} for AI input.");
+
                 var student = await _userRepository.GetByIdAsync(submission.UserId);
-                string studentName = student?.FirstName + " " + student?.LastName;
+                string studentName = $"{student?.FirstName} {student?.LastName}";
 
-                // Cắt text nếu quá dài trước khi check integrity
-                var textToCheck = extractedText.Length > 5000 ? extractedText.Substring(0, 5000) : extractedText;
-
-                var integrityCheck = await _genAIService.CheckIntegrityAsync(textToCheck, assignment.Title, studentName);
-
+                var integrityCheck = await _genAIService.CheckIntegrityAsync(textForAI, assignment.Title, studentName);
                 if (integrityCheck.CheatDetails != "No anomalies detected")
                 {
-                    string violationMessage = integrityCheck.CheatDetails;
-
-                     _logger.LogWarning($"Submission {submission.SubmissionId} flagged: {violationMessage}");
-
-                    var errorFeedbacks = new List<AICriteriaFeedbackItem>();
-
-                    foreach (var criterion in criteria)
-                    {
-                        var errorSummary = new AISummary
-                        {
-                            SubmissionId = request.SubmissionId,
-                            Content = $"Score: 0 | Summary: {violationMessage}",
-                            SummaryType = $"CriteriaFeedback_{criterion.CriteriaId}_Violation",
-                            GeneratedAt = DateTime.UtcNow.AddHours(7)
-                        };
-                        await _aiSummaryRepository.AddAsync(errorSummary);
-
-                        errorFeedbacks.Add(new AICriteriaFeedbackItem
-                        {
-                            CriteriaId = criterion.CriteriaId,
-                            Title = criterion.Title,
-                            Description = criterion.Description ?? "",
-                            Summary = violationMessage,
-                            Score = 0,
-                            MaxScore = criterion.MaxScore
-                        });
-                    }
-
-                    var errorResponse = new AICriteriaResponse
-                    {
-                        Feedbacks = errorFeedbacks,
-                        IsRelevant = false,
-                        ErrorMessage = violationMessage
-                    };
-
-                    return new BaseResponse<AICriteriaResponse>(
-                        "Submission integrity violation detected",
-                        StatusCodeEnum.OK_200, 
-                        errorResponse
-                    );
-                }
-                var maxTokensConfig = await _systemConfigService.GetSystemConfigAsync("AISummaryMaxTokens");
-                var maxWordsConfig = await _systemConfigService.GetSystemConfigAsync("AISummaryMaxWords");
-                int maxTokens = int.Parse(maxTokensConfig ?? "1000");  
-                int maxWords = int.Parse(maxWordsConfig ?? "200");    
-
-                _logger.LogInformation($"Using config for criteria feedback: MaxTokens={maxTokens}, MaxWords={maxWords}");
-
-                if (extractedText.Length > maxTokens)
-                {
-                    extractedText = extractedText.Substring(0, maxTokens) + "... [document truncated]";
+                    return await SaveAndReturnViolationResponse(request.SubmissionId, criteria, integrityCheck.CheatDetails);
                 }
 
-                var isRelevant = await CheckSubmissionRelevanceAsync(submission, assignment, extractedText);
+                var isRelevant = await CheckSubmissionRelevanceAsync(submission, assignment, textForAI);
                 if (!isRelevant)
                 {
-                    _logger.LogWarning($"Submission {request.SubmissionId} is not relevant to assignment. Returning error criteria feedback.");
-
-                    var errorFeedbacks = new List<AICriteriaFeedbackItem>();
-
-                    foreach (var criterion in criteria)
-                    {
-                        var errorMessage = "Unable to evaluate: Submission content does not match assignment requirements.";
-                        var errorSummary = new AISummary
-                        {
-                            SubmissionId = request.SubmissionId,
-                            Content = $"Score: 0 | Summary: {errorMessage}",
-                            SummaryType = $"CriteriaFeedback_{criterion.CriteriaId}_NotRelevant",
-                            GeneratedAt = DateTime.UtcNow.AddHours(7)
-                        };
-                        await _aiSummaryRepository.AddAsync(errorSummary);
-
-                        errorFeedbacks.Add(new AICriteriaFeedbackItem
-                        {
-                            CriteriaId = criterion.CriteriaId,
-                            Title = criterion.Title,
-                            Description = criterion.Description ?? "",
-                            Summary = errorMessage,
-                            Score = 0,
-                            MaxScore = criterion.MaxScore
-                        });
-                    }
-                    var errorResponse = new AICriteriaResponse
-                    {
-                        Feedbacks = errorFeedbacks,
-                        IsRelevant = false,
-                        ErrorMessage = "This submission does not match the assignment requirements. " +
-                                      $"Expected: {assignment.Title}. " +
-                                      "Please review the assignment guidelines and resubmit appropriate content."
-                    };
-
-                    return new BaseResponse<AICriteriaResponse>(
-                        "Submission is not relevant to assignment",
-                        StatusCodeEnum.BadRequest_400,
-                        errorResponse
-                    );
+                    return await SaveAndReturnRelevanceErrorResponse(request.SubmissionId, criteria, assignment.Title);
                 }
 
-                var feedbacks = new List<AICriteriaFeedbackItem>();
-                var allExist = true;
+                var existingFeedbacks = new List<AICriteriaFeedbackItem>();
+                bool allExist = true;
 
                 foreach (var criterion in criteria)
                 {
-                    var summaryType = $"CriteriaFeedback_{criterion.CriteriaId}";
+                    var summaryType = $"CriteriaFeedback*{criterion.CriteriaId}";
                     var existing = await _aiSummaryRepository.GetBySubmissionAndTypeAsync(request.SubmissionId, summaryType);
                     var existingSummary = existing.FirstOrDefault();
 
                     if (existingSummary != null)
                     {
-                        decimal score = 0;
-                        string summaryText = existingSummary.Content;
-
-                        if (summaryText.Contains("Score:"))
-                        {
-                            var parts = summaryText.Split('|');
-                            if (parts.Length >= 2)
-                            {
-                                var scoreStr = parts[0].Replace("Score:", "").Trim();
-                                decimal.TryParse(scoreStr, out score);
-                                summaryText = parts[1].Replace("Summary:", "").Trim();
-                            }
-                        }
-
-                        feedbacks.Add(new AICriteriaFeedbackItem
+                        // Parse lại content "Score: 8 | Summary: ..."
+                        ParseScoreAndSummary(existingSummary.Content, out decimal score, out string summaryText);
+                        existingFeedbacks.Add(new AICriteriaFeedbackItem
                         {
                             CriteriaId = criterion.CriteriaId,
                             Title = criterion.Title,
@@ -1229,128 +1124,151 @@ namespace Service.Service
                     return new BaseResponse<AICriteriaResponse>(
                         "Existing criteria feedback loaded",
                         StatusCodeEnum.OK_200,
-                        new AICriteriaResponse { Feedbacks = feedbacks, IsRelevant = true });
+                        new AICriteriaResponse { Feedbacks = existingFeedbacks, IsRelevant = true });
                 }
 
-                _logger.LogInformation($"Generating new criteria feedback for submission {request.SubmissionId}");
+                _logger.LogInformation($"Calling AI Bulk Generation for Submission {request.SubmissionId} with {criteria.Count} criteria.");
 
                 var context = BuildEnhancedContext(assignment, rubric, criteria);
 
-                feedbacks.Clear();
+                var aiResults = await _genAIService.GenerateBulkCriteriaFeedbackAsync(textForAI, criteria, context);
+
+                var finalFeedbacks = new List<AICriteriaFeedbackItem>();
+
+
                 foreach (var criterion in criteria)
                 {
-                    try
+                    var aiItem = aiResults.FirstOrDefault(x => x.CriteriaId == criterion.CriteriaId);
+
+                    decimal scoreToSave = 0;
+                    string summaryToSave = "";
+
+                    if (aiItem != null)
                     {
-                        var criteriaSummary = await _genAIService.GenerateCriteriaSummaryAsync(extractedText, criterion, context);
-
-                        decimal score = 0;
-                        string summaryText = criteriaSummary;
-
-                        if (criteriaSummary.Contains("Score:"))
-                        {
-                            var parts = criteriaSummary.Split('|');
-                            if (parts.Length >= 2)
-                            {
-                                var scoreStr = parts[0].Replace("Score:", "").Trim();
-                                if (decimal.TryParse(scoreStr, out var parsedScore))
-                                {
-                                    score = parsedScore;
-                                }
-                                summaryText = parts[1].Replace("Summary:", "").Trim();
-                            }
-                        }
-                        else
-                        {
-                            _logger.LogWarning($"AI did not return expected format for criteria {criterion.CriteriaId}. Response: {criteriaSummary}");
-                            summaryText = criteriaSummary;
-                        }
-                        if (summaryText.Split(' ').Length > maxWords)
-                        {
-                            var words = summaryText.Split(' ').Take(maxWords).ToArray();
-                            summaryText = string.Join(" ", words) + "...";
-                        }
-
-                        score = Math.Clamp(score, 0, criterion.MaxScore);
-
-                        var fullContent = $"Score: {score} | Summary: {summaryText}";
-                        if (fullContent.Length > 2000)
-                        {
-                            fullContent = fullContent.Substring(0, 2000);
-                        }
-
-                        var aiSummary = new AISummary
-                        {
-                            SubmissionId = request.SubmissionId,
-                            Content = fullContent,
-                            SummaryType = $"CriteriaFeedback_{criterion.CriteriaId}",
-                            GeneratedAt = DateTime.UtcNow.AddHours(7)
-                        };
-                        await _aiSummaryRepository.AddAsync(aiSummary);
-
-                        feedbacks.Add(new AICriteriaFeedbackItem
-                        {
-                            CriteriaId = criterion.CriteriaId,
-                            Title = criterion.Title,
-                            Description = criterion.Description ?? "",
-                            Summary = summaryText,
-                            Score = score,
-                            MaxScore = criterion.MaxScore
-                        });
-
-                        _logger.LogInformation($"Generated feedback for criteria {criterion.CriteriaId} ({criterion.Title}): Score={score}/{criterion.MaxScore}");
+                        scoreToSave = aiItem.Score;
+                        summaryToSave = aiItem.Summary;
                     }
-                    catch (Exception ex)
+                    else
                     {
-                        _logger.LogError(ex, $"Error generating feedback for criteria {criterion.CriteriaId}");
-
-                        var errorMessage = $"Error generating feedback: {ex.Message}";
-                        if (errorMessage.Length > 1950)
-                        {
-                            errorMessage = errorMessage.Substring(0, 1950) + "... [truncated]";
-                        }
-
-                        feedbacks.Add(new AICriteriaFeedbackItem
-                        {
-                            CriteriaId = criterion.CriteriaId,
-                            Title = criterion.Title,
-                            Description = criterion.Description ?? "",
-                            Summary = errorMessage,
-                            Score = 0,
-                            MaxScore = criterion.MaxScore
-                        });
-
-                        var fullContent = $"Score: 0 | Summary: {errorMessage}";
-                        var errorSummary = new AISummary
-                        {
-                            SubmissionId = request.SubmissionId,
-                            Content = fullContent,
-                            SummaryType = $"CriteriaFeedback_{criterion.CriteriaId}_Error",
-                            GeneratedAt = DateTime.UtcNow.AddHours(7)
-                        };
-                        await _aiSummaryRepository.AddAsync(errorSummary);
+                        scoreToSave = 0;
+                        summaryToSave = "AI could not evaluate this criterion based on the submitted content.";
+                        _logger.LogWarning($"AI missed criteria {criterion.CriteriaId} for submission {request.SubmissionId}");
                     }
+
+                    if (summaryToSave.Length > 1900) summaryToSave = summaryToSave.Substring(0, 1900) + "...";
+
+                    var dbContent = $"Score: {scoreToSave} | Summary: {summaryToSave}";
+
+                    var oldTypes = await _aiSummaryRepository.GetBySubmissionAndTypeAsync(request.SubmissionId, $"CriteriaFeedback*{criterion.CriteriaId}");
+                    foreach (var old in oldTypes) await _aiSummaryRepository.DeleteAsync(old);
+
+                    var aiSummary = new AISummary
+                    {
+                        SubmissionId = request.SubmissionId,
+                        Content = dbContent,
+                        SummaryType = $"CriteriaFeedback*{criterion.CriteriaId}",
+                        GeneratedAt = DateTime.UtcNow.AddHours(7)
+                    };
+                    await _aiSummaryRepository.AddAsync(aiSummary);
+
+                    finalFeedbacks.Add(new AICriteriaFeedbackItem
+                    {
+                        CriteriaId = criterion.CriteriaId,
+                        Title = criterion.Title,
+                        Description = criterion.Description ?? "",
+                        Summary = summaryToSave,
+                        Score = scoreToSave,
+                        MaxScore = criterion.MaxScore
+                    });
                 }
 
-                var response = new AICriteriaResponse
-                {
-                    Feedbacks = feedbacks,
-                    IsRelevant = true,
-                    ErrorMessage = null
-                };
-
                 return new BaseResponse<AICriteriaResponse>(
-                    "AI criteria feedback generated and saved",
+                    "AI criteria feedback generated successfully (Bulk Optimized)",
                     StatusCodeEnum.Created_201,
-                    response);
+                    new AICriteriaResponse { Feedbacks = finalFeedbacks, IsRelevant = true });
+
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error generating criteria feedback for submission {request.SubmissionId}");
+                _logger.LogError(ex, $"Error inside GenerateCriteriaFeedbackAsync for submission {request.SubmissionId}");
                 return new BaseResponse<AICriteriaResponse>(
-                    $"Error: {ex.Message}",
+                    $"Error generating feedback: {ex.Message}",
                     StatusCodeEnum.InternalServerError_500,
                     null);
             }
+        }
+
+        private void ParseScoreAndSummary(string content, out decimal score, out string summary)
+        {
+            score = 0;
+            summary = content;
+            if (content.Contains("Score:"))
+            {
+                var parts = content.Split('|');
+                if (parts.Length >= 2)
+                {
+                    var scoreStr = parts[0].Replace("Score:", "").Trim();
+                    decimal.TryParse(scoreStr, out score);
+                    summary = parts[1].Replace("Summary:", "").Trim();
+                }
+            }
+        }
+
+        private async Task<BaseResponse<AICriteriaResponse>> SaveAndReturnViolationResponse(int submissionId, List<Criteria> criteria, string violationMessage)
+        {
+            var feedbacks = new List<AICriteriaFeedbackItem>();
+            foreach (var criterion in criteria)
+            {
+                var content = $"Score: 0 | Summary: {violationMessage}";
+                await SaveErrorSummaryAsync(submissionId, content, $"CriteriaFeedback*{criterion.CriteriaId}_Violation");
+
+                feedbacks.Add(new AICriteriaFeedbackItem
+                {
+                    CriteriaId = criterion.CriteriaId,
+                    Title = criterion.Title,
+                    Description = criterion.Description ?? "",
+                    Summary = violationMessage,
+                    Score = 0,
+                    MaxScore = criterion.MaxScore
+                });
+            }
+            return new BaseResponse<AICriteriaResponse>("Integrity violation detected", StatusCodeEnum.OK_200,
+                new AICriteriaResponse { Feedbacks = feedbacks, IsRelevant = false, ErrorMessage = violationMessage });
+        }
+
+        private async Task<BaseResponse<AICriteriaResponse>> SaveAndReturnRelevanceErrorResponse(int submissionId, List<Criteria> criteria, string assignmentTitle)
+        {
+            var msg = $"Submission irrelevant to assignment: {assignmentTitle}";
+            var feedbacks = new List<AICriteriaFeedbackItem>();
+            foreach (var criterion in criteria)
+            {
+                var content = $"Score: 0 | Summary: {msg}";
+                await SaveErrorSummaryAsync(submissionId, content, $"CriteriaFeedback*{criterion.CriteriaId}_NotRelevant");
+
+                feedbacks.Add(new AICriteriaFeedbackItem
+                {
+                    CriteriaId = criterion.CriteriaId,
+                    Title = criterion.Title,
+                    Description = criterion.Description ?? "",
+                    Summary = msg,
+                    Score = 0,
+                    MaxScore = criterion.MaxScore
+                });
+            }
+            return new BaseResponse<AICriteriaResponse>("Submission not relevant", StatusCodeEnum.BadRequest_400,
+                new AICriteriaResponse { Feedbacks = feedbacks, IsRelevant = false, ErrorMessage = msg });
+        }
+
+        private async Task SaveErrorSummaryAsync(int submissionId, string content, string type)
+        {
+            var summary = new AISummary
+            {
+                SubmissionId = submissionId,
+                Content = content,
+                SummaryType = type,
+                GeneratedAt = DateTime.UtcNow.AddHours(7)
+            };
+            await _aiSummaryRepository.AddAsync(summary);
         }
         public async Task<BaseResponse<AIOverallResponse>> GenerateInstructorOverallSummaryAsync(GenerateAIOverallRequest request)
         {

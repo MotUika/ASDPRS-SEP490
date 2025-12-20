@@ -805,9 +805,7 @@ namespace Service.Service
             {
                 var deadlineDays = await _systemConfigService.GetConfigValueAsync<int>("RegradeProcessingDeadlineDays", 7);
                 var deadline = regradeRequest.RequestedAt.AddDays(deadlineDays).ToString("yyyy-MM-dd HH:mm:ss");
-                // Lấy danh sách instructors của course
                 var instructors = await _courseInstructorRepository.GetByCourseInstanceIdAsync(assignment.CourseInstanceId);
-                // Lấy thông tin student
                 var student = await _userRepository.GetByIdAsync(submission.UserId);
                 var studentName = student != null ? $"{student.FirstName} {student.LastName}" : "Unknown Student";
                 foreach (var instructor in instructors)
@@ -816,11 +814,11 @@ namespace Service.Service
                     {
                         UserId = instructor.UserId,
                         Title = "New Regrade Request Submitted",
-                        Message = $"Student {studentName} has submitted a regrade request for assignment '{assignment.Title}'. Reason: {regradeRequest.Reason}",
+                        Message = $"Student {studentName} has submitted a regrade request for assignment '{assignment.Title}'. Reason: {regradeRequest.Reason}. Please resolve by {deadline}.",
                         Type = "RegradeRequest",
                         AssignmentId = assignment.AssignmentId,
                         SubmissionId = submission.SubmissionId,
-                        SenderUserId = submission.UserId // Student là người gửi
+                        SenderUserId = submission.UserId
                     };
                     var result = await _notificationService.CreateNotificationAsync(notificationRequest);
                     if (result.StatusCode != StatusCodeEnum.Created_201)
