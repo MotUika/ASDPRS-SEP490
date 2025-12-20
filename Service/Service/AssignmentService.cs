@@ -1718,10 +1718,16 @@ namespace Service.Service
             }
         }
 
-        public async Task<BaseResponse<AssignmentResponse>> CloneAssignmentAsync(int sourceAssignmentId, int targetCourseInstanceId, CloneAssignmentRequest request)
+        public async Task<BaseResponse<AssignmentResponse>> CloneAssignmentAsync(
+    int sourceAssignmentId,
+    int targetCourseInstanceId,
+    CloneAssignmentRequest request)
         {
             try
             {
+                // ==============================
+                // 1️⃣ Load source assignment + rubric
+                // ==============================
                 var sourceAssignment = await _context.Assignments
                     .Include(a => a.Rubric)
                         .ThenInclude(r => r.Criteria)
@@ -1729,26 +1735,92 @@ namespace Service.Service
 
                 if (sourceAssignment == null)
                 {
-                    return new BaseResponse<AssignmentResponse>("Source assignment not found", StatusCodeEnum.NotFound_404, null);
+                    return new BaseResponse<AssignmentResponse>(
+                        "Source assignment not found",
+                        StatusCodeEnum.NotFound_404,
+                        null);
                 }
 
-                var targetCourseInstance = await _courseInstanceRepository.GetByIdAsync(targetCourseInstanceId);
+                // ==============================
+                // 2️⃣ Load target course instance
+                // ==============================
+                var targetCourseInstance = await _context.CourseInstances
+                    .FirstOrDefaultAsync(ci => ci.CourseInstanceId == targetCourseInstanceId);
+
                 if (targetCourseInstance == null)
                 {
-                    return new BaseResponse<AssignmentResponse>("Target course instance not found", StatusCodeEnum.NotFound_404, null);
+                    return new BaseResponse<AssignmentResponse>(
+                        "Target course instance not found",
+                        StatusCodeEnum.NotFound_404,
+                        null);
                 }
 
-                // Clone assignment
+                // ==============================
+                // 3️⃣ Resolve dates (THEO ENTITY)
+                // ==============================
+                DateTime? startDate =
+                    request.NewStartDate ?? sourceAssignment.StartDate;
+
+                DateTime deadline =
+                    request.NewDeadline ?? sourceAssignment.Deadline;
+
+                DateTime? reviewDeadline =
+                    request.NewReviewDeadline ?? sourceAssignment.ReviewDeadline;
+
+                DateTime? finalDeadline =
+                    request.NewFinalDeadline ?? sourceAssignment.FinalDeadline;
+
+                // ==============================
+                // 4️⃣ Validate date logic
+                // ==============================
+                var dateError = ValidateAssignmentDates(
+                    startDate,
+                    deadline,
+                    reviewDeadline,
+                    finalDeadline);
+
+                if (dateError != null)
+                {
+                    return new BaseResponse<AssignmentResponse>(
+                        dateError,
+                        StatusCodeEnum.BadRequest_400,
+                        null);
+                }
+
+                // ==============================
+                // 5️⃣ Validate dates within course instance
+                // ==============================
+                var courseDateError =
+                    await ValidateAssignmentDatesWithinCourseInstanceAsync(
+                        targetCourseInstanceId,
+                        startDate,
+                        deadline,
+                        reviewDeadline,
+                        finalDeadline);
+
+                if (courseDateError != null)
+                {
+                    return new BaseResponse<AssignmentResponse>(
+                        courseDateError,
+                        StatusCodeEnum.BadRequest_400,
+                        null);
+                }
+
+                // ==============================
+                // 6️⃣ Clone assignment
+                // ==============================
                 var clonedAssignment = new Assignment
                 {
                     CourseInstanceId = targetCourseInstanceId,
                     Title = request.NewTitle ?? $"{sourceAssignment.Title} (Clone)",
                     Description = sourceAssignment.Description,
                     Guidelines = sourceAssignment.Guidelines,
-                    StartDate = request.NewStartDate ?? sourceAssignment.StartDate,
-                    Deadline = request.NewDeadline ?? sourceAssignment.Deadline,
-                    FinalDeadline = request.NewFinalDeadline ?? sourceAssignment.FinalDeadline,
-                    ReviewDeadline = request.NewReviewDeadline ?? sourceAssignment.ReviewDeadline,
+
+                    StartDate = startDate,
+                    Deadline = deadline,
+                    ReviewDeadline = reviewDeadline,
+                    FinalDeadline = finalDeadline,
+
                     NumPeerReviewsRequired = sourceAssignment.NumPeerReviewsRequired,
                     PassThreshold = sourceAssignment.PassThreshold,
                     AllowCrossClass = sourceAssignment.AllowCrossClass,
@@ -1756,14 +1828,16 @@ namespace Service.Service
                     InstructorWeight = sourceAssignment.InstructorWeight,
                     PeerWeight = sourceAssignment.PeerWeight,
                     GradingScale = sourceAssignment.GradingScale,
-
                     IncludeAIScore = sourceAssignment.IncludeAIScore,
+
                     Status = AssignmentStatusEnum.Draft.ToString(),
                     ClonedFromAssignmentId = sourceAssignmentId,
                     CreatedAt = DateTime.UtcNow.AddHours(7)
                 };
 
-                // Clone rubric nếu có
+                // ==============================
+                // 7️⃣ Clone rubric + criteria
+                // ==============================
                 if (sourceAssignment.Rubric != null)
                 {
                     var clonedRubric = new Rubric
@@ -1774,12 +1848,11 @@ namespace Service.Service
                     };
 
                     _context.Rubrics.Add(clonedRubric);
-                    await _context.SaveChangesAsync(); // Save để lấy RubricId
+                    await _context.SaveChangesAsync(); // lấy RubricId
 
-                    // Clone criteria
                     foreach (var criteria in sourceAssignment.Rubric.Criteria)
                     {
-                        var clonedCriteria = new Criteria
+                        _context.Criteria.Add(new Criteria
                         {
                             RubricId = clonedRubric.RubricId,
                             CriteriaTemplateId = criteria.CriteriaTemplateId,
@@ -1790,23 +1863,20 @@ namespace Service.Service
                             ScoringType = criteria.ScoringType,
                             ScoreLabel = criteria.ScoreLabel,
                             IsModified = criteria.IsModified
-                        };
-                        _context.Criteria.Add(clonedCriteria);
+                        });
                     }
 
                     clonedAssignment.RubricId = clonedRubric.RubricId;
                 }
 
+                // ==============================
+                // 8️⃣ Save
+                // ==============================
                 _context.Assignments.Add(clonedAssignment);
                 await _context.SaveChangesAsync();
-                // Copy penalties from source assignment
-                var sourceLatePenalty = await GetAssignmentConfig(sourceAssignmentId, "LateSubmissionPenalty");
-                var sourceMissingReviewPenalty = await GetAssignmentConfig(sourceAssignmentId, "MissingReviewPenalty");
-
-                // Use request values if provided, otherwise use source values or default to 0
-                var missingReviewPenalty = request.MissingReviewPenalty?.ToString() ?? sourceMissingReviewPenalty ?? "0";
 
                 var response = await MapToResponse(clonedAssignment);
+
                 return new BaseResponse<AssignmentResponse>(
                     "Assignment cloned successfully",
                     StatusCodeEnum.Created_201,
