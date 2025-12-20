@@ -22,8 +22,6 @@ namespace Service.Mapping
                     string.Empty))
                 .ForMember(dest => dest.RubricCount, opt => opt.MapFrom(src => src.Rubrics.Count))
                 .ForMember(dest => dest.CriteriaTemplateCount, opt => opt.MapFrom(src => src.CriteriaTemplates.Count))
-                .ForMember(dest => dest.MajorId, opt => opt.MapFrom(src => src.MajorId))
-                .ForMember(dest => dest.MajorName, opt => opt.MapFrom(src => src.Major != null ? src.Major.MajorName : null))
                 .ForMember(dest => dest.CourseId, opt => opt.MapFrom(src => src.CourseId))
                 .ForMember(dest => dest.CourseName, opt => opt.MapFrom(src => src.Course != null ? src.Course.CourseName : null));
         }

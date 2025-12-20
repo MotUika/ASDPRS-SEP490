@@ -46,7 +46,6 @@ namespace Repository.Repository
                 .Include(rt => rt.CreatedByUser)
                 .Include(rt => rt.Rubrics)
                 .Include(rt => rt.CriteriaTemplates)
-                .Include(rt => rt.Major)
                 .AsNoTracking()
                 .FirstOrDefaultAsync(rt => rt.TemplateId == templateId);
         }

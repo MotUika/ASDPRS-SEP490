@@ -108,7 +108,6 @@ namespace Service.Service
                     .Include(rt => rt.CreatedByUser)
                     .Include(rt => rt.Rubrics)
                     .Include(rt => rt.CriteriaTemplates)
-                    .Include(rt => rt.Major)
                     .Include(rt => rt.Course)
                     .ToListAsync();
 
@@ -153,7 +152,7 @@ namespace Service.Service
                 rubricTemplate.CourseId = request.CourseId;
 
                 rubricTemplate.CreatedAt = DateTime.UtcNow.AddHours(7);
-                rubricTemplate.IsPublic = false;
+                rubricTemplate.IsPublic = true;
 
                 var createdRubricTemplate = await _rubricTemplateRepository.AddAsync(rubricTemplate);
 
@@ -161,7 +160,6 @@ namespace Service.Service
                     .Include(rt => rt.CreatedByUser)
                     .Include(rt => rt.Rubrics)
                     .Include(rt => rt.CriteriaTemplates)
-                    .Include(rt => rt.Major)
                     .Include(rt => rt.Course)
                     .FirstOrDefaultAsync(rt => rt.TemplateId == createdRubricTemplate.TemplateId);
 
@@ -183,7 +181,6 @@ namespace Service.Service
                     .Include(rt => rt.CreatedByUser)
                     .Include(rt => rt.Rubrics)
                     .Include(rt => rt.CriteriaTemplates)
-                    .Include(rt => rt.Major)
                     .Include(rt => rt.Course)
                     .FirstOrDefaultAsync(rt => rt.TemplateId == request.TemplateId);
 
@@ -207,16 +204,6 @@ namespace Service.Service
                     existingRubricTemplate.Title = request.Title;
                 }
 
-                if (request.MajorId.HasValue && request.MajorId.Value != existingRubricTemplate.MajorId)
-                {
-                    // Kiểm tra MajorId hợp lệ
-                    var majorExists = await _context.Majors.AnyAsync(m => m.MajorId == request.MajorId.Value);
-                    if (!majorExists)
-                        return new BaseResponse<RubricTemplateResponse>("Major not found", StatusCodeEnum.NotFound_404, null);
-
-                    existingRubricTemplate.MajorId = request.MajorId.Value;
-                }
-
 
                 if (request.CourseId != existingRubricTemplate.CourseId)
                 {
@@ -238,7 +225,6 @@ namespace Service.Service
                     .Include(rt => rt.CreatedByUser)
                     .Include(rt => rt.Rubrics)
                     .Include(rt => rt.CriteriaTemplates)
-                    .Include(rt => rt.Major)
                     .Include(rt => rt.Course)
                     .FirstOrDefaultAsync(rt => rt.TemplateId == existingRubricTemplate.TemplateId);
 
@@ -305,7 +291,6 @@ namespace Service.Service
                     .Include(rt => rt.Rubrics)
                     .Include(rt => rt.CriteriaTemplates)
                     .Include(rt => rt.Course)
-                    .Include(rt => rt.Major)
                     .Where(rt =>
                         rt.CreatedByUserId == userId ||
                         (rt.IsPublic && rt.CourseId.HasValue && taughtCourseIds.Contains(rt.CourseId.Value))
@@ -420,83 +405,6 @@ namespace Service.Service
             }
         }
 
-        public async Task<BaseResponse<IEnumerable<RubricTemplateResponse>>> GetRubricTemplatesByUserAndMajorAsync(int userId, int majorId)
-        {
-            try
-            {
-                var user = await _context.Users
-                    .Include(u => u.CourseInstructors)
-                        .ThenInclude(ci => ci.CourseInstance)
-                            .ThenInclude(ci => ci.Course)
-                    .FirstOrDefaultAsync(u => u.Id == userId);
-
-                if (user == null)
-                {
-                    return new BaseResponse<IEnumerable<RubricTemplateResponse>>(
-                        $"UserId {userId} not found in the system.",
-                        StatusCodeEnum.BadRequest_400,
-                        null);
-                }
-
-                var majorExists = await _context.Majors.AnyAsync(m => m.MajorId == majorId);
-                if (!majorExists)
-                {
-                    return new BaseResponse<IEnumerable<RubricTemplateResponse>>(
-                        $"MajorId {majorId} does not exist in the system.",
-                        StatusCodeEnum.BadRequest_400,
-                        null);
-                }
-
-
-                var templates = await _context.RubricTemplates
-                    .Include(rt => rt.CreatedByUser)
-                    .Include(rt => rt.CriteriaTemplates)
-                    .Where(rt =>
-                        (rt.IsPublic && rt.MajorId == majorId) ||
-                        (rt.CreatedByUserId == userId && (rt.MajorId == majorId || rt.MajorId == null))
-                    )
-                    .ToListAsync();
-
-                if (!templates.Any())
-                {
-                    return new BaseResponse<IEnumerable<RubricTemplateResponse>>(
-                        $"No templates found for UserId {userId} and MajorId {majorId}.",
-                        StatusCodeEnum.NotFound_404,
-                        null);
-                }
-
-                var response = _mapper.Map<IEnumerable<RubricTemplateResponse>>(templates);
-
-                foreach (var template in response)
-                {
-                    var assignments = await _rubricTemplateRepository.GetAssignmentsUsingTemplateAsync(template.TemplateId);
-                    template.AssignmentsUsingTemplate = assignments?.Any() == true
-                        ? assignments.Select(a => new AssignmentUsingTemplateResponse
-                        {
-                            AssignmentId = a.AssignmentId,
-                            Title = a.Title,
-                            CourseName = a.CourseInstance?.Course?.CourseName,
-                            ClassName = $"{a.CourseInstance?.Course?.CourseName} - {a.CourseInstance?.SectionCode}",
-                            CampusName = a.CourseInstance?.Campus?.CampusName,
-                            Deadline = a.Deadline
-                        }).ToList()
-                        : new List<AssignmentUsingTemplateResponse>();
-                }
-
-                return new BaseResponse<IEnumerable<RubricTemplateResponse>>(
-                    $"Found {response.Count()} template(s) for UserId {userId} and MajorId {majorId}.",
-                    StatusCodeEnum.OK_200,
-                    response);
-            }
-            catch (Exception ex)
-            {
-                return new BaseResponse<IEnumerable<RubricTemplateResponse>>(
-                    $"Error retrieving templates: {ex.Message}",
-                    StatusCodeEnum.InternalServerError_500,
-                    null);
-            }
-        }
-
         public async Task<BaseResponse<IEnumerable<RubricTemplateResponse>>> GetRubricTemplatesByUserAndCourseAsync(int userId, int courseId)
         {
             try
@@ -603,7 +511,6 @@ namespace Service.Service
                     .Include(rt => rt.Rubrics)
                     .Include(rt => rt.CriteriaTemplates)
                     .Include(rt => rt.Course)
-                    .Include(rt => rt.Major)
                     .Where(rt => rt.IsPublic && rt.CourseId.HasValue && taughtCourseIds.Contains(rt.CourseId.Value))
                     .ToListAsync();
 
@@ -648,7 +555,6 @@ namespace Service.Service
                     .Include(rt => rt.CriteriaTemplates)
                     .Include(rt => rt.CreatedByUser)
                     .Include(rt => rt.Rubrics)
-                    .Include(rt => rt.Major)
                     .FirstOrDefaultAsync(rt => rt.TemplateId == templateId);
 
                 if (rubricTemplate == null)
