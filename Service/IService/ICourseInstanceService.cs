@@ -1,4 +1,6 @@
-﻿using Service.RequestAndResponse.BaseResponse;
+﻿using BussinessObject.Models;
+using Microsoft.AspNetCore.Http;
+using Service.RequestAndResponse.BaseResponse;
 using Service.RequestAndResponse.Request.CourseInstance;
 using Service.RequestAndResponse.Response.CourseInstance;
 using System.Collections.Generic;
@@ -19,5 +21,6 @@ namespace Service.IService
         Task<BaseResponse<string>> UpdateEnrollKeyAsync(int courseInstanceId, string newKey, int userId);
         Task<BaseResponse<IEnumerable<CourseInstanceResponse>>> GetClassesByUserIdAsync(int userId, int? courseId);
         Task<BaseResponse<bool>> ToggleCourseStatusAsync(int id);
+        Task<BaseResponse<object>> ImportCourseInstancesFromExcelAsync(IFormFile file);
     }
 }

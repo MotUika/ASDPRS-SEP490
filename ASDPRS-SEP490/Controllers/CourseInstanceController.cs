@@ -223,9 +223,8 @@ namespace ASDPRS_SEP490.Controllers
 
         [HttpPatch("{id}/toggle-status")]
         [SwaggerOperation(
-    Summary = "Bật/Tắt trạng thái lớp học (Active/Deactive)",
-    Description = "Chỉ cho phép thực hiện khi lớp chưa bắt đầu HOẶC đã kết thúc. Không được đổi khi đang diễn ra."
-)]
+        Summary = "Bật/Tắt trạng thái lớp học (Active/Deactive)",
+        Description = "Chỉ cho phép thực hiện khi lớp chưa bắt đầu HOẶC đã kết thúc. Không được đổi khi đang diễn ra.")]
         public async Task<IActionResult> ToggleCourseStatus(int id)
         {
             var result = await _courseInstanceService.ToggleCourseStatusAsync(id);
@@ -237,5 +236,42 @@ namespace ASDPRS_SEP490.Controllers
                 _ => StatusCode(500, result)
             };
         }
+
+        [HttpPost("import-excel")]
+        [Consumes("multipart/form-data")]
+        [SwaggerOperation(
+    Summary = "Import danh sách lớp học từ Excel",
+    Description = "Admin import CourseInstance từ file Excel. Validate toàn bộ dữ liệu trước khi import."
+)]
+        [SwaggerResponse(201, "Import thành công")]
+        [SwaggerResponse(400, "Excel validation failed")]
+        [SwaggerResponse(500, "Lỗi server")]
+        public async Task<IActionResult> ImportCourseInstancesFromExcel(
+    [FromForm] ImportCourseInstanceExcelRequest request
+)
+        {
+            if (request.File == null || request.File.Length == 0)
+            {
+                return BadRequest(new BaseResponse<object>(
+                    "File is required",
+                    StatusCodeEnum.BadRequest_400,
+                    null
+                ));
+            }
+
+            var result = await _courseInstanceService
+                .ImportCourseInstancesFromExcelAsync(request.File);
+
+            return result.StatusCode switch
+            {
+                StatusCodeEnum.Created_201 => Created(string.Empty, result),
+                StatusCodeEnum.BadRequest_400 => BadRequest(result),
+                StatusCodeEnum.InternalServerError_500 => StatusCode(500, result),
+                _ => StatusCode(500, result)
+            };
+        }
+
+
+
     }
 }
