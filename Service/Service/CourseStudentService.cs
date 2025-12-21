@@ -695,7 +695,7 @@ namespace Service.Service
 
                 foreach (var cs in courseStudents)
                 {
-                    var courseInstance = await _courseInstanceRepository.GetByIdAsync(cs.CourseInstanceId);
+                    var courseInstance = await _courseInstanceRepository.GetByIdWithRelationsAsync(cs.CourseInstanceId);
                     var user = await _userRepository.GetByIdAsync(cs.UserId);
                     User changedByUser = null;
                     if (cs.ChangedByUserId.HasValue)
