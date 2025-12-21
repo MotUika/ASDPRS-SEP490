@@ -481,19 +481,8 @@ namespace Service.Service
 
                 if (ws == null)
                 {
-                    return new BaseResponse<object>(
-                        "Invalid Excel file",
-                        StatusCodeEnum.BadRequest_400,
-                        null
-                    );
+                    return new BaseResponse<object>("Invalid Excel file", StatusCodeEnum.BadRequest_400, null);
                 }
-
-                // ==============================
-                // CONFIG
-                // ==============================
-                int headerRow = 1;
-                int startRow = 2;
-
                 int semesterCol = 2;
                 int campusCol = 3;
                 int courseCodeCol = 4;
@@ -504,10 +493,8 @@ namespace Service.Service
                 int instructorEmailCol = 9;
 
                 var excelErrors = new List<ExcelValidationError>();
-
-                // ==============================
-                // PHASE 1️⃣ VALIDATE
-                // ==============================
+                int headerRow = 1;
+                int startRow = 2;
                 int row = startRow;
 
                 while (!string.IsNullOrWhiteSpace(ws.Cells[row, courseCodeCol].Text))
@@ -515,228 +502,50 @@ namespace Service.Service
                     string semesterName = ws.Cells[row, semesterCol].Text.Trim();
                     string campusValue = ws.Cells[row, campusCol].Text.Trim();
                     string courseCode = ws.Cells[row, courseCodeCol].Text.Trim();
-                    string courseName = ws.Cells[row, courseNameCol].Text.Trim();
                     string sectionCode = ws.Cells[row, sectionCol].Text.Trim();
                     string instructorEmail = ws.Cells[row, instructorEmailCol].Text.Trim();
 
-                    // ---------- Required
-                    if (string.IsNullOrWhiteSpace(semesterName))
-                        excelErrors.Add(new ExcelValidationError { Row = row, Column = "Semester", Message = "Semester is required" });
+                    if (string.IsNullOrWhiteSpace(semesterName)) excelErrors.Add(new ExcelValidationError { Row = row, Column = "Semester", Message = "Semester is required" });
+                    if (string.IsNullOrWhiteSpace(courseCode)) excelErrors.Add(new ExcelValidationError { Row = row, Column = "CourseCode", Message = "CourseCode is required" });
+                    if (string.IsNullOrWhiteSpace(sectionCode)) excelErrors.Add(new ExcelValidationError { Row = row, Column = "SectionCode", Message = "SectionCode is required" });
 
-                    if (string.IsNullOrWhiteSpace(courseCode))
-                        excelErrors.Add(new ExcelValidationError { Row = row, Column = "CourseCode", Message = "CourseCode is required" });
-
-                    if (string.IsNullOrWhiteSpace(sectionCode))
-                        excelErrors.Add(new ExcelValidationError { Row = row, Column = "SectionCode", Message = "SectionCode is required" });
-
-                    // ---------- SectionCode format
-                    if (!string.IsNullOrWhiteSpace(sectionCode) &&
-                        !Regex.IsMatch(sectionCode, @"^[A-Z0-9\-]+$"))
+                    if (!string.IsNullOrWhiteSpace(sectionCode) && !Regex.IsMatch(sectionCode, @"^[A-Z0-9\-]+$"))
                     {
-                        excelErrors.Add(new ExcelValidationError
-                        {
-                            Row = row,
-                            Column = "SectionCode",
-                            Message = "SectionCode only allows A-Z, 0-9 and '-'"
-                        });
+                        excelErrors.Add(new ExcelValidationError { Row = row, Column = "SectionCode", Message = "SectionCode only allows A-Z, 0-9 and '-'" });
                     }
 
-                    // ---------- Dates
-                    // Đảm bảo đã có: using System.Globalization; ở đầu file
+                    bool isStartValid = DateTime.TryParseExact(ws.Cells[row, startDateCol].Text?.Trim(), "dd/MM/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime startDate);
+                    if (!isStartValid) excelErrors.Add(new ExcelValidationError { Row = row, Column = "StartDate", Message = "Invalid StartDate (dd/MM/yyyy)" });
 
-                    // 1. Thử parse StartDate với định dạng chuẩn dd/MM/yyyy
-                    bool isStartValid = DateTime.TryParseExact(
-                        ws.Cells[row, startDateCol].Text?.Trim(),
-                        "dd/MM/yyyy",
-                        CultureInfo.InvariantCulture,
-                        DateTimeStyles.None,
-                        out DateTime startDate);
+                    bool isEndValid = DateTime.TryParseExact(ws.Cells[row, endDateCol].Text?.Trim(), "dd/MM/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime endDate);
+                    if (!isEndValid) excelErrors.Add(new ExcelValidationError { Row = row, Column = "EndDate", Message = "Invalid EndDate (dd/MM/yyyy)" });
 
-                    if (!isStartValid)
-                    {
-                        excelErrors.Add(new ExcelValidationError
-                        {
-                            Row = row,
-                            Column = "StartDate",
-                            Message = "Invalid StartDate (Required format: dd/MM/yyyy)"
-                        });
-                    }
-
-                    // 2. Thử parse EndDate với định dạng chuẩn dd/MM/yyyy
-                    bool isEndValid = DateTime.TryParseExact(
-                        ws.Cells[row, endDateCol].Text?.Trim(),
-                        "dd/MM/yyyy",
-                        CultureInfo.InvariantCulture,
-                        DateTimeStyles.None,
-                        out DateTime endDate);
-
-                    if (!isEndValid)
-                    {
-                        excelErrors.Add(new ExcelValidationError
-                        {
-                            Row = row,
-                            Column = "EndDate",
-                            Message = "Invalid EndDate (Required format: dd/MM/yyyy)"
-                        });
-                    }
-
-                    // 3. Chỉ so sánh logic khi CẢ HAI ngày đều đã đọc thành công
-                    // Việc này giúp tránh lỗi "StartDate must be before EndDate" vô lý khi ngày bị parse sai thành 01/01/0001
                     if (isStartValid && isEndValid && startDate >= endDate)
                     {
-                        excelErrors.Add(new ExcelValidationError
-                        {
-                            Row = row,
-                            Column = "StartDate/EndDate",
-                            Message = "StartDate must be before EndDate"
-                        });
+                        excelErrors.Add(new ExcelValidationError { Row = row, Column = "StartDate/EndDate", Message = "StartDate must be before EndDate" });
                     }
 
-                    // ---------- Semester + AcademicYear
-                    var semesters = await _context.Semesters
-                        .Include(s => s.AcademicYear)
-                        .Where(s => s.Name == semesterName)
-                        .ToListAsync();
+                    var semesters = await _context.Semesters.Include(s => s.AcademicYear).Where(s => s.Name == semesterName).ToListAsync();
+                    if (!semesters.Any()) excelErrors.Add(new ExcelValidationError { Row = row, Column = "Semester", Message = $"Semester '{semesterName}' not found" });
 
-                    if (!semesters.Any())
-                    {
-                        excelErrors.Add(new ExcelValidationError
-                        {
-                            Row = row,
-                            Column = "Semester",
-                            Message = $"Semester '{semesterName}' not found"
-                        });
-                    }
-                    else if (semesters.Select(s => s.AcademicYearId).Distinct().Count() > 1)
-                    {
-                        excelErrors.Add(new ExcelValidationError
-                        {
-                            Row = row,
-                            Column = "Semester",
-                            Message = $"Semester '{semesterName}' exists in multiple AcademicYears"
-                        });
-                    }
-                    else
-                    {
-                        var semester = semesters.First();
-                        if (startDate < semester.StartDate || endDate > semester.EndDate)
-                        {
-                            excelErrors.Add(new ExcelValidationError
-                            {
-                                Row = row,
-                                Column = "StartDate/EndDate",
-                                Message = $"Class time must be within semester {semester.Name} ({semester.StartDate:dd/MM/yyyy} - {semester.EndDate:dd/MM/yyyy})"
-                            });
-                        }
-                    }
-
-                    // ---------- Course
-                    var course = await _context.Courses.FirstOrDefaultAsync(c => c.CourseCode == courseCode);
-                    if (course != null &&
-                        !string.Equals(course.CourseName, courseName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        excelErrors.Add(new ExcelValidationError
-                        {
-                            Row = row,
-                            Column = "CourseCode",
-                            Message = $"CourseCode '{courseCode}' exists but CourseName mismatch"
-                        });
-                    }
-
-                    // ---------- Campus
-                    Campus campus = int.TryParse(campusValue, out int campusId)
-                        ? await _context.Campuses.FindAsync(campusId)
-                        : await _context.Campuses.FirstOrDefaultAsync(c => c.CampusName == campusValue);
-
-                    if (campus == null)
-                    {
-                        excelErrors.Add(new ExcelValidationError
-                        {
-                            Row = row,
-                            Column = "Campus",
-                            Message = $"Campus '{campusValue}' not found"
-                        });
-                    }
-
-                    // ---------- Instructor (required)
                     if (string.IsNullOrWhiteSpace(instructorEmail))
                     {
-                        excelErrors.Add(new ExcelValidationError
-                        {
-                            Row = row,
-                            Column = "InstructorEmail",
-                            Message = "InstructorEmail is required"
-                        });
+                        excelErrors.Add(new ExcelValidationError { Row = row, Column = "InstructorEmail", Message = "InstructorEmail is required" });
                     }
                     else
                     {
-                        var instructor = await _userManager.FindByEmailAsync(instructorEmail);
-                        if (instructor == null)
-                        {
-                            excelErrors.Add(new ExcelValidationError
-                            {
-                                Row = row,
-                                Column = "InstructorEmail",
-                                Message = $"Instructor '{instructorEmail}' not found"
-                            });
-                        }
-                        else if (!await _userManager.IsInRoleAsync(instructor, "Instructor"))
-                        {
-                            excelErrors.Add(new ExcelValidationError
-                            {
-                                Row = row,
-                                Column = "InstructorEmail",
-                                Message = "User is not Instructor"
-                            });
-                        }
-                        else if (campus != null && instructor.CampusId != campus.CampusId)
-                        {
-                            excelErrors.Add(new ExcelValidationError
-                            {
-                                Row = row,
-                                Column = "InstructorEmail",
-                                Message = "Instructor does not belong to this campus"
-                            });
-                        }
-                    }
-
-                    // ---------- Duplicate class
-                    if (course != null && campus != null && semesters.Count == 1)
-                    {
-                        var semester = semesters.First();
-                        bool existed = await _context.CourseInstances.AnyAsync(ci =>
-                            ci.SectionCode == sectionCode &&
-                            ci.CourseId == course.CourseId &&
-                            ci.CampusId == campus.CampusId &&
-                            ci.SemesterId == semester.SemesterId);
-
-                        if (existed)
-                        {
-                            excelErrors.Add(new ExcelValidationError
-                            {
-                                Row = row,
-                                Column = "SectionCode",
-                                Message = "Course instance already exists"
-                            });
-                        }
+                        var instructorCheck = await _userManager.FindByEmailAsync(instructorEmail);
+                        if (instructorCheck == null) excelErrors.Add(new ExcelValidationError { Row = row, Column = "InstructorEmail", Message = $"Instructor '{instructorEmail}' not found" });
                     }
 
                     row++;
                 }
 
-                // ❌ STOP nếu có lỗi
                 if (excelErrors.Any())
                 {
-                    return new BaseResponse<object>(
-                        "Excel validation failed",
-                        StatusCodeEnum.BadRequest_400,
-                        excelErrors
-                    );
+                    return new BaseResponse<object>("Excel validation failed", StatusCodeEnum.BadRequest_400, excelErrors);
                 }
 
-                // ==============================
-                // PHASE 2️⃣ IMPORT
-                // ==============================
                 using var transaction = await _context.Database.BeginTransactionAsync();
                 var responses = new List<CourseInstanceImportResponse>();
 
@@ -754,7 +563,7 @@ namespace Service.Service
                     DateTime endDate = DateTime.ParseExact(ws.Cells[row, endDateCol].Text.Trim(), "dd/MM/yyyy", CultureInfo.InvariantCulture);
 
                     var course = await _context.Courses.FirstOrDefaultAsync(c => c.CourseCode == courseCode)
-                        ?? new Course { CourseCode = courseCode, CourseName = courseName, IsActive = true };
+                                ?? new Course { CourseCode = courseCode, CourseName = courseName, IsActive = true };
 
                     if (course.CourseId == 0)
                     {
@@ -762,9 +571,7 @@ namespace Service.Service
                         await _context.SaveChangesAsync();
                     }
 
-                    var semester = await _context.Semesters
-                        .Include(s => s.AcademicYear)
-                        .FirstAsync(s => s.Name == semesterName);
+                    var semester = await _context.Semesters.Include(s => s.AcademicYear).FirstAsync(s => s.Name == semesterName);
 
                     Campus campus = int.TryParse(campusValue, out int campusId)
                         ? await _context.Campuses.FindAsync(campusId)
@@ -772,47 +579,70 @@ namespace Service.Service
 
                     var instructor = await _userManager.FindByEmailAsync(instructorEmail);
 
-                    var ci = new CourseInstance
-                    {
-                        CourseId = course.CourseId,
-                        SemesterId = semester.SemesterId,
-                        CampusId = campus.CampusId,
-                        SectionCode = sectionCode,
-                        StartDate = startDate,
-                        EndDate = endDate,
-                        IsActive = true,
-                        RequiresApproval = false,
-                        EnrollmentPassword = sectionCode,
-                        CreatedAt = DateTime.UtcNow.AddHours(7)
-                    };
+                    var existingCI = await _context.CourseInstances
+                        .Include(ci => ci.CourseInstructors)
+                        .FirstOrDefaultAsync(ci =>
+                            ci.CourseId == course.CourseId &&
+                            ci.SemesterId == semester.SemesterId &&
+                            ci.CampusId == campus.CampusId &&
+                            ci.SectionCode == sectionCode);
 
-                    _context.CourseInstances.Add(ci);
+                    CourseInstance ciToProcess;
+
+                    if (existingCI != null)
+                    {
+                        existingCI.StartDate = startDate;
+                        existingCI.EndDate = endDate;
+
+                        _context.CourseInstructors.RemoveRange(existingCI.CourseInstructors);
+
+                        existingCI.CourseInstructors.Add(new CourseInstructor
+                        {
+                            UserId = instructor.Id
+                        });
+
+                        _context.CourseInstances.Update(existingCI);
+                        ciToProcess = existingCI;
+                    }
+                    else
+                    {
+                        ciToProcess = new CourseInstance
+                        {
+                            CourseId = course.CourseId,
+                            SemesterId = semester.SemesterId,
+                            CampusId = campus.CampusId,
+                            SectionCode = sectionCode,
+                            StartDate = startDate,
+                            EndDate = endDate,
+                            IsActive = true,
+                            RequiresApproval = false,
+                            EnrollmentPassword = sectionCode,
+                            CreatedAt = DateTime.UtcNow.AddHours(7)
+                        };
+
+                        ciToProcess.CourseInstructors = new List<CourseInstructor>
+                {
+                    new CourseInstructor { UserId = instructor.Id }
+                };
+
+                        _context.CourseInstances.Add(ciToProcess);
+                    }
+
                     await _context.SaveChangesAsync();
-
-                    _context.CourseInstructors.Add(new CourseInstructor
-                    {
-                        CourseInstanceId = ci.CourseInstanceId,
-                        UserId = instructor.Id
-                    });
 
                     responses.Add(new CourseInstanceImportResponse
                     {
-                        CourseInstanceId = ci.CourseInstanceId,
+                        CourseInstanceId = ciToProcess.CourseInstanceId,
                         CourseId = course.CourseId,
                         CourseCode = course.CourseCode,
                         CourseName = course.CourseName,
-                        SemesterId = semester.SemesterId,
                         SemesterName = semester.Name,
-                        AcademicYearId = semester.AcademicYear.AcademicYearId,
-                        AcademicYearName = semester.AcademicYear.Name,
-                        CampusId = campus.CampusId,
                         CampusName = campus.CampusName,
                         SectionCode = sectionCode,
                         StartDate = startDate,
                         EndDate = endDate,
-                        InstructorId = instructor.Id,
                         InstructorEmail = instructor.Email,
-                        CreatedAt = ci.CreatedAt
+                        CreatedAt = ciToProcess.CreatedAt
                     });
 
                     row++;
@@ -821,18 +651,14 @@ namespace Service.Service
                 await transaction.CommitAsync();
 
                 return new BaseResponse<object>(
-                    "Imported course instances successfully",
+                    "Imported/Updated course instances successfully",
                     StatusCodeEnum.Created_201,
                     responses
                 );
             }
             catch (Exception ex)
             {
-                return new BaseResponse<object>(
-                    $"Error importing Excel: {ex.Message}",
-                    StatusCodeEnum.InternalServerError_500,
-                    null
-                );
+                return new BaseResponse<object>($"Error importing Excel: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
 
