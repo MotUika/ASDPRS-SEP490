@@ -353,8 +353,11 @@ public class StudentReviewController : ControllerBase
     [SwaggerResponse(500, "Lỗi server")]
     public async Task<IActionResult> GetAssignmentsWithTracking(int courseInstanceId)
     {
-        var result = await _assignmentService.GetAssignmentsByCourseInstanceBasicAsync(courseInstanceId);
-        return StatusCode((int)result.StatusCode, result);
+        return await CheckEnrollmentAndExecute(courseInstanceId, async () =>
+        {
+            var result = await _assignmentService.GetAssignmentsByCourseInstanceBasicAsync(courseInstanceId);
+            return StatusCode((int)result.StatusCode, result);
+        });
     }
 
     [HttpGet("assignment/{assignmentId}/tracking")]
