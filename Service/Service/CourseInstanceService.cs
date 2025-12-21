@@ -667,7 +667,6 @@ namespace Service.Service
         {
             try
             {
-                // 1. Tìm lớp học và lấy mật khẩu
                 var courseInstance = await _context.CourseInstances
                     .Where(ci => ci.CourseInstanceId == courseInstanceId)
                     .Select(ci => new { ci.EnrollmentPassword, ci.CourseInstanceId })
@@ -675,28 +674,26 @@ namespace Service.Service
 
                 if (courseInstance == null)
                 {
-                    return new BaseResponse<string>("Không tìm thấy lớp học", StatusCodeEnum.NotFound_404, null);
+                    return new BaseResponse<string>("Course instance not found", StatusCodeEnum.NotFound_404, null);
                 }
 
-                // 2. Kiểm tra xem User này có phải là Instructor của lớp này không
-                // Nếu bạn muốn Admin cũng xem được, có thể check thêm Role ở đây
                 var isInstructor = await _context.CourseInstructors
                     .AnyAsync(ciu => ciu.CourseInstanceId == courseInstanceId && ciu.UserId == userId);
 
                 if (!isInstructor)
                 {
-                    return new BaseResponse<string>("Bạn không có quyền xem mật khẩu của lớp này", StatusCodeEnum.Forbidden_403, null);
+                    return new BaseResponse<string>("You do not have permission to view the password for this course", StatusCodeEnum.Forbidden_403, null);
                 }
 
                 return new BaseResponse<string>(
-                    "Lấy mật khẩu thành công",
+                    "Password retrieved successfully",
                     StatusCodeEnum.OK_200,
                     courseInstance.EnrollmentPassword
                 );
             }
             catch (Exception ex)
             {
-                return new BaseResponse<string>($"Lỗi: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
+                return new BaseResponse<string>($"Error: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
 
