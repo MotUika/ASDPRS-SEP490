@@ -191,19 +191,123 @@ namespace Service.Service
 
                 var emailSubject = $"[ASDPRS] {notification.Title}";
                 var emailBody = $@"
-                <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;'>
-                    <h2 style='color: #2563eb;'>{notification.Title}</h2>
-                    <div style='background: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0;'>
-                        {notification.Message}
-                    </div>
-                    <p style='color: #64748b; font-size: 14px;'>
-                        Sent: {notification.CreatedAt:dd/MM/yyyy HH:mm}
-                    </p>
-                    <p style='color: #64748b; font-size: 12px;'>
-                        This is an automated notification from FASM System.
-                    </p>
-                </div>
-            ";
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset=""UTF-8"">
+    <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
+    <title>Notification - FASM System</title>
+    <style>
+        body {{
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #334155;
+            margin: 0;
+            padding: 0;
+            background-color: #f1f5f9;
+        }}
+        .container {{
+            max-width: 600px;
+            margin: 30px auto;
+            background: #ffffff;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }}
+        .header {{
+            background-color: #ffffff;
+            padding: 25px;
+            text-align: center;
+            border-bottom: 1px solid #e2e8f0;
+        }}
+        .header img {{
+            max-width: 150px;
+            height: auto;
+        }}
+        .body-content {{
+            padding: 40px 30px;
+        }}
+        .notification-icon {{
+            text-align: center;
+            margin-bottom: 15px;
+        }}
+        .title {{
+            color: #1e40af;
+            /* Dark blue */
+            font-size: 24px;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 25px;
+        }}
+        .message-box {{
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 25px;
+            color: #475569;
+            font-size: 16px;
+            line-height: 1.8;
+            margin-bottom: 25px;
+        }}
+        .meta-info {{
+            border-top: 1px solid #f1f5f9;
+            padding-top: 20px;
+            color: #94a3b8;
+            font-size: 13px;
+        }}
+        .footer {{
+            background-color: #f8fafc;
+            padding: 20px;
+            text-align: center;
+            font-size: 12px;
+            color: #64748b;
+        }}
+        .badge {{
+            display: inline-block;
+            background-color: #dbeafe;
+            color: #1e40af;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }}
+    </style>
+</head>
+<body>
+    <div class=""container"">
+        <div class=""header"">
+            <img src=""https://res.cloudinary.com/daf34jpxn/image/upload/v1766342084/FASM_ss094j.png"" alt=""FASM Logo"">
+        </div>
+
+        <div class=""body-content"">
+            <div class=""notification-icon"">
+                <span style=""font-size: 40px;"">🔔</span>
+            </div>
+            
+            <div style=""text-align: center;"">
+                <span class=""badge"">System Update</span>
+                <h2 class=""title"">{notification.Title}</h2>
+            </div>
+            
+            <div class=""message-box"">
+                {notification.Message}
+            </div>
+
+            <div class=""meta-info"">
+                <strong>Sent on:</strong> {notification.CreatedAt:dd/MM/yyyy HH:mm}
+            </div>
+        </div>
+
+        <div class=""footer"">
+            This is an automated notification from <strong>FASM System</strong>.<br>
+            Please do not reply to this email.
+            <br><br>
+            &copy; 2025 FASM Management Team.
+        </div>
+    </div>
+</body>
+</html>";
 
                 await _emailService.SendEmail(user.Email, emailSubject, emailBody);
             }

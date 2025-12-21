@@ -1122,61 +1122,248 @@ namespace Service.Service
 
                 if (role == "Instructor")
                 {
-                    subject = "Official Appointment: ASDPRS System Instructor Credentials";
+                    subject = "Welcome to ASDPRS System - Instructor Account Created";
                     htmlContent = $@"
-                        <html>
-                        <body style='font-family: Arial, sans-serif; line-height: 1.6; color: #333;'>
-                            <div style='max-width: 600px; margin: 0 auto; border: 1px solid #ddd; padding: 20px; border-radius: 5px;'>
-                                <h2 style='color: #0056b3; text-align: center;'>ASDPRS Academic Portal - Instructor Welcome</h2>
-                                <hr style='border: 0; border-top: 1px solid #eee;' />
-                                
-                                <p>Dear <strong>{user.FirstName} {user.LastName}</strong>,</p>
-                                
-                                <p>We are pleased to inform you that your Instructor account for the <strong>ASDPRS Academic System</strong> has been successfully created. You have been added to the system to manage courses and student assessments.</p>
-                                
-                                <div style='background-color: #f9f9f9; padding: 15px; border-left: 4px solid #0056b3; margin: 20px 0;'>
-                                    <h3 style='margin-top: 0; color: #0056b3;'>📱 Mobile Application Credentials</h3>
-                                    <p>To access the ASDPRS Mobile App for grading and attendance, please use the following credentials:</p>
-                                    <ul style='list-style: none; padding-left: 0;'>
-                                        <li><strong>Username:</strong> <span style='font-family: monospace; font-size: 1.1em;'>{user.UserName}</span></li>
-                                        <li><strong>Password:</strong> <span style='font-family: monospace; font-size: 1.1em; background-color: #eef; padding: 2px 5px; border-radius: 3px;'>{password}</span></li>
-                                    </ul>
-                                    <p style='font-size: 0.9em; color: #666;'><em>*Please change your password upon your first login for security purposes.</em></p>
-                                </div>
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset=""UTF-8"">
+    <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
+    <title>Welcome to ASDPRS</title>
+    <style>
+        body {{
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333333;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f7;
+        }}
+        .container {{
+            max-width: 600px;
+            margin: 20px auto;
+            background: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+        }}
+        .header {{
+            background-color: #ffffff;
+            padding: 30px 20px;
+            text-align: center;
+            border-bottom: 1px solid #eeeeee;
+        }}
+        .header img {{
+            max-width: 180px;
+            height: auto;
+        }}
+        .body-content {{
+            padding: 40px 30px;
+        }}
+        .welcome-text {{
+            font-size: 22px;
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }}
+        .highlight-box {{
+            background-color: #f8f9fa;
+            border-left: 4px solid #007bff;
+            padding: 15px;
+            margin: 20px 0;
+        }}
+        .button {{
+            display: inline-block;
+            padding: 12px 25px;
+            background-color: #007bff;
+            color: #ffffff !important;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+            margin-top: 10px;
+        }}
+        .footer {{
+            background-color: #f4f4f7;
+            padding: 20px;
+            text-align: center;
+            font-size: 12px;
+            color: #777777;
+        }}
+        .info-text {{
+            font-size: 14px;
+            color: #555555;
+        }}
+    </style>
+</head>
+<body>
+    <div class=""container"">
+        <div class=""header"">
+            <img src=""https://res.cloudinary.com/daf34jpxn/image/upload/v1766342084/FASM_ss094j.png"" alt=""ASDPRS Logo"">
+        </div>
 
-                                <div style='margin: 20px 0;'>
-                                    <h3 style='color: #28a745;'>💻 Web Portal Access</h3>
-                                    <p>For the Web Portal (Course Management, Reports), please continue to use the <strong>Google Login</strong> method with your university email address: <strong>{user.Email}</strong>.</p>
-                                </div>
+        <div class=""body-content"">
+            <div class=""welcome-text"">Welcome to ASDPRS System</div>
+            
+            <p class=""info-text"">Dear <strong>{user.FirstName} {user.LastName}</strong>,</p>
+     
+            <p class=""info-text"">Your instructor account has been successfully created in the <strong>ASDPRS system</strong>.
+            We are excited to have you on board!</p>
+            
+            <div class=""highlight-box"">
+                <p class=""info-text"" style=""margin: 0;"">
+                    <strong>Login Email:</strong> {user.Email}<br>
+                    <strong>Method:</strong> Google Authentication
+                </p>
+            </div>
 
-                                <p>If you encounter any issues accessing your account or the assigned courses, please contact the IT Support Department immediately.</p>
-                                
-                                <br>
-                                <p>Sincerely,</p>
-                                <p><strong>ASDPRS Administration Team</strong><br>
-                                <span style='font-size: 0.85em; color: #777;'>Automated System Notification</span></p>
-                            </div>
-                        </body>
-                        </html>";
+            <p class=""info-text"">Simply click on the Google login button on the login page and use your Google account associated with this email.</p>
+            
+            <p style=""text-align: center;"">
+                <a href=""https://fasm-fpt.site/login"" class=""button"">Go to Login Page</a>
+            </p>
+
+            <p class=""info-text"" style=""color: #e67e22; font-weight: bold;"">
+                * No password is required for Google login.
+            </p>
+
+            <p class=""info-text"" style=""margin-top: 30px;"">
+                If you have any issues, please contact the system administrator.<br><br>
+                Best regards,<br>
+                <strong>ASDPRS Team</strong>
+            </p>
+        </div>
+
+        <div class=""footer"">
+            &copy; 2025 ASDPRS System. All rights reserved.<br>
+            This is an automated email, please do not reply.
+        </div>
+    </div>
+</body>
+</html>";
                 }
-                else // Student Email
+                else
                 {
                     subject = "Welcome to ASDPRS System - Your Account Credentials";
                     htmlContent = $@"
-                        <html>
-                        <body style='font-family: Arial, sans-serif;'>
-                            <h2>Welcome to ASDPRS System</h2>
-                            <p>Dear {user.FirstName} {user.LastName},</p>
-                            <p>Your student account has been automatically created via course enrollment.</p>
-                            
-                            <p><strong>Username:</strong> {user.UserName}</p>
-                            <p><strong>Password:</strong> {password}</p>
-                            
-                            <p>Please log in and change your password as soon as possible.</p>
-                            <br>
-                            <p>Best regards,<br>ASDPRS Team</p>
-                        </body>
-                        </html>";
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset=""UTF-8"">
+    <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
+    <title>Account Created - ASDPRS</title>
+    <style>
+        body {{
+            font-family: 'Segoe UI', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333333;
+            margin: 0;
+            padding: 0;
+            background-color: #f9f9f9;
+        }}
+        .container {{
+            max-width: 600px;
+            margin: 20px auto;
+            background: #ffffff;
+            border: 1px solid #eeeeee;
+            border-radius: 12px;
+            overflow: hidden;
+        }}
+        .header {{
+            background-color: #ffffff;
+            padding: 25px;
+            text-align: center;
+            border-bottom: 2px solid #f0f0f0;
+        }}
+        .header img {{
+            max-width: 150px;
+            height: auto;
+        }}
+        .content {{
+            padding: 35px;
+        }}
+        .title {{
+            color: #1a73e8;
+            font-size: 22px;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }}
+        .credentials-card {{
+            background-color: #f0f7ff;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 25px 0;
+            border: 1px dashed #1a73e8;
+        }}
+        .credentials-item {{
+            margin: 5px 0;
+            font-size: 15px;
+        }}
+        .button {{
+            display: inline-block;
+            padding: 14px 30px;
+            background-color: #1a73e8;
+            color: #ffffff !important;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            margin: 10px 0;
+        }}
+        .warning {{
+            color: #d93025;
+            font-size: 13px;
+            font-style: italic;
+            margin-top: 15px;
+        }}
+        .footer {{
+            background-color: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+            font-size: 12px;
+            color: #70757a;
+            border-top: 1px solid #eeeeee;
+        }}
+    </style>
+</head>
+<body>
+    <div class=""container"">
+        <div class=""header"">
+            <img src=""https://res.cloudinary.com/daf34jpxn/image/upload/v1766342084/FASM_ss094j.png"" alt=""ASDPRS Logo"">
+        </div>
+
+        <div class=""content"">
+            <div class=""title"">Welcome to ASDPRS System</div>
+            
+            <p>Dear <strong>{user.FirstName} {user.LastName}</strong>,</p>
+            
+            <p>Your student account has been automatically created following your successful course enrollment.
+            Below are your login credentials:</p>
+            
+            <div class=""credentials-card"">
+                <div class=""credentials-item""><strong>Username:</strong> <code>{user.UserName}</code></div>
+                <div class=""credentials-item""><strong>Password:</strong> <code>{password}</code></div>
+            </div>
+
+            <p style=""text-align: center;"">
+                <a href=""https://fasm-fpt.site/login"" class=""button"">Login to Your Account</a>
+            </p>
+
+            <p class=""warning"">
+                ⚠️ For security reasons, please log in and change your password immediately after your first access.
+            </p>
+
+            <p style=""margin-top: 30px;"">
+                Best regards,<br>
+                <strong>ASDPRS Team</strong>
+            </p>
+        </div>
+
+        <div class=""footer"">
+            © 2025 ASDPRS System. All rights reserved.<br>
+            If you did not expect this email, please ignore it or contact support.
+        </div>
+    </div>
+</body>
+</html>";
                 }
 
                 await _emailService.SendEmail(user.Email, subject, htmlContent);

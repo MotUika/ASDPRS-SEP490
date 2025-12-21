@@ -2756,8 +2756,9 @@ namespace Service.Service
                 int userNameCol = 1;
                 int studentCodeCol = 2;
                 int submissionIdCol = 3;
+                int reviewUrlCol = 4;
                 int instructorIdCol = 5;
-                int startCriteriaCol = 7;
+                int startCriteriaCol = 7; 
                 int finalFeedbackCol = ws.Dimension.End.Column;
 
                 if (!int.TryParse(ws.Cells[startRow, submissionIdCol].Text, out int firstSubmissionId))
@@ -2786,6 +2787,25 @@ namespace Service.Service
                     string studentName = ws.Cells[row, userNameCol].Text;
                     string studentCode = ws.Cells[row, studentCodeCol].Text;
                     string submissionIdText = ws.Cells[row, submissionIdCol].Text;
+                    string reviewUrl = ws.Cells[row, reviewUrlCol].Text;
+                    string finalFeedback = ws.Cells[row, finalFeedbackCol].Text;
+
+                    bool isNotSubmitted =
+                        (!string.IsNullOrEmpty(reviewUrl) && reviewUrl.Contains("Not Submitted", StringComparison.OrdinalIgnoreCase)) ||
+                        (!string.IsNullOrEmpty(finalFeedback) && finalFeedback.Contains("auto grade zero", StringComparison.OrdinalIgnoreCase));
+
+                    if (isNotSubmitted)
+                    {
+                        errorList.Add(new
+                        {
+                            Row = row,
+                            StudentInfo = $"{studentName} ({studentCode})",
+                            SubmissionId = submissionIdText,
+                            Message = "Skipped: Student did not submit (Auto Grade Zero)."
+                        });
+                        row++;
+                        continue;
+                    }
 
                     var rowErrors = new List<string>();
 
@@ -2794,8 +2814,6 @@ namespace Service.Service
 
                     if (!int.TryParse(ws.Cells[row, instructorIdCol].Text, out int instructorId))
                         rowErrors.Add("InstructorId must be a number");
-
-                    string finalFeedback = ws.Cells[row, finalFeedbackCol].Text;
 
                     var criteriaScores = new List<ImportCriteriaScore>();
 
@@ -2845,7 +2863,6 @@ namespace Service.Service
                             SubmissionId = submissionIdText,
                             Errors = rowErrors
                         });
-
                         row++;
                         continue;
                     }
@@ -2860,7 +2877,6 @@ namespace Service.Service
                             CriteriaScores = criteriaScores
                         };
 
-                        // Gọi hàm xử lý logic Merge
                         var result = await ImportSingleSubmissionAsync(req);
 
                         if (result.StatusCode == StatusCodeEnum.OK_200)
