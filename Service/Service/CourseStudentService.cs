@@ -493,11 +493,11 @@ namespace Service.Service
                 var courseInstance = await _courseInstanceRepository.GetByIdAsync(courseInstanceId);
 
                 if (courseInstance == null || courseInstance.EnrollmentPassword != enrollKey)
-                    return new BaseResponse<CourseStudentResponse>("Key sai hoặc lớp không tồn tại", StatusCodeEnum.BadRequest_400, null);
+                    return new BaseResponse<CourseStudentResponse>("Invalid enrollment key or course instance not found", StatusCodeEnum.BadRequest_400, null);
                 if (DateTime.UtcNow.AddHours(7) < courseInstance.StartDate)
                 {
                     return new BaseResponse<CourseStudentResponse>(
-                        $"Lớp học chưa bắt đầu. Bạn chỉ có thể enroll từ ngày {courseInstance.StartDate:dd/MM/yyyy HH:mm}",
+                        $"The course has not started yet. You can only enroll starting from {courseInstance.StartDate:dd/MM/yyyy HH:mm}",
                         StatusCodeEnum.Forbidden_403,
                         null);
                 }
@@ -506,7 +506,7 @@ namespace Service.Service
                     .FirstOrDefault(cs => cs.UserId == studentUserId && cs.Status == "Pending");
 
                 if (courseStudent == null)
-                    return new BaseResponse<CourseStudentResponse>("Bạn chưa được import vào lớp hoặc đã enroll rồi", StatusCodeEnum.NotFound_404, null);
+                    return new BaseResponse<CourseStudentResponse>("You have not been added to the pending list or are already enrolled", StatusCodeEnum.NotFound_404, null);
 
                 courseStudent.Status = "Enrolled";
                 courseStudent.EnrolledAt = DateTime.UtcNow.AddHours(7);
@@ -516,11 +516,11 @@ namespace Service.Service
                 var user = await _userRepository.GetByIdAsync(studentUserId);
                 var response = MapToResponse(courseStudent, courseInstance, user, null);
 
-                return new BaseResponse<CourseStudentResponse>("Enroll thành công", StatusCodeEnum.OK_200, response);
+                return new BaseResponse<CourseStudentResponse>("Enrollment successful", StatusCodeEnum.OK_200, response);
             }
             catch (Exception ex)
             {
-                return new BaseResponse<CourseStudentResponse>("Lỗi enroll: " + ex.Message, StatusCodeEnum.InternalServerError_500, null);
+                return new BaseResponse<CourseStudentResponse>("Enrollment error: " + ex.Message, StatusCodeEnum.InternalServerError_500, null);
             }
         }
 
