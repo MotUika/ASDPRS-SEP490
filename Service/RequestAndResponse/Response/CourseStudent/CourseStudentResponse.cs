@@ -10,6 +10,7 @@ namespace Service.RequestAndResponse.Response.CourseStudent
         public string CourseInstanceName { get; set; }
         public string CourseCode { get; set; }
         public string CourseName { get; set; }
+        public int SemesterId { get; set; }
         public string Semester { get; set; }
         public int UserId { get; set; }
         public string StudentName { get; set; }
