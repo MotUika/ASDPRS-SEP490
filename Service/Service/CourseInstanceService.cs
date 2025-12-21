@@ -165,7 +165,7 @@ namespace Service.Service
 
                 if (courseInstance == null)
                 {
-                    return new BaseResponse<string>("Không tìm thấy lớp học", StatusCodeEnum.NotFound_404, null);
+                    return new BaseResponse<string>("Course instance not found", StatusCodeEnum.NotFound_404, null);
                 }
 
                 var isInstructorInCourse = await _context.CourseInstructors
@@ -173,17 +173,17 @@ namespace Service.Service
 
                 if (!isInstructorInCourse)
                 {
-                    return new BaseResponse<string>("Bạn không có quyền đổi mã lớp này", StatusCodeEnum.Forbidden_403, null);
+                    return new BaseResponse<string>("You do not have permission to update the enrollment key for this course", StatusCodeEnum.Forbidden_403, null);
                 }
 
                 courseInstance.EnrollmentPassword = newKey;
                 await _courseInstanceRepository.UpdateAsync(courseInstance);
 
-                return new BaseResponse<string>("Cập nhật mã lớp thành công", StatusCodeEnum.OK_200, newKey);
+                return new BaseResponse<string>("Enrollment key updated successfully", StatusCodeEnum.OK_200, newKey);
             }
             catch (Exception ex)
             {
-                return new BaseResponse<string>($"Lỗi khi cập nhật mã lớp: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
+                return new BaseResponse<string>($"Error updating enrollment key: {ex.Message}", StatusCodeEnum.InternalServerError_500, null);
             }
         }
 
