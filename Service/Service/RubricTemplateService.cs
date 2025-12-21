@@ -269,7 +269,7 @@ namespace Service.Service
             }
         }
 
-        public async Task<BaseResponse<IEnumerable<RubricTemplateResponse>>> GetRubricTemplatesByUserIdAsync(int userId)
+        public async Task<BaseResponse<IEnumerable<RubricTemplateResponse>>> GetRubricTemplatesByUserIdAsync(int userId, int courseInstanceId)
         {
             try
             {
@@ -279,12 +279,27 @@ namespace Service.Service
                     return new BaseResponse<IEnumerable<RubricTemplateResponse>>($"UserId {userId} not found.", StatusCodeEnum.NotFound_404, null);
                 }
 
+                var courseInstance = await _context.CourseInstances
+                    .Include(ci => ci.Course)
+                    .FirstOrDefaultAsync(ci => ci.CourseInstanceId == courseInstanceId);
 
-                var taughtCourseIds = await _context.CourseInstructors
-                    .Where(ci => ci.UserId == userId)
-                    .Select(ci => ci.CourseInstance.CourseId)
-                    .Distinct()
-                    .ToListAsync();
+                if (courseInstance == null)
+                {
+                    return new BaseResponse<IEnumerable<RubricTemplateResponse>>($"CourseInstanceId {courseInstanceId} not found.", StatusCodeEnum.NotFound_404, null);
+                }
+
+                var targetCourseId = courseInstance.CourseId;
+
+                var isInstructor = await _context.CourseInstructors
+                    .AnyAsync(ci => ci.UserId == userId && ci.CourseInstanceId == courseInstanceId);
+
+                if (!isInstructor)
+                {
+                    return new BaseResponse<IEnumerable<RubricTemplateResponse>>(
+                        $"UserId {userId} is not an instructor for CourseInstanceId {courseInstanceId}.",
+                        StatusCodeEnum.Forbidden_403,
+                        null);
+                }
 
                 var rubricTemplates = await _context.RubricTemplates
                     .Include(rt => rt.CreatedByUser)
@@ -292,15 +307,15 @@ namespace Service.Service
                     .Include(rt => rt.CriteriaTemplates)
                     .Include(rt => rt.Course)
                     .Where(rt =>
-                        rt.CreatedByUserId == userId ||
-                        (rt.IsPublic && rt.CourseId.HasValue && taughtCourseIds.Contains(rt.CourseId.Value))
+                        (rt.CreatedByUserId == userId || rt.IsPublic) &&
+                        (rt.CourseId == targetCourseId || rt.CourseId == null)
                     )
                     .ToListAsync();
 
                 if (!rubricTemplates.Any())
                 {
                     return new BaseResponse<IEnumerable<RubricTemplateResponse>>(
-                        $"No rubric templates found for UserId {userId}.",
+                        $"No rubric templates found for UserId {userId} in Course {courseInstance.Course?.CourseName}.",
                         StatusCodeEnum.OK_200,
                         new List<RubricTemplateResponse>());
                 }

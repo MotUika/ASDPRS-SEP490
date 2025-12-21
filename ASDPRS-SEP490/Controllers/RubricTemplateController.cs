@@ -66,20 +66,25 @@ namespace ASDPRS_SEP490.Controllers
         // 🔹 GET: Lấy Rubric Template theo UserId
         [HttpGet("user/{userId}")]
         [SwaggerOperation(
-            Summary = "Lấy danh sách Rubric Template theo người tạo",
-            Description = "Trả về danh sách Rubric Template được tạo bởi user cụ thể"
+            Summary = "Lấy danh sách Rubric Template theo người tạo và Course Instance",
+            Description = "Trả về danh sách Rubric Template được tạo bởi user hoặc công khai, nhưng phải thuộc về Course của CourseInstance được chỉ định."
         )]
         [SwaggerResponse(200, "Thành công", typeof(BaseResponse<IEnumerable<RubricTemplateResponse>>))]
-        [SwaggerResponse(404, "Không tìm thấy user hoặc không có template")]
+        [SwaggerResponse(404, "Không tìm thấy user hoặc course instance")]
+        [SwaggerResponse(403, "User không phải là giảng viên của lớp này")]
         [SwaggerResponse(500, "Lỗi server")]
-        public async Task<IActionResult> GetRubricTemplatesByUserId(int userId)
+        public async Task<IActionResult> GetRubricTemplatesByUserId(
+            int userId,
+            [FromQuery] int courseInstanceId)
         {
-            var result = await _rubricTemplateService.GetRubricTemplatesByUserIdAsync(userId);
+            var result = await _rubricTemplateService.GetRubricTemplatesByUserIdAsync(userId, courseInstanceId);
 
             return result.StatusCode switch
             {
                 StatusCodeEnum.OK_200 => Ok(result),
                 StatusCodeEnum.NotFound_404 => NotFound(result),
+                StatusCodeEnum.Forbidden_403 => StatusCode(403, result),
+                StatusCodeEnum.BadRequest_400 => BadRequest(result),
                 _ => StatusCode(500, result)
             };
         }
