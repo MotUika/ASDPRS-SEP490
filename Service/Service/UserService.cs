@@ -420,13 +420,10 @@ namespace Service.Service
                     return new BaseResponse<bool>("If the email exists, a new password has been sent.", StatusCodeEnum.OK_200, true);
                 }
 
-                // Tạo mật khẩu mới thỏa mãn điều kiện
                 string newPassword = GenerateStrongPassword();
 
-                // Tạo token reset password (cần thiết vì ta không biết password cũ)
                 var token = await _userManager.GeneratePasswordResetTokenAsync(user);
 
-                // Reset password
                 var result = await _userManager.ResetPasswordAsync(user, token, newPassword);
 
                 if (!result.Succeeded)
@@ -434,19 +431,148 @@ namespace Service.Service
                     return new BaseResponse<bool>($"Error resetting password: {string.Join(", ", result.Errors.Select(e => e.Description))}", StatusCodeEnum.InternalServerError_500, false);
                 }
 
-                string subject = "ASDPRS System - Password Reset";
+                string subject = "ASDPRS System - Password Reset Successful";
+
                 string htmlContent = $@"
-                <html>
-                <body>
-                    <h2>Password Reset Request</h2>
-                    <p>Dear {user.FirstName} {user.LastName},</p>
-                    <p>Your password has been reset successfully.</p>
-                    <p><strong>New Password:</strong> {newPassword}</p>
-                    <p>Please log in and change your password immediately for security reasons.</p>
-                    <br>
-                    <p>Best regards,<br>ASDPRS Team</p>
-                </body>
-                </html>";
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset=""UTF-8"">
+    <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
+    <title>Password Reset - ASDPRS</title>
+    <style>
+        body {{
+            font-family: 'Segoe UI', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333333;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f7;
+        }}
+        .container {{
+            max-width: 600px;
+            margin: 20px auto;
+            background: #ffffff;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }}
+        .header {{
+            background-color: #ffffff;
+            padding: 25px;
+            text-align: center;
+            border-bottom: 1px solid #eeeeee;
+        }}
+        .header img {{
+            max-width: 150px;
+            height: auto;
+        }}
+        .body-content {{
+            padding: 40px 30px;
+        }}
+        .status-icon {{
+            text-align: center;
+            font-size: 40px;
+            margin-bottom: 10px;
+        }}
+        .title {{
+            color: #2c3e50;
+            font-size: 22px;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 25px;
+        }}
+        .password-box {{
+            background-color: #fff9e6;
+            border: 1px solid #ffeeba;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            margin: 25px 0;
+        }}
+        .password-label {{
+            font-size: 14px;
+            color: #856404;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }}
+        .password-value {{
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+            letter-spacing: 2px;
+        }}
+        .button {{
+            display: inline-block;
+            padding: 12px 30px;
+            background-color: #28a745; /* Màu xanh lá đại diện cho thành công */
+            color: #ffffff !important;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: bold;
+            margin: 10px 0;
+        }}
+        .security-note {{
+            background-color: #fdf2f2;
+            padding: 15px;
+            border-radius: 6px;
+            font-size: 13px;
+            color: #a94442;
+            margin-top: 25px;
+        }}
+        .footer {{
+            background-color: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+            font-size: 12px;
+            color: #777777;
+        }}
+    </style>
+</head>
+<body>
+    <div class=""container"">
+        <div class=""header"">
+            <img src=""https://res.cloudinary.com/daf34jpxn/image/upload/v1766342084/FASM_ss094j.png"" alt=""ASDPRS Logo"">
+        </div>
+
+        <div class=""body-content"">
+            <div class=""status-icon"">🔐</div>
+            <div class=""title"">Password Reset Successful</div>
+    
+            <p>Dear <strong>{user.FirstName} {user.LastName}</strong>,</p>
+            
+            <p>We have received a request to reset your password.
+            Your password has been updated successfully. You can now use the temporary password below to log in:</p>
+            
+            <div class=""password-box"">
+                <div class=""password-label"">Your New Password</div>
+                <div class=""password-value"">{newPassword}</div>
+            </div>
+
+            <p style=""text-align: center;"">
+                <a href=""https://fasm-fpt.site/login"" class=""button"">Log In to FASM</a>
+            </p>
+
+            <div class=""security-note"">
+                <strong>Important:</strong> For security reasons, you 
+                are required to change this password immediately after logging in. If you did not request this change, please contact our support team right away.
+            </div>
+
+            <p style=""margin-top: 30px; font-size: 14px;"">
+                Best regards,<br>
+                <strong>ASDPRS Team</strong>
+            </p>
+        </div>
+
+        <div class=""footer"">
+            &copy; 2025 ASDPRS System. All rights reserved.<br>
+            This is an automated security notification.
+        </div>
+    </div>
+</body>
+</html>";
 
                 await _emailService.SendEmail(user.Email, subject, htmlContent);
 
@@ -547,38 +673,246 @@ namespace Service.Service
                 {
                     subject = "Welcome to ASDPRS System - Instructor Account Created";
                     htmlContent = $@"
-                <html>
-                <body>
-                    <h2>Welcome to ASDPRS System</h2>
-                    <p>Dear {user.FirstName} {user.LastName},</p>
-                    <p>Your instructor account has been successfully created in the ASDPRS system.</p>
-                    <p><strong>You can now login using Google authentication with your email:</strong> {user.Email}</p>
-                    <p>Simply click on the Google login button on the login page and use your Google account associated with this email.</p>
-                    <br>
-                    <p><strong>No password is required for Google login.</strong></p>
-                    <br>
-                    <p>If you have any issues, please contact the system administrator.</p>
-                    <br>
-                    <p>Best regards,<br>ASDPRS Team</p>
-                </body>
-                </html>";
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset=""UTF-8"">
+    <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
+    <title>Welcome to ASDPRS</title>
+    <style>
+        body {{
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333333;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f7;
+        }}
+        .container {{
+            max-width: 600px;
+            margin: 20px auto;
+            background: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+        }}
+        .header {{
+            background-color: #ffffff;
+            padding: 30px 20px;
+            text-align: center;
+            border-bottom: 1px solid #eeeeee;
+        }}
+        .header img {{
+            max-width: 180px;
+            height: auto;
+        }}
+        .body-content {{
+            padding: 40px 30px;
+        }}
+        .welcome-text {{
+            font-size: 22px;
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }}
+        .highlight-box {{
+            background-color: #f8f9fa;
+            border-left: 4px solid #007bff;
+            padding: 15px;
+            margin: 20px 0;
+        }}
+        .button {{
+            display: inline-block;
+            padding: 12px 25px;
+            background-color: #007bff;
+            color: #ffffff !important;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+            margin-top: 10px;
+        }}
+        .footer {{
+            background-color: #f4f4f7;
+            padding: 20px;
+            text-align: center;
+            font-size: 12px;
+            color: #777777;
+        }}
+        .info-text {{
+            font-size: 14px;
+            color: #555555;
+        }}
+    </style>
+</head>
+<body>
+    <div class=""container"">
+        <div class=""header"">
+            <img src=""https://res.cloudinary.com/daf34jpxn/image/upload/v1766342084/FASM_ss094j.png"" alt=""ASDPRS Logo"">
+        </div>
+
+        <div class=""body-content"">
+            <div class=""welcome-text"">Welcome to ASDPRS System</div>
+            
+            <p class=""info-text"">Dear <strong>{user.FirstName} {user.LastName}</strong>,</p>
+     
+            <p class=""info-text"">Your instructor account has been successfully created in the <strong>ASDPRS system</strong>.
+            We are excited to have you on board!</p>
+            
+            <div class=""highlight-box"">
+                <p class=""info-text"" style=""margin: 0;"">
+                    <strong>Login Email:</strong> {user.Email}<br>
+                    <strong>Method:</strong> Google Authentication
+                </p>
+            </div>
+
+            <p class=""info-text"">Simply click on the Google login button on the login page and use your Google account associated with this email.</p>
+            
+            <p style=""text-align: center;"">
+                <a href=""https://fasm-fpt.site/login"" class=""button"">Go to Login Page</a>
+            </p>
+
+            <p class=""info-text"" style=""color: #e67e22; font-weight: bold;"">
+                * No password is required for Google login.
+            </p>
+
+            <p class=""info-text"" style=""margin-top: 30px;"">
+                If you have any issues, please contact the system administrator.<br><br>
+                Best regards,<br>
+                <strong>ASDPRS Team</strong>
+            </p>
+        </div>
+
+        <div class=""footer"">
+            &copy; 2025 ASDPRS System. All rights reserved.<br>
+            This is an automated email, please do not reply.
+        </div>
+    </div>
+</body>
+</html>";
                 }
                 else
                 {
                     subject = "Welcome to ASDPRS System - Your Account Credentials";
                     htmlContent = $@"
-                <html>
-                <body>
-                    <h2>Welcome to ASDPRS System</h2>
-                    <p>Dear {user.FirstName} {user.LastName},</p>
-                    <p>Your account has been successfully created by the administrator.</p>
-                    <p><strong>Username:</strong> {user.UserName}</p>
-                    <p><strong>Password:</strong> {password}</p>
-                    <p>Please log in and change your password as soon as possible for security reasons.</p>
-                    <br>
-                    <p>Best regards,<br>ASDPRS Team</p>
-                </body>
-                </html>";
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset=""UTF-8"">
+    <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
+    <title>Account Created - ASDPRS</title>
+    <style>
+        body {{
+            font-family: 'Segoe UI', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333333;
+            margin: 0;
+            padding: 0;
+            background-color: #f9f9f9;
+        }}
+        .container {{
+            max-width: 600px;
+            margin: 20px auto;
+            background: #ffffff;
+            border: 1px solid #eeeeee;
+            border-radius: 12px;
+            overflow: hidden;
+        }}
+        .header {{
+            background-color: #ffffff;
+            padding: 25px;
+            text-align: center;
+            border-bottom: 2px solid #f0f0f0;
+        }}
+        .header img {{
+            max-width: 150px;
+            height: auto;
+        }}
+        .content {{
+            padding: 35px;
+        }}
+        .title {{
+            color: #1a73e8;
+            font-size: 22px;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }}
+        .credentials-card {{
+            background-color: #f0f7ff;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 25px 0;
+            border: 1px dashed #1a73e8;
+        }}
+        .credentials-item {{
+            margin: 5px 0;
+            font-size: 15px;
+        }}
+        .button {{
+            display: inline-block;
+            padding: 14px 30px;
+            background-color: #1a73e8;
+            color: #ffffff !important;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            margin: 10px 0;
+        }}
+        .warning {{
+            color: #d93025;
+            font-size: 13px;
+            font-style: italic;
+            margin-top: 15px;
+        }}
+        .footer {{
+            background-color: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+            font-size: 12px;
+            color: #70757a;
+            border-top: 1px solid #eeeeee;
+        }}
+    </style>
+</head>
+<body>
+    <div class=""container"">
+        <div class=""header"">
+            <img src=""https://res.cloudinary.com/daf34jpxn/image/upload/v1766342084/FASM_ss094j.png"" alt=""ASDPRS Logo"">
+        </div>
+
+        <div class=""content"">
+            <div class=""title"">Welcome to ASDPRS System</div>
+            
+            <p>Dear <strong>{user.FirstName} {user.LastName}</strong>,</p>
+            
+            <p>Your student account has been automatically created following your successful course enrollment.
+            Below are your login credentials:</p>
+            
+            <div class=""credentials-card"">
+                <div class=""credentials-item""><strong>Username:</strong> <code>{user.UserName}</code></div>
+                <div class=""credentials-item""><strong>Password:</strong> <code>{password}</code></div>
+            </div>
+
+            <p style=""text-align: center;"">
+                <a href=""https://fasm-fpt.site/login"" class=""button"">Login to Your Account</a>
+            </p>
+
+            <p class=""warning"">
+                ⚠️ For security reasons, please log in and change your password immediately after your first access.
+            </p>
+
+            <p style=""margin-top: 30px;"">
+                Best regards,<br>
+                <strong>ASDPRS Team</strong>
+            </p>
+        </div>
+
+        <div class=""footer"">
+            © 2025 ASDPRS System. All rights reserved.<br>
+            If you did not expect this email, please ignore it or contact support.
+        </div>
+    </div>
+</body>
+</html>";
                 }
 
                 return await _emailService.SendEmail(user.Email, subject, htmlContent);
