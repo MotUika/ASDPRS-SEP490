@@ -243,10 +243,16 @@ namespace Service.Service
 
                             if (existingStudent == null)
                             {
-                                bool isAlreadyInCourse = await IsStudentEnrolledInCourseInSemesterAsync(user.Id, currentCourseId, currentSemesterId);
-                                if (isAlreadyInCourse)
+                                bool isTimeOverlapping = await IsStudentInOverlappingCourseAsync(
+                                    user.Id,
+                                    courseInstance.CourseId,
+                                    courseInstance.StartDate,
+                                    courseInstance.EndDate
+                                );
+
+                                if (isTimeOverlapping)
                                 {
-                                    errors.Add($"{email}: Student is already enrolled in this course in another class.");
+                                    errors.Add($"{email}: Student is already enrolled in this course during this time range.");
                                     continue;
                                 }
                                 var cs = new CourseStudent
@@ -556,10 +562,16 @@ namespace Service.Service
                 if (existing != null)
                     return new BaseResponse<CourseStudentResponse>("Student is already enrolled in this course instance", StatusCodeEnum.Conflict_409, null);
 
-                bool isAlreadyInCourse = await IsStudentEnrolledInCourseInSemesterAsync(request.UserId, courseInstance.CourseId, courseInstance.SemesterId);
-                if (isAlreadyInCourse)
+                bool isTimeOverlapping = await IsStudentInOverlappingCourseAsync(
+                    request.UserId,
+                    courseInstance.CourseId,
+                    courseInstance.StartDate,
+                    courseInstance.EndDate
+                );
+
+                if (isTimeOverlapping)
                 {
-                    return new BaseResponse<CourseStudentResponse>("Student is already enrolled in this course in another class for this semester.", StatusCodeEnum.Conflict_409, null);
+                    return new BaseResponse<CourseStudentResponse>("Student is already taking this course in an overlapping time range.", StatusCodeEnum.Conflict_409, null);
                 }
                 var courseStudent = new CourseStudent
                 {
@@ -1388,14 +1400,18 @@ namespace Service.Service
             }
         }
 
-        private async Task<bool> IsStudentEnrolledInCourseInSemesterAsync(int userId, int courseId, int semesterId)
+        private async Task<bool> IsStudentInOverlappingCourseAsync(int userId, int courseId, DateTime newStart, DateTime newEnd, int? currentInstanceId = null)
         {
             return await _context.CourseStudents
                 .Include(cs => cs.CourseInstance)
-                .AnyAsync(cs => cs.UserId == userId
-                             && cs.CourseInstance.CourseId == courseId
-                             && cs.CourseInstance.SemesterId == semesterId
-                             && (cs.Status == "Enrolled" || cs.Status == "Pending"));
+                .AnyAsync(cs =>
+                    cs.UserId == userId &&
+                    cs.CourseInstance.CourseId == courseId &&
+                    (!currentInstanceId.HasValue || cs.CourseInstanceId != currentInstanceId.Value) &&
+                    (cs.Status == "Enrolled" || cs.Status == "Pending") &&
+                    cs.CourseInstance.StartDate < newEnd &&
+                    cs.CourseInstance.EndDate > newStart
+                );
         }
     }
 }
