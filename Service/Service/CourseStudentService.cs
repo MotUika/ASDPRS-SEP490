@@ -73,6 +73,8 @@ namespace Service.Service
 
                 if (courseInstance == null)
                     return new BaseResponse<List<CourseStudentResponse>>("Course instance not found", StatusCodeEnum.NotFound_404, null);
+                int currentCourseId = courseInstance.CourseId;
+                int currentSemesterId = courseInstance.SemesterId;
 
                 var deadline = courseInstance.StartDate.AddDays(14);
                 bool isPastDeadline = DateTime.UtcNow.AddHours(7) > deadline;
@@ -241,6 +243,12 @@ namespace Service.Service
 
                             if (existingStudent == null)
                             {
+                                bool isAlreadyInCourse = await IsStudentEnrolledInCourseInSemesterAsync(user.Id, currentCourseId, currentSemesterId);
+                                if (isAlreadyInCourse)
+                                {
+                                    errors.Add($"{email}: Student is already enrolled in this course in another class.");
+                                    continue;
+                                }
                                 var cs = new CourseStudent
                                 {
                                     CourseInstanceId = courseInstanceId,
@@ -548,6 +556,11 @@ namespace Service.Service
                 if (existing != null)
                     return new BaseResponse<CourseStudentResponse>("Student is already enrolled in this course instance", StatusCodeEnum.Conflict_409, null);
 
+                bool isAlreadyInCourse = await IsStudentEnrolledInCourseInSemesterAsync(request.UserId, courseInstance.CourseId, courseInstance.SemesterId);
+                if (isAlreadyInCourse)
+                {
+                    return new BaseResponse<CourseStudentResponse>("Student is already enrolled in this course in another class for this semester.", StatusCodeEnum.Conflict_409, null);
+                }
                 var courseStudent = new CourseStudent
                 {
                     CourseInstanceId = request.CourseInstanceId,
@@ -1373,6 +1386,16 @@ namespace Service.Service
                 // Log error (Console/Logger) but ensure the import process doesn't crash
                 Console.WriteLine($"Failed to send email to {user.Email}: {ex.Message}");
             }
+        }
+
+        private async Task<bool> IsStudentEnrolledInCourseInSemesterAsync(int userId, int courseId, int semesterId)
+        {
+            return await _context.CourseStudents
+                .Include(cs => cs.CourseInstance)
+                .AnyAsync(cs => cs.UserId == userId
+                             && cs.CourseInstance.CourseId == courseId
+                             && cs.CourseInstance.SemesterId == semesterId
+                             && (cs.Status == "Enrolled" || cs.Status == "Pending"));
         }
     }
 }
