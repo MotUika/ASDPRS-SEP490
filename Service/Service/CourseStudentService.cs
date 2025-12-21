@@ -1096,6 +1096,7 @@ namespace Service.Service
                 CourseInstanceName = courseInstance?.SectionCode ?? "",
                 CourseCode = courseInstance?.Course?.CourseCode ?? "",
                 CourseName = courseInstance?.Course?.CourseName ?? "",
+                SemesterId = courseInstance?.SemesterId ?? 0,
                 Semester = courseInstance?.Semester?.Name ?? "",
                 UserId = courseStudent.UserId,
                 StudentName = user?.FirstName + " " + user?.LastName,
