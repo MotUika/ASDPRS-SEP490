@@ -477,16 +477,32 @@ namespace Service.Service
             try
             {
                 var courseInstance = await _courseInstanceRepository.GetByIdAsync(courseInstanceId);
-                if (courseInstance == null || courseInstance.EnrollmentPassword != enrollKey) return new BaseResponse<CourseStudentResponse>("Key sai hoặc lớp không tồn tại", StatusCodeEnum.BadRequest_400, null);
 
-                var courseStudent = (await _courseStudentRepository.GetByCourseInstanceIdAsync(courseInstanceId)).FirstOrDefault(cs => cs.UserId == studentUserId && cs.Status == "Pending");
+                if (courseInstance == null || courseInstance.EnrollmentPassword != enrollKey)
+                    return new BaseResponse<CourseStudentResponse>("Key sai hoặc lớp không tồn tại", StatusCodeEnum.BadRequest_400, null);
+                if (DateTime.UtcNow.AddHours(7) < courseInstance.StartDate)
+                {
+                    return new BaseResponse<CourseStudentResponse>(
+                        $"Lớp học chưa bắt đầu. Bạn chỉ có thể enroll từ ngày {courseInstance.StartDate:dd/MM/yyyy HH:mm}",
+                        StatusCodeEnum.Forbidden_403,
+                        null);
+                }
 
-                if (courseStudent == null) return new BaseResponse<CourseStudentResponse>("Bạn chưa được import vào lớp", StatusCodeEnum.NotFound_404, null);
+                var courseStudent = (await _courseStudentRepository.GetByCourseInstanceIdAsync(courseInstanceId))
+                    .FirstOrDefault(cs => cs.UserId == studentUserId && cs.Status == "Pending");
+
+                if (courseStudent == null)
+                    return new BaseResponse<CourseStudentResponse>("Bạn chưa được import vào lớp hoặc đã enroll rồi", StatusCodeEnum.NotFound_404, null);
 
                 courseStudent.Status = "Enrolled";
+                courseStudent.EnrolledAt = DateTime.UtcNow.AddHours(7);
+
                 await _courseStudentRepository.UpdateAsync(courseStudent);
 
-                return new BaseResponse<CourseStudentResponse>("Enroll thành công", StatusCodeEnum.OK_200, new CourseStudentResponse { /* Map */ });
+                var user = await _userRepository.GetByIdAsync(studentUserId);
+                var response = MapToResponse(courseStudent, courseInstance, user, null);
+
+                return new BaseResponse<CourseStudentResponse>("Enroll thành công", StatusCodeEnum.OK_200, response);
             }
             catch (Exception ex)
             {
@@ -658,17 +674,14 @@ namespace Service.Service
                 var courseStudents = await _courseStudentRepository.GetByUserIdAsync(studentId);
                 var responses = new List<CourseStudentResponse>();
 
-                // Lấy tất cả courseInstanceIds để query hiệu quả
                 var courseInstanceIds = courseStudents.Select(cs => cs.CourseInstanceId).Distinct().ToList();
 
-                // Lấy thông tin số lượng sinh viên cho mỗi lớp
                 var studentCounts = await _context.CourseStudents
                     .Where(cs => courseInstanceIds.Contains(cs.CourseInstanceId) && cs.Status == "Enrolled")
                     .GroupBy(cs => cs.CourseInstanceId)
                     .Select(g => new { CourseInstanceId = g.Key, Count = g.Count() })
                     .ToDictionaryAsync(x => x.CourseInstanceId, x => x.Count);
 
-                // Lấy thông tin instructor cho mỗi lớp
                 var instructors = await _context.CourseInstructors
                     .Where(ci => courseInstanceIds.Contains(ci.CourseInstanceId))
                     .Include(ci => ci.User)
@@ -692,7 +705,6 @@ namespace Service.Service
 
                     var response = MapToResponse(cs, courseInstance, user, changedByUser);
 
-                    // Thêm thông tin số lượng sinh viên và instructor
                     response.StudentCount = studentCounts.GetValueOrDefault(cs.CourseInstanceId, 0);
                     response.InstructorNames = instructors.GetValueOrDefault(cs.CourseInstanceId, new List<string>());
 
@@ -1084,6 +1096,7 @@ namespace Service.Service
                 CourseInstanceName = courseInstance?.SectionCode ?? "",
                 CourseCode = courseInstance?.Course?.CourseCode ?? "",
                 CourseName = courseInstance?.Course?.CourseName ?? "",
+                Semester = courseInstance?.Semester?.Name ?? "",
                 UserId = courseStudent.UserId,
                 StudentName = user?.FirstName + " " + user?.LastName,
                 StudentEmail = user?.Email,

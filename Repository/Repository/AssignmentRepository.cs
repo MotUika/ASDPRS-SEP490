@@ -347,5 +347,21 @@ namespace Repository.Repository
                 .OrderBy(a => a.Deadline)
                 .ToListAsync();
         }
+
+        public async Task<IEnumerable<Assignment>> GetAssignmentsWithSubmissionByStudentAndSemesterAsync(int studentId, int semesterId)
+        {
+            return await _context.Assignments
+                .Include(a => a.CourseInstance)
+                    .ThenInclude(ci => ci.Course)
+                .Include(a => a.Submissions.Where(s => s.UserId == studentId && s.Status == "Graded"))
+                .Where(a =>
+                    a.CourseInstance.SemesterId == semesterId &&
+                    a.CourseInstance.CourseStudents.Any(cs => cs.UserId == studentId && cs.Status == "Enrolled") &&
+                    a.Status == "GradesPublished"
+                )
+                .OrderBy(a => a.CourseInstance.Course.CourseCode)
+                .ThenBy(a => a.Deadline)
+                .ToListAsync();
+        }
     }
 }
