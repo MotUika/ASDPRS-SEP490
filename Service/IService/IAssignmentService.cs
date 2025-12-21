@@ -37,5 +37,6 @@ namespace Service.IService
         Task<List<Submission>> GetEligibleSubmissionsForCrossClassReviewAsync(int reviewerStudentId, int currentAssignmentId);
         Task<BaseResponse<List<PublishedGradeAssignmentResponse>>> GetPublishedGradeAssignmentsForStudentAsync(int studentId);
         Task<BaseResponse<List<AssignmentSummaryResponse>>> GetStudentAssignmentStatusesBySemesterAsync(int studentId, int semesterId);
+        Task<BaseResponse<List<StudentSemesterScoreResponse>>> GetStudentSemesterScoresAsync(int studentId, int semesterId);
     }
 }

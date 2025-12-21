@@ -17,6 +17,5 @@ namespace Repository.IRepository
         Task<bool> ExistsAsync(int submissionId, string summaryType);
         Task<IEnumerable<AISummary>> GetBySubmissionAndTypePrefixAsync(int submissionId, string typePrefix);
         Task<IEnumerable<AISummary>> GetAllAsync();
-
     }
 }

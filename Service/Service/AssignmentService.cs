@@ -2278,6 +2278,68 @@ namespace Service.Service
                     null);
             }
         }
+        public async Task<BaseResponse<List<StudentSemesterScoreResponse>>> GetStudentSemesterScoresAsync(int studentId, int semesterId)
+        {
+            try
+            {
+                var assignments = await _assignmentRepository.GetAssignmentsWithSubmissionByStudentAndSemesterAsync(studentId, semesterId);
+
+                var responseList = new List<StudentSemesterScoreResponse>();
+
+                foreach (var assignment in assignments)
+                {
+                    var submission = assignment.Submissions.FirstOrDefault();
+
+                    var dto = new StudentSemesterScoreResponse
+                    {
+                        CourseInstanceId = assignment.CourseInstanceId,
+                        CourseCode = assignment.CourseInstance?.Course?.CourseCode ?? "",
+                        CourseName = assignment.CourseInstance?.Course?.CourseName ?? "",
+                        SectionCode = assignment.CourseInstance?.SectionCode ?? "",
+
+                        AssignmentId = assignment.AssignmentId,
+                        AssignmentTitle = assignment.Title,
+                        Deadline = assignment.Deadline,
+                        GradingScale = assignment.GradingScale,
+
+                        FinalScore = null,
+                        FormattedScore = "-",
+                        GradeStatus = "No Grade"
+                    };
+
+                    if (submission != null && submission.FinalScore.HasValue)
+                    {
+                        dto.GradeStatus = "Graded";
+                        dto.FinalScore = submission.FinalScore.Value;
+
+                        if (assignment.GradingScale == "PassFail")
+                        {
+                            var threshold = assignment.PassThreshold ?? 50;
+                            bool passed = submission.FinalScore.Value >= threshold;
+                            dto.FormattedScore = passed ? "Pass" : "Fail";
+                        }
+                        else
+                        {
+                            dto.FormattedScore = submission.FinalScore.Value.ToString("0.0");
+                        }
+                    }
+
+                    responseList.Add(dto);
+                }
+
+                return new BaseResponse<List<StudentSemesterScoreResponse>>(
+                    "Success",
+                    StatusCodeEnum.OK_200,
+                    responseList);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<List<StudentSemesterScoreResponse>>(
+                    $"Error getting semester scores: {ex.Message}",
+                    StatusCodeEnum.InternalServerError_500,
+                    null);
+            }
+        }
         public async Task AutoUpdateUpcomingAssignmentsAsync()
         {
             var now = DateTime.UtcNow.AddHours(7);

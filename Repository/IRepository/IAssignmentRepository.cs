@@ -28,5 +28,6 @@ namespace Repository.IRepository
         Task<List<Assignment>> GetAssignmentsByRubricTemplateIdAsync(int rubricTemplateId);
         Task<IEnumerable<Assignment>> GetAllAsync();
         Task<IEnumerable<Assignment>> GetAssignmentsByStudentAndSemesterAndStatusAsync(int studentId, int semesterId, List<string> statuses);
+        Task<IEnumerable<Assignment>> GetAssignmentsWithSubmissionByStudentAndSemesterAsync(int studentId, int semesterId);
     }
 }

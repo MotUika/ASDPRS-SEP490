@@ -785,6 +785,32 @@ public class StudentReviewController : ControllerBase
         return StatusCode((int)result.StatusCode, result);
     }
 
+    [HttpGet("student/{studentId}/semester/{semesterId}/final-scores")]
+    [Authorize]
+    [SwaggerOperation(
+        Summary = "Xem bảng điểm tổng hợp của tất cả bài tập trong kỳ",
+        Description = "Trả về danh sách điểm số (Final Score) của tất cả Assignment mà sinh viên tham gia trong một kỳ học cụ thể. Bao gồm cả Pass/Fail và điểm số thực."
+    )]
+    [SwaggerResponse(200, "Thành công", typeof(BaseResponse<List<StudentSemesterScoreResponse>>))]
+    [SwaggerResponse(403, "Không có quyền truy cập")]
+    [SwaggerResponse(500, "Lỗi server")]
+    public async Task<IActionResult> GetStudentSemesterScores(int studentId, int semesterId)
+    {
+        // Security check: Chỉ xem được điểm của chính mình
+        var currentStudentId = GetCurrentStudentId();
+        if (studentId != currentStudentId)
+        {
+            return StatusCode(403, new BaseResponse<object>(
+                "Access denied: Cannot view other student's scores",
+                StatusCodeEnum.Forbidden_403,
+                null
+            ));
+        }
+
+        var result = await _assignmentService.GetStudentSemesterScoresAsync(studentId, semesterId);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
     [HttpPost("assignment/{assignmentId}/check-plagiarism")]
     [SwaggerOperation(
         Summary = "Kiểm tra bài nộp (AI + Similarity)",
