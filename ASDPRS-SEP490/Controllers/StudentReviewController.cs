@@ -189,11 +189,8 @@ public class StudentReviewController : ControllerBase
         }
 
         var assignmentId = submissionResult.Data.AssignmentId;
-        return await CheckEnrollmentByAssignmentAndExecute(assignmentId, async () =>
-        {
-            var result = await _reviewService.SubmitStudentReviewAsync(request);
-            return StatusCode((int)result.StatusCode, result);
-        });
+        var result = await _reviewService.SubmitStudentReviewAsync(request);
+        return StatusCode((int)result.StatusCode, result);
     }
 
     [HttpGet("completed-reviews/{studentId}")]
@@ -298,6 +295,39 @@ public class StudentReviewController : ControllerBase
             var result = await _reviewAssignmentService.GetRandomCrossClassReviewAssignmentAsync(assignmentId, studentId);
             return StatusCode((int)result.StatusCode, result);
         });
+    }
+
+    [HttpPost("submit-review-cross-class")]
+    [SwaggerOperation(
+        Summary = "Nộp bài review cross-class",
+        Description = "Sinh viên nộp bài peer review cross-class với điểm số và feedback theo từng tiêu chí"
+    )]
+    [SwaggerResponse(201, "Nộp review thành công", typeof(BaseResponse<ReviewResponse>))]
+    [SwaggerResponse(400, "Dữ liệu review không hợp lệ")]
+    [SwaggerResponse(404, "Không tìm thấy review assignment")]
+    [SwaggerResponse(500, "Lỗi server")]
+    public async Task<IActionResult> SubmitStudentReviewCrossClass([FromBody] SubmitStudentReviewRequest request)
+    {
+        var studentId = GetCurrentStudentId();
+        request.ReviewerUserId = studentId;
+
+        var reviewAssignmentResult = await _reviewAssignmentService.GetReviewAssignmentByIdAsync(request.ReviewAssignmentId);
+        if (reviewAssignmentResult.StatusCode != StatusCodeEnum.OK_200 || reviewAssignmentResult.Data == null)
+        {
+            return StatusCode((int)reviewAssignmentResult.StatusCode, reviewAssignmentResult);
+        }
+
+        var submissionId = reviewAssignmentResult.Data.SubmissionId;
+        var submissionRequest = new GetSubmissionByIdRequest { SubmissionId = submissionId };
+        var submissionResult = await _submissionService.GetSubmissionByIdAsync(submissionRequest);
+        if (submissionResult.StatusCode != StatusCodeEnum.OK_200 || submissionResult.Data == null)
+        {
+            return StatusCode((int)submissionResult.StatusCode, submissionResult);
+        }
+
+        var assignmentId = submissionResult.Data.AssignmentId;
+        var result = await _reviewService.SubmitStudentReviewAsync(request);
+        return StatusCode((int)result.StatusCode, result);
     }
 
     [HttpGet("assignment/{assignmentId}/available-reviews")]
