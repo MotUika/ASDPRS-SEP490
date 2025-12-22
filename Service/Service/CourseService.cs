@@ -93,12 +93,32 @@ namespace Service.Service
             try
             {
                 var existingCourse = await _context.Courses
-                    .Include(c => c.CourseInstances)
                     .FirstOrDefaultAsync(c => c.CourseId == request.CourseId);
 
                 if (existingCourse == null)
                 {
                     return new BaseResponse<CourseResponse>("Course not found", StatusCodeEnum.NotFound_404, null);
+                }
+
+                if (existingCourse.IsActive && !request.IsActive)
+                {
+                    bool hasInstances = await _context.CourseInstances.AnyAsync(ci => ci.CourseId == request.CourseId);
+                    if (hasInstances)
+                    {
+                        return new BaseResponse<CourseResponse>(
+                            "Cannot deactivate Course because it contains existing Course Instances.",
+                            StatusCodeEnum.BadRequest_400,
+                            null);
+                    }
+
+                    bool hasRubrics = await _context.RubricTemplates.AnyAsync(rt => rt.CourseId == request.CourseId);
+                    if (hasRubrics)
+                    {
+                        return new BaseResponse<CourseResponse>(
+                            "Cannot deactivate Course because it is linked to existing Rubric Templates.",
+                            StatusCodeEnum.BadRequest_400,
+                            null);
+                    }
                 }
 
                 if (!string.IsNullOrEmpty(request.CourseCode)) existingCourse.CourseCode = request.CourseCode;
@@ -120,7 +140,6 @@ namespace Service.Service
             try
             {
                 var course = await _context.Courses
-                    .Include(c => c.CourseInstances)
                     .FirstOrDefaultAsync(c => c.CourseId == id);
 
                 if (course == null)
@@ -128,9 +147,22 @@ namespace Service.Service
                     return new BaseResponse<bool>("Course not found", StatusCodeEnum.NotFound_404, false);
                 }
 
-                if (course.CourseInstances.Any())
+                bool hasInstances = await _context.CourseInstances.AnyAsync(ci => ci.CourseId == id);
+                if (hasInstances)
                 {
-                    return new BaseResponse<bool>("Cannot delete course that has course instances", StatusCodeEnum.BadRequest_400, false);
+                    return new BaseResponse<bool>(
+                        "Cannot delete Course because it contains existing Course Instances.",
+                        StatusCodeEnum.BadRequest_400,
+                        false);
+                }
+
+                bool hasRubrics = await _context.RubricTemplates.AnyAsync(rt => rt.CourseId == id);
+                if (hasRubrics)
+                {
+                    return new BaseResponse<bool>(
+                        "Cannot delete Course because it is linked to existing Rubric Templates.",
+                        StatusCodeEnum.BadRequest_400,
+                        false);
                 }
 
                 await _courseRepository.DeleteAsync(course);
