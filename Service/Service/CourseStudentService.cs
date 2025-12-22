@@ -260,7 +260,7 @@ namespace Service.Service
                                     CourseInstanceId = courseInstanceId,
                                     UserId = user.Id,
                                     EnrolledAt = DateTime.UtcNow.AddHours(7),
-                                    Status = "Enrolled",
+                                    Status = "Pending",
                                     ChangedByUserId = changedByUserId
                                 };
                                 cs.Status = "Pending";

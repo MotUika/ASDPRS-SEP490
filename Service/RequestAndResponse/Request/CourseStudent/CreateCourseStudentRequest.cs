@@ -13,7 +13,7 @@ namespace Service.RequestAndResponse.Request.CourseStudent
         public string StudentCode { get; set; }
 
         [StringLength(50)]
-        public string Status { get; set; } = "Enrolled";
+        public string Status { get; set; } = "Pending";
         public int? ChangedByUserId { get; set; }
     }
 }
