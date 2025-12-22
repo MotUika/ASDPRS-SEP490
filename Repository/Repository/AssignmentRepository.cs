@@ -164,6 +164,46 @@ namespace Repository.Repository
                 .Include(a => a.CourseInstance)
                     .ThenInclude(ci => ci.Campus)
                 .Include(a => a.ClonedFromAssignment) // Thêm thông tin clone
+                .Select(a => new Assignment
+                {
+                    AssignmentId = a.AssignmentId,
+                    CourseInstanceId = a.CourseInstanceId,
+                    RubricTemplateId = a.RubricTemplateId,
+                    RubricId = a.RubricId,
+                    Title = a.Title,
+                    Description = a.Description,
+                    Guidelines = a.Guidelines,
+
+                    
+                    FileUrl = a.FileUrl,
+                    FileName = a.FileName,
+                   
+
+                    CreatedAt = a.CreatedAt,
+                    StartDate = a.StartDate,
+                    Deadline = a.Deadline,
+                    ReviewDeadline = a.ReviewDeadline,
+                    FinalDeadline = a.FinalDeadline,
+
+                    NumPeerReviewsRequired = a.NumPeerReviewsRequired,
+                    PassThreshold = a.PassThreshold,
+                    MissingReviewPenalty = a.MissingReviewPenalty,
+                    AllowCrossClass = a.AllowCrossClass,
+                    CrossClassTag = a.CrossClassTag,
+                    InstructorWeight = a.InstructorWeight,
+                    PeerWeight = a.PeerWeight,
+                    IsBlindReview = a.IsBlindReview,
+                    IncludeAIScore = a.IncludeAIScore,
+                    GradingScale = a.GradingScale,
+
+                    Status = a.Status,
+
+                  
+                    CourseInstance = a.CourseInstance,
+                    Rubric = a.Rubric,
+                    ClonedFromAssignment = a.ClonedFromAssignment,
+                    Submissions = a.Submissions
+                })
                 .FirstOrDefaultAsync(a => a.AssignmentId == assignmentId);
         }
 
