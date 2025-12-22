@@ -472,13 +472,17 @@ namespace Service.Service
                         null);
                 }
 
-                var courseStudent = await _courseStudentRepository.GetByCourseInstanceAndUserAsync(assignment.CourseInstanceId, request.ReviewerUserId);
-                if (courseStudent == null || (courseStudent.Status != "Enrolled" && !courseStudent.IsPassed))
+                var courseStudent = await _courseStudentRepository
+                    .GetByCourseInstanceAndUserAsync(assignment.CourseInstanceId, request.ReviewerUserId);
+
+                bool isEnrolled = courseStudent != null && (courseStudent.Status == "Enrolled" || courseStudent.IsPassed);
+
+                if (!isEnrolled && !assignment.AllowCrossClass)
                 {
                     return new BaseResponse<ReviewResponse>(
-                        "Access denied: You do not have permission to review this assignment",
-                        StatusCodeEnum.Forbidden_403,
-                        null);
+                       "Access denied: You do not have permission to review this assignment.",
+                       StatusCodeEnum.Forbidden_403,
+                       null);
                 }
 
                 if (reviewAssignment.Status == "Completed")
@@ -496,7 +500,7 @@ namespace Service.Service
                     var missPenaltyStr = await GetAssignmentConfig(assignment.AssignmentId, "MissingReviewPenalty");
                     if (decimal.TryParse(missPenaltyStr, out decimal missPenalty))
                     {
-                        // Log penalty application (actual grade adjustment handled in CourseStudentService)
+
                     }
                 }
 
