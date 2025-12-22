@@ -253,20 +253,43 @@ namespace Service.Service
                     Status = AssignmentStatusEnum.Draft.ToString()
                 };
 
+                //if (request.File != null)
+                //{
+                //    var uploadResult = await _fileStorageService.UploadFileAsync(
+                //        request.File,
+                //        folder: $"assignments/{request.CourseInstanceId}", makePublic: true
+                //    );
+
+                //    if (!uploadResult.Success)
+                //    {
+                //        return new BaseResponse<AssignmentResponse>(
+                //            $"Assignment created but failed to upload file: {uploadResult.ErrorMessage}",
+                //            StatusCodeEnum.PartialContent_206,
+                //            null
+                //        );
+                //    }
+
+                //    assignment.FileUrl = uploadResult.FileUrl;
+                //    assignment.FileName = uploadResult.FileName;
+                //}
+
                 if (request.File != null)
                 {
+                    
                     var uploadResult = await _fileStorageService.UploadFileAsync(
                         request.File,
-                        folder: $"assignments/{request.CourseInstanceId}", makePublic: true
+                        folder: $"assignments/{request.CourseInstanceId}",
+                        makePublic: true,
+                        customFileName: request.File.FileName 
                     );
 
                     if (!uploadResult.Success)
                     {
                         return new BaseResponse<AssignmentResponse>(
-                            $"Assignment created but failed to upload file: {uploadResult.ErrorMessage}",
-                            StatusCodeEnum.PartialContent_206,
-                            null
-                        );
+                           $"Assignment created but failed to upload file: {uploadResult.ErrorMessage}",
+                           StatusCodeEnum.PartialContent_206,
+                           null
+                       );
                     }
 
                     assignment.FileUrl = uploadResult.FileUrl;
@@ -435,11 +458,35 @@ namespace Service.Service
 
 
                 // 🧩 Validate file upload
+                //if (request.File != null)
+                //{
+                //    var uploadResult = await _fileStorageService.UploadFileAsync(
+                //        request.File,
+                //        folder: $"assignments/{assignment.CourseInstanceId}", makePublic: true
+                //    );
+
+                //    if (!uploadResult.Success)
+                //    {
+                //        return new BaseResponse<AssignmentResponse>(
+                //            $"Assignment updated but failed to upload file: {uploadResult.ErrorMessage}",
+                //            StatusCodeEnum.PartialContent_206,
+                //            await MapToResponse(assignment)
+                //        );
+                //    }
+
+                //    assignment.FileUrl = uploadResult.FileUrl;
+                //    assignment.FileName = uploadResult.FileName;
+                //}
+
+
                 if (request.File != null)
                 {
+                    
                     var uploadResult = await _fileStorageService.UploadFileAsync(
                         request.File,
-                        folder: $"assignments/{assignment.CourseInstanceId}", makePublic: true
+                        folder: $"assignments/{assignment.CourseInstanceId}",
+                        makePublic: true,
+                        customFileName: request.File.FileName 
                     );
 
                     if (!uploadResult.Success)
@@ -451,9 +498,13 @@ namespace Service.Service
                         );
                     }
 
+                    // Xóa file cũ
+                    if (!string.IsNullOrEmpty(assignment.FileName)) await _fileStorageService.DeleteFileAsync(assignment.FileName);
+
                     assignment.FileUrl = uploadResult.FileUrl;
                     assignment.FileName = uploadResult.FileName;
                 }
+
 
                 // ✅ Validate date logic
                 var dateValidation = ValidateAssignmentDates(

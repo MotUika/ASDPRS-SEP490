@@ -5,10 +5,11 @@ namespace Service.Interface
 {
     public interface IFileStorageService
     {
-        Task<FileUploadResult> UploadFileAsync(IFormFile file, string? folder = null, bool makePublic = false);
+        //Task<FileUploadResult> UploadFileAsync(IFormFile file, string? folder = null, bool makePublic = false);
         Task<bool> DeleteFileAsync(string fileUrl);
         Task<Stream?> GetFileStreamAsync(string fileUrl);
         Task<string?> CreateSignedDownloadUrlAsync(string filePath, int expiresInSeconds = 3600);
+        Task<FileUploadResult> UploadFileAsync(IFormFile file, string? folder = null, bool makePublic = false, string? customFileName = null);
     }
 
     public class FileUploadResult
