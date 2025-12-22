@@ -578,7 +578,7 @@ namespace Service.Service
                     CourseInstanceId = request.CourseInstanceId,
                     UserId = request.UserId,
                     EnrolledAt = DateTime.UtcNow.AddHours(7),
-                    Status = request.Status ?? "Enrolled",
+                    Status = request.Status ?? "Pending",
                     ChangedByUserId = request.ChangedByUserId,
                     StatusChangedAt = DateTime.UtcNow.AddHours(7)
                 };
