@@ -98,6 +98,18 @@ namespace Service.Service
                 if (existingMajor == null)
                     return new BaseResponse<MajorResponse>("Major not found", StatusCodeEnum.NotFound_404, null);
 
+                if (existingMajor.IsActive && !request.IsActive)
+                {
+                    bool hasUsers = await _context.Users.AnyAsync(u => u.MajorId == request.MajorId);
+                    if (hasUsers)
+                    {
+                        return new BaseResponse<MajorResponse>(
+                            "Cannot deactivate Major because there are users currently assigned to this major.",
+                            StatusCodeEnum.BadRequest_400,
+                            null);
+                    }
+                }
+
                 _mapper.Map(request, existingMajor);
                 var updated = await _majorRepository.UpdateAsync(existingMajor);
                 var response = _mapper.Map<MajorResponse>(updated);
@@ -117,6 +129,15 @@ namespace Service.Service
                 var major = await _majorRepository.GetByIdAsync(id);
                 if (major == null)
                     return new BaseResponse<bool>("Major not found", StatusCodeEnum.NotFound_404, false);
+
+                bool hasUsers = await _context.Users.AnyAsync(u => u.MajorId == id);
+                if (hasUsers)
+                {
+                    return new BaseResponse<bool>(
+                        "Cannot delete Major because there are users currently assigned to this major.",
+                        StatusCodeEnum.BadRequest_400,
+                        false);
+                }
 
                 await _majorRepository.DeleteAsync(major);
                 return new BaseResponse<bool>("Major deleted successfully", StatusCodeEnum.OK_200, true);
