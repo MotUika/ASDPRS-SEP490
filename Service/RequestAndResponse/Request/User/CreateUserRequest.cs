@@ -29,7 +29,7 @@ namespace Service.RequestAndResponse.Request.User
         [StringLength(50)]
         public string? StudentCode { get; set; }
 
-        public string AvatarUrl { get; set; }
+        public string? AvatarUrl { get; set; }
 
         public string Role { get; set; }
 
