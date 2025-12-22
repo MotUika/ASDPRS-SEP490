@@ -152,7 +152,7 @@ namespace Service.Service
                 rubricTemplate.CourseId = request.CourseId;
 
                 rubricTemplate.CreatedAt = DateTime.UtcNow.AddHours(7);
-                rubricTemplate.IsPublic = true;
+                rubricTemplate.IsPublic = false;
 
                 var createdRubricTemplate = await _rubricTemplateRepository.AddAsync(rubricTemplate);
 
