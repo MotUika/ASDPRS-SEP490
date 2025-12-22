@@ -1812,7 +1812,7 @@ namespace Service.Service
                 var clonedAssignment = new Assignment
                 {
                     CourseInstanceId = targetCourseInstanceId,
-                    Title = request.NewTitle ?? $"{sourceAssignment.Title} (Clone)",
+                    Title = sourceAssignment.Title,
                     Description = sourceAssignment.Description,
                     Guidelines = sourceAssignment.Guidelines,
 
@@ -1822,6 +1822,7 @@ namespace Service.Service
                     FinalDeadline = finalDeadline,
 
                     NumPeerReviewsRequired = sourceAssignment.NumPeerReviewsRequired,
+                    MissingReviewPenalty = sourceAssignment.MissingReviewPenalty,
                     PassThreshold = sourceAssignment.PassThreshold,
                     AllowCrossClass = sourceAssignment.AllowCrossClass,
                     IsBlindReview = sourceAssignment.IsBlindReview,
