@@ -32,14 +32,18 @@ public class SupabaseFileStorageService : IFileStorageService
         _logger.LogInformation($"Supabase initialized with bucket '{_bucket}'");
     }
 
+    
+
     private static string SanitizeFilename(string fileName)
     {
-        foreach (var c in Path.GetInvalidFileNameChars())
-            fileName = fileName.Replace(c, '_');
-        return fileName;
+        var invalidChars = Path.GetInvalidFileNameChars();
+       
+        var sanitized = string.Join("_", fileName.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries)).Trim();
+      
+        return sanitized.Replace(" ", "_");
     }
 
-    public async Task<FileUploadResult> UploadFileAsync(IFormFile file, string? folder = null, bool makePublic = false)
+    public async Task<FileUploadResult> UploadFileAsync(IFormFile file, string? folder = null, bool makePublic = false, string? customFileName = null)
     {
         try
         {
@@ -47,7 +51,25 @@ public class SupabaseFileStorageService : IFileStorageService
             var storage = _client.Storage.From(_bucket);
 
             var fileExt = Path.GetExtension(file.FileName);
-            var fileName = $"{Guid.NewGuid()}{fileExt}";
+            string fileName;
+
+            if (!string.IsNullOrEmpty(customFileName))
+            {
+                // LOGIC CHO INSTRUCTOR: Giữ tên gốc
+                // Lấy tên file gốc (bỏ extension cũ để tránh trùng lặp vd: file.pdf.pdf)
+                var nameWithoutExt = Path.GetFileNameWithoutExtension(customFileName);
+                var sanitizedParams = SanitizeFilename(nameWithoutExt);
+
+                // Thêm timestamp ngắn để tránh việc Instructor upload 2 file cùng tên trong cùng 1 folder bị ghi đè mất file cũ
+                // Nếu bạn muốn giữ chính xác 100% tên thì bỏ phần DateTime.Now.Ticks đi
+                fileName = $"{sanitizedParams}_{DateTime.UtcNow.Ticks}{fileExt}";
+            }
+            else
+            {
+                // LOGIC CHO STUDENT (CŨ): Mã hóa tên file bằng GUID
+                fileName = $"{Guid.NewGuid()}{fileExt}";
+            }
+
             var path = string.IsNullOrEmpty(folder) ? fileName : $"{folder}/{fileName}";
 
             using var stream = file.OpenReadStream();
@@ -55,6 +77,7 @@ public class SupabaseFileStorageService : IFileStorageService
             await stream.CopyToAsync(memoryStream);
             var bytes = memoryStream.ToArray();
 
+            // Upsert = true: Ghi đè nếu trùng tên
             await storage.Upload(bytes, path, new Supabase.Storage.FileOptions { Upsert = true });
 
             string fileUrl = makePublic
@@ -65,7 +88,7 @@ public class SupabaseFileStorageService : IFileStorageService
             {
                 Success = true,
                 FileUrl = fileUrl,
-                FileName = fileName
+                FileName = fileName // Trả về tên file đã được xử lý
             };
         }
         catch (Exception ex)
