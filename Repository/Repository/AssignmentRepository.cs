@@ -174,7 +174,7 @@ namespace Repository.Repository
                     Description = a.Description,
                     Guidelines = a.Guidelines,
 
-                    // 🔥 FILE (luôn có nếu DB có)
+                    
                     FileUrl = a.FileUrl,
                     FileName = a.FileName,
                    
@@ -198,7 +198,7 @@ namespace Repository.Repository
 
                     Status = a.Status,
 
-                    // ===== Navigation =====
+                  
                     CourseInstance = a.CourseInstance,
                     Rubric = a.Rubric,
                     ClonedFromAssignment = a.ClonedFromAssignment,
