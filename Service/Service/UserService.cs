@@ -431,7 +431,7 @@ namespace Service.Service
                     return new BaseResponse<bool>($"Error resetting password: {string.Join(", ", result.Errors.Select(e => e.Description))}", StatusCodeEnum.InternalServerError_500, false);
                 }
 
-                string subject = "ASDPRS System - Password Reset Successful";
+                string subject = "FASM System - Password Reset Successful";
 
                 string htmlContent = $@"
 <!DOCTYPE html>
@@ -439,7 +439,7 @@ namespace Service.Service
 <head>
     <meta charset=""UTF-8"">
     <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
-    <title>Password Reset - ASDPRS</title>
+    <title>Password Reset - FASM</title>
     <style>
         body {{
             font-family: 'Segoe UI', Arial, sans-serif;
@@ -534,7 +534,7 @@ namespace Service.Service
 <body>
     <div class=""container"">
         <div class=""header"">
-            <img src=""https://res.cloudinary.com/daf34jpxn/image/upload/v1766342084/FASM_ss094j.png"" alt=""ASDPRS Logo"">
+            <img src=""https://res.cloudinary.com/daf34jpxn/image/upload/v1766342084/FASM_ss094j.png"" alt=""FASM Logo"">
         </div>
 
         <div class=""body-content"">
@@ -562,12 +562,12 @@ namespace Service.Service
 
             <p style=""margin-top: 30px; font-size: 14px;"">
                 Best regards,<br>
-                <strong>ASDPRS Team</strong>
+                <strong>FASM Team</strong>
             </p>
         </div>
 
         <div class=""footer"">
-            &copy; 2025 ASDPRS System. All rights reserved.<br>
+            &copy; 2025 FASM System. All rights reserved.<br>
             This is an automated security notification.
         </div>
     </div>
@@ -671,14 +671,14 @@ namespace Service.Service
 
                 if (role == "Instructor")
                 {
-                    subject = "Welcome to ASDPRS System - Instructor Account Created";
+                    subject = "Welcome to FASM System - Instructor Account Created";
                     htmlContent = $@"
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset=""UTF-8"">
     <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
-    <title>Welcome to ASDPRS</title>
+    <title>Welcome to FASM</title>
     <style>
         body {{
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -747,15 +747,15 @@ namespace Service.Service
 <body>
     <div class=""container"">
         <div class=""header"">
-            <img src=""https://res.cloudinary.com/daf34jpxn/image/upload/v1766342084/FASM_ss094j.png"" alt=""ASDPRS Logo"">
+            <img src=""https://res.cloudinary.com/daf34jpxn/image/upload/v1766342084/FASM_ss094j.png"" alt=""FASM Logo"">
         </div>
 
         <div class=""body-content"">
-            <div class=""welcome-text"">Welcome to ASDPRS System</div>
+            <div class=""welcome-text"">Welcome to FASM System</div>
             
             <p class=""info-text"">Dear <strong>{user.FirstName} {user.LastName}</strong>,</p>
      
-            <p class=""info-text"">Your instructor account has been successfully created in the <strong>ASDPRS system</strong>.
+            <p class=""info-text"">Your instructor account has been successfully created in the <strong>FASM system</strong>.
             We are excited to have you on board!</p>
             
             <div class=""highlight-box"">
@@ -778,12 +778,12 @@ namespace Service.Service
             <p class=""info-text"" style=""margin-top: 30px;"">
                 If you have any issues, please contact the system administrator.<br><br>
                 Best regards,<br>
-                <strong>ASDPRS Team</strong>
+                <strong>FASM Team</strong>
             </p>
         </div>
 
         <div class=""footer"">
-            &copy; 2025 ASDPRS System. All rights reserved.<br>
+            &copy; 2025 FASM System. All rights reserved.<br>
             This is an automated email, please do not reply.
         </div>
     </div>
@@ -792,14 +792,14 @@ namespace Service.Service
                 }
                 else
                 {
-                    subject = "Welcome to ASDPRS System - Your Account Credentials";
+                    subject = "Welcome to FASM System - Your Account Credentials";
                     htmlContent = $@"
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset=""UTF-8"">
     <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
-    <title>Account Created - ASDPRS</title>
+    <title>Account Created - FASM</title>
     <style>
         body {{
             font-family: 'Segoe UI', Arial, sans-serif;
@@ -876,11 +876,11 @@ namespace Service.Service
 <body>
     <div class=""container"">
         <div class=""header"">
-            <img src=""https://res.cloudinary.com/daf34jpxn/image/upload/v1766342084/FASM_ss094j.png"" alt=""ASDPRS Logo"">
+            <img src=""https://res.cloudinary.com/daf34jpxn/image/upload/v1766342084/FASM_ss094j.png"" alt=""FASM Logo"">
         </div>
 
         <div class=""content"">
-            <div class=""title"">Welcome to ASDPRS System</div>
+            <div class=""title"">Welcome to FASM System</div>
             
             <p>Dear <strong>{user.FirstName} {user.LastName}</strong>,</p>
             
@@ -902,12 +902,12 @@ namespace Service.Service
 
             <p style=""margin-top: 30px;"">
                 Best regards,<br>
-                <strong>ASDPRS Team</strong>
+                <strong>FASM Team</strong>
             </p>
         </div>
 
         <div class=""footer"">
-            © 2025 ASDPRS System. All rights reserved.<br>
+            © 2025 FASM System. All rights reserved.<br>
             If you did not expect this email, please ignore it or contact support.
         </div>
     </div>
