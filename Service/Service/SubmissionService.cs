@@ -2066,6 +2066,8 @@ namespace Service.Service
                             PeerAverageScore = submission.PeerAverageScore ?? 0,
                             InstructorScore = submission.InstructorScore ?? 0,
                             FinalScore = submission.FinalScore ?? 0,
+                            InstructorWeight = submission.Assignment?.InstructorWeight ?? 0,
+                            PeerWeight = submission.Assignment?.PeerWeight ?? 0,
                             Feedback = submission.Feedback,
                             Status = submission.Status,
                             GradedAt = submission.GradedAt
@@ -2094,6 +2096,8 @@ namespace Service.Service
                             PeerAverageScore = 0,
                             InstructorScore = 0,
                             FinalScore = 0,
+                            InstructorWeight = assignment?.InstructorWeight ?? 0,
+                            PeerWeight = assignment?.PeerWeight ?? 0,
                             Feedback = "Not Submitted",
                             Status = "Not Submitted",
                             GradedAt = null
