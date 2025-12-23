@@ -801,7 +801,7 @@ namespace Service.Service
 
             return assignment.GradingScale == "PassFail"
                 ? (rawScore >= 50 ? 100 : 0)
-                : Math.Round(rawScore / 10, 1);
+                : Math.Round(rawScore / 10, 2);
         }
         // Method tính điểm từ request
         private async Task<decimal> CalculateReviewScoreFromRequest(CreateReviewRequest request, Assignment assignment)
