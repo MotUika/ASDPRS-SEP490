@@ -260,7 +260,6 @@ namespace Service.Service
 
         public async Task<List<AICriteriaFeedbackItem>> GenerateBulkCriteriaFeedbackAsync(string documentText, List<Criteria> criteria, string context)
         {
-            // Tạo danh sách tiêu chí dạng text rút gọn để gửi vào prompt
             var criteriaListText = string.Join("\n", criteria.Select(c =>
                 $"- ID:{c.CriteriaId} | Title: {c.Title} | MaxScore: {c.MaxScore} | Desc: {c.Description}"));
 
@@ -278,9 +277,10 @@ Evaluate the submission against ALL criteria listed above.
 Return a STRICT JSON ARRAY where each object corresponds to a criteria.
 Format: [ {{ ""CriteriaId"": <int>, ""Score"": <decimal>, ""Summary"": ""<short feedback>"" }}, ... ]
 Rules:
-1. Score must be between 0 and MaxScore.
-2. Summary must be concise (under 40 words per criteria).
-3. Do not include markdown formatting (```json), just the raw JSON string.
+1. Score must be between 0.25 and MaxScore.
+2. Score must be in increments of 0.25 (e.g., 0.25, 0.50, 0.75, 1.0).
+3. Summary must be concise (under 40 words per criteria).
+4. Do not include markdown formatting (```json), just the raw JSON string.
 ";
 
             var jsonResponse = await SummarizeAsync(prompt, maxOutputTokens: 1000);
@@ -300,8 +300,17 @@ Rules:
                         item.Title = original.Title;
                         item.Description = original.Description;
                         item.MaxScore = original.MaxScore;
-                        if (item.Score > original.MaxScore) item.Score = original.MaxScore;
-                        if (item.Score < 0) item.Score = 0;
+
+                        item.Score = Math.Round(item.Score * 4) / 4;
+
+                        if (item.Score < 0.25m)
+                        {
+                            item.Score = 0.25m;
+                        }
+                        if (item.Score > original.MaxScore)
+                        {
+                            item.Score = original.MaxScore;
+                        }
                     }
                 }
                 return feedbacks ?? new List<AICriteriaFeedbackItem>();

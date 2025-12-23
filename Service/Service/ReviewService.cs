@@ -505,9 +505,25 @@ namespace Service.Service
                 }
 
                 decimal? overallScore = null;
+
                 if (request.CriteriaFeedbacks != null && request.CriteriaFeedbacks.Any(cf => cf.Score.HasValue))
                 {
                     overallScore = await CalculateReviewScoreFromRequest(request, assignment);
+
+                    if (overallScore <= 0)
+                    {
+                        return new BaseResponse<ReviewResponse>(
+                            "Invalid review score: The calculated overall score cannot be 0.",
+                            StatusCodeEnum.BadRequest_400,
+                            null);
+                    }
+                }
+                else
+                {
+                    return new BaseResponse<ReviewResponse>(
+                        "Review must include criteria grading.",
+                        StatusCodeEnum.BadRequest_400,
+                        null);
                 }
 
                 var review = new Review
@@ -528,12 +544,22 @@ namespace Service.Service
                     {
                         var criteria = await _criteriaRepository.GetByIdAsync(cfRequest.CriteriaId);
                         if (criteria == null) continue;
+                        decimal scoreToSave = 0;
+
+                        if (cfRequest.Score.HasValue)
+                        {
+                            scoreToSave = Math.Round(cfRequest.Score.Value * 4) / 4;
+
+                            if (scoreToSave < 0.25m) scoreToSave = 0.25m;
+
+                            if (scoreToSave > criteria.MaxScore) scoreToSave = criteria.MaxScore;
+                        }
 
                         var criteriaFeedback = new CriteriaFeedback
                         {
                             ReviewId = review.ReviewId,
                             CriteriaId = cfRequest.CriteriaId,
-                            ScoreAwarded = cfRequest.Score,
+                            ScoreAwarded = scoreToSave,
                             Feedback = cfRequest.Feedback,
                             FeedbackSource = "Student"
                         };
@@ -755,22 +781,27 @@ namespace Service.Service
                 var criteria = await _criteriaRepository.GetByIdAsync(cfRequest.CriteriaId);
                 if (criteria == null) continue;
 
-                decimal score = cfRequest.Score.Value;
+                decimal rawInputScore = cfRequest.Score.Value;
+
+                decimal processedScore = Math.Round(rawInputScore * 4) / 4;
+
+                if (processedScore < 0.25m) processedScore = 0.25m;
+
+                if (processedScore > criteria.MaxScore) processedScore = criteria.MaxScore;
+
                 decimal maxScore = criteria.MaxScore;
                 decimal weight = criteria.Weight;
 
-                // Tính điểm chuẩn hóa
-                decimal normalizedScore = maxScore > 0 ? (score / maxScore) * 100 : 0;
+                decimal normalizedScore = maxScore > 0 ? (processedScore / maxScore) * 100 : 0;
                 totalScore += normalizedScore * weight;
                 totalWeight += weight;
             }
 
             decimal rawScore = totalWeight > 0 ? totalScore / totalWeight : 0;
 
-            // Áp dụng thang điểm
             return assignment.GradingScale == "PassFail"
                 ? (rawScore >= 50 ? 100 : 0)
-                : Math.Round(rawScore / 10, 1); // Chia 10 để chuyển từ 0-100 sang 0-10
+                : Math.Round(rawScore / 10, 1);
         }
         // Method tính điểm từ request
         private async Task<decimal> CalculateReviewScoreFromRequest(CreateReviewRequest request, Assignment assignment)
