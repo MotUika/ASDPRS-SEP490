@@ -1198,10 +1198,9 @@ namespace Service.Service
                     return new BaseResponse<ReviewAssignmentDetailResponse>(
                         "Assignment is not in review phase yet", StatusCodeEnum.BadRequest_400, null);
                 }
-                // Ưu tiên: Tìm review assignment đang in progress hoặc assigned
+
                 var existingInProgressAssignment = await _context.ReviewAssignments
                     .Include(ra => ra.Submission)
-                    .ThenInclude(s => s.Assignment)
                     .FirstOrDefaultAsync(ra =>
                         ra.ReviewerUserId == reviewerId &&
                         ra.Submission.AssignmentId == assignmentId &&
@@ -1212,59 +1211,20 @@ namespace Service.Service
                     {
                         existingInProgressAssignment.Status = "In Progress";
                         await _reviewAssignmentRepository.UpdateAsync(existingInProgressAssignment);
+                        await transaction.CommitAsync();
                     }
-                    await transaction.CommitAsync();
                     return await GetReviewAssignmentDetailsAsync(existingInProgressAssignment.ReviewAssignmentId, reviewerId);
                 }
-                // Đếm số completed reviews trong lớp này
-                var completedReviewsInClass = await _context.ReviewAssignments
-                    .CountAsync(ra => ra.ReviewerUserId == reviewerId &&
-                                      ra.Submission.AssignmentId == assignmentId &&
-                                      ra.Status == "Completed");
-                // Lấy available submissions trong lớp
                 var availableInClassSubmissions = await _reviewAssignmentRepository.GetAvailableSubmissionsForReviewerAsync(assignmentId, reviewerId);
-                _logger.LogInformation($"Available in-class submissions: {availableInClassSubmissions.Count}"); // Log để debug
+                _logger.LogInformation($"Available in-class submissions: {availableInClassSubmissions.Count}");
 
-                List<Submission> availableCrossClassSubmissions = new List<Submission>();
-                bool canUseCrossClass = assignment.AllowCrossClass && !string.IsNullOrEmpty(assignment.CrossClassTag) && completedReviewsInClass >= assignment.NumPeerReviewsRequired;
-                if (canUseCrossClass)
-                {
-                    // Lấy submissions từ cross-class nếu đủ min reviews
-                    availableCrossClassSubmissions = await _assignmentService.GetEligibleSubmissionsForCrossClassReviewAsync(reviewerId, assignmentId);
-                    // Lọc bỏ submissions đã review - Lấy fresh existing để tránh cache
-                    var existingReviews = await _reviewAssignmentRepository.GetByReviewerIdAsync(reviewerId); // Lấy lại để fresh
-                    var reviewedSubmissionIds = existingReviews.Select(ra => ra.SubmissionId).ToHashSet();
-                    availableCrossClassSubmissions = availableCrossClassSubmissions
-                        .Where(s => !reviewedSubmissionIds.Contains(s.SubmissionId) && s.UserId != reviewerId)
-                        .ToList();
-                    _logger.LogInformation($"Available cross-class submissions after filter: {availableCrossClassSubmissions.Count}");
-                }
-                // Kết hợp pool: Nếu canUseCrossClass, mix in-class và cross-class với tỉ lệ (ví dụ: 70% in-class, 30% cross-class)
-                var allAvailableSubmissions = new List<Submission>();
-                if (availableInClassSubmissions.Any())
-                {
-                    allAvailableSubmissions.AddRange(availableInClassSubmissions);
-                }
-                var random = _threadLocalRandom.Value;
-                if (canUseCrossClass && availableCrossClassSubmissions.Any())
-                {
-                    // Tỉ lệ: Random mix - giả sử 70% chance lấy in-class nếu còn, 30% cross-class
-                    if (availableInClassSubmissions.Any() && random.NextDouble() < 0.7) // 70% ưu tiên in-class
-                    {
-                        // Giữ nguyên in-class
-                    }
-                    else
-                    {
-                        allAvailableSubmissions.AddRange(availableCrossClassSubmissions);
-                    }
-                }
-                if (!allAvailableSubmissions.Any())
+                if (!availableInClassSubmissions.Any())
                 {
                     return new BaseResponse<ReviewAssignmentDetailResponse>(
-                        "No available submissions to review", StatusCodeEnum.NotFound_404, null);
+                        "No available submissions to review in this class", StatusCodeEnum.NotFound_404, null);
                 }
-                // Chọn random từ pool
-                var submissionsWithReviewCount = allAvailableSubmissions.Select(s => new
+
+                var submissionsWithReviewCount = availableInClassSubmissions.Select(s => new
                 {
                     Submission = s,
                     ReviewCount = _context.ReviewAssignments.Count(ra => ra.SubmissionId == s.SubmissionId && ra.Status == "Completed")
@@ -1272,42 +1232,36 @@ namespace Service.Service
 
                 var minReviewCount = submissionsWithReviewCount.Min(x => x.ReviewCount);
                 var prioritySubmissions = submissionsWithReviewCount.Where(x => x.ReviewCount == minReviewCount)
-                                                                   .Select(x => x.Submission)
-                                                                   .ToList();
+                                                                    .Select(x => x.Submission)
+                                                                    .ToList();
 
+                var random = _threadLocalRandom.Value;
                 var selectedSubmission = prioritySubmissions[random.Next(prioritySubmissions.Count)];
-                _logger.LogInformation($"Selected submission ID: {selectedSubmission.SubmissionId}");
 
-                // Sửa: Query lại DB để check existing RA cho selected submission (fresh check tránh cache)
+                _logger.LogInformation($"Selected in-class submission ID: {selectedSubmission.SubmissionId}");
+
+
                 var existingReviewAssignment = await _context.ReviewAssignments
                     .FirstOrDefaultAsync(ra => ra.SubmissionId == selectedSubmission.SubmissionId && ra.ReviewerUserId == reviewerId);
 
                 ReviewAssignment reviewAssignment;
                 if (existingReviewAssignment != null)
                 {
-                    // Nếu đã tồn tại
                     if (existingReviewAssignment.Status == "Completed")
                     {
-                        // Không cho review lại nếu đã complete
-                        _logger.LogWarning($"Attempt to re-review completed submission {selectedSubmission.SubmissionId} by reviewer {reviewerId}");
                         await transaction.RollbackAsync();
                         return new BaseResponse<ReviewAssignmentDetailResponse>(
-                            "Cannot review already completed submission", StatusCodeEnum.BadRequest_400, null);
+                           "You have already reviewed this submission.", StatusCodeEnum.BadRequest_400, null);
                     }
-                    else
+                    reviewAssignment = existingReviewAssignment;
+                    if (reviewAssignment.Status == "Assigned")
                     {
-                        // Nếu Assigned hoặc InProgress, dùng existing để continue
-                        reviewAssignment = existingReviewAssignment;
-                        if (reviewAssignment.Status == "Assigned")
-                        {
-                            reviewAssignment.Status = "In Progress";
-                            await _reviewAssignmentRepository.UpdateAsync(reviewAssignment);
-                        }
+                        reviewAssignment.Status = "In Progress";
+                        await _reviewAssignmentRepository.UpdateAsync(reviewAssignment);
                     }
                 }
                 else
                 {
-                    // Tạo mới nếu chưa có
                     reviewAssignment = new ReviewAssignment
                     {
                         SubmissionId = selectedSubmission.SubmissionId,
@@ -1318,7 +1272,7 @@ namespace Service.Service
                         IsAIReview = false
                     };
                     await _reviewAssignmentRepository.AddAsync(reviewAssignment);
-                    await _context.SaveChangesAsync(); // Save immediate để persist, tránh duplicate ở call sau
+                    await _context.SaveChangesAsync();
                 }
 
                 await transaction.CommitAsync();

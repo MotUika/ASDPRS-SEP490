@@ -917,15 +917,20 @@ namespace Service.Service
         public async Task<List<Submission>> GetEligibleSubmissionsForCrossClassReviewAsync(int reviewerStudentId, int currentAssignmentId)
         {
             var currentAssignment = await _assignmentRepository.GetByIdAsync(currentAssignmentId);
-            if (!currentAssignment.AllowCrossClass) return new List<Submission>();
+
+            if (currentAssignment == null || !currentAssignment.AllowCrossClass || string.IsNullOrEmpty(currentAssignment.CrossClassTag))
+                return new List<Submission>();
 
             var allEligibleSubmissions = new List<Submission>();
 
             var potentialAssignments = await _context.Assignments
-                .Where(a => a.Status == "Active" || a.Status == "InReview")
+                .Where(a => (a.Status == "Active" || a.Status == "InReview")
+                            && a.AssignmentId != currentAssignmentId
+                            && a.AllowCrossClass == true // <--- Chặn AllowCrossClass = false
+                            && a.CrossClassTag == currentAssignment.CrossClassTag) // <--- Chặn sai Tag hoặc không có Tag
                 .ToListAsync();
 
-            foreach (var assignment in potentialAssignments.Where(a => a.AssignmentId != currentAssignmentId))
+            foreach (var assignment in potentialAssignments)
             {
                 if (await CanCrossClassWithAsync(currentAssignment, assignment))
                 {
