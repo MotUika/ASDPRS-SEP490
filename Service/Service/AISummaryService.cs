@@ -855,6 +855,50 @@ namespace Service.Service
 
             return contextBuilder.ToString();
         }
+
+        private string BuildEnhancedFileContext(Assignment assignment, Rubric rubric, List<Criteria> criteria, string assignmentFileContent)
+        {
+            var contextBuilder = new StringBuilder();
+
+            // Thông tin bài tập cơ bản
+            contextBuilder.AppendLine($"Assignment: {assignment.Title}");
+
+            if (!string.IsNullOrEmpty(assignment.Description))
+            {
+                var shortDesc = assignment.Description.Length > 80 ?
+                    assignment.Description.Substring(0, 80) + "..." : assignment.Description;
+                contextBuilder.AppendLine($"Description: {shortDesc}");
+            }
+            if (!string.IsNullOrWhiteSpace(assignmentFileContent))
+            {
+                contextBuilder.AppendLine("\n--- DETAILED ASSIGNMENT FILE CONTENT ---");
+                contextBuilder.AppendLine(assignmentFileContent);
+                contextBuilder.AppendLine("--- END ASSIGNMENT FILE CONTENT ---\n");
+            }
+            // Thông tin grading scale
+            contextBuilder.AppendLine($"Grading Scale: {assignment.GradingScale}");
+            if (assignment.PassThreshold.HasValue)
+            {
+                contextBuilder.AppendLine($"Pass Threshold: {assignment.PassThreshold}%");
+            }
+
+            // Tiêu chí đánh giá chi tiết
+            if (criteria != null && criteria.Any())
+            {
+                contextBuilder.AppendLine("Evaluation Criteria:");
+                foreach (var criterion in criteria)
+                {
+                    contextBuilder.AppendLine($"- {criterion.Title} (Weight: {criterion.Weight}%, Max Score: {criterion.MaxScore})");
+                    if (!string.IsNullOrEmpty(criterion.Description))
+                    {
+                        contextBuilder.AppendLine($"  Description: {criterion.Description}");
+                    }
+                }
+            }
+
+            return contextBuilder.ToString();
+        }
+
         private async Task<AISummaryResponse> MapToResponse(AISummary aiSummary)
         {
             var submission = await _submissionRepository.GetByIdAsync(aiSummary.SubmissionId);
@@ -969,7 +1013,7 @@ namespace Service.Service
 
                     return new BaseResponse<AIOverallResponse>(
                         "Submission is not relevant to assignment",
-                        StatusCodeEnum.BadRequest_400, // Đổi sang 400 thay vì 200
+                        StatusCodeEnum.BadRequest_400,
                         response
                     );
                 }
@@ -1055,6 +1099,29 @@ namespace Service.Service
                 if (criteria == null || !criteria.Any())
                     return new BaseResponse<AICriteriaResponse>("No rubric criteria found for this assignment", StatusCodeEnum.NotFound_404, null);
 
+                string assignmentFileContent = "";
+                if (!string.IsNullOrEmpty(assignment.FileUrl))
+                {
+                    try
+                    {
+                        using var assignStream = await _fileStorageService.GetFileStreamAsync(assignment.FileUrl);
+                        if (assignStream != null)
+                        {
+                            var assignFileName = assignment.FileName ?? "assignment_document";
+                            assignmentFileContent = await _documentTextExtractor.ExtractTextAsync(assignStream, assignFileName);
+
+                            if (assignmentFileContent.Length > 2000)
+                            {
+                                assignmentFileContent = assignmentFileContent.Substring(0, 2000) + "...[Truncated]";
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning($"Could not extract assignment file content: {ex.Message}");
+                    }
+                }
+
                 using var fileStream = await _fileStorageService.GetFileStreamAsync(submission.FileUrl);
                 if (fileStream == null)
                     return new BaseResponse<AICriteriaResponse>("Could not download file from storage", StatusCodeEnum.BadRequest_400, null);
@@ -1129,7 +1196,7 @@ namespace Service.Service
 
                 _logger.LogInformation($"Calling AI Bulk Generation for Submission {request.SubmissionId} with {criteria.Count} criteria.");
 
-                var context = BuildEnhancedContext(assignment, rubric, criteria);
+                var context = BuildEnhancedFileContext(assignment, rubric, criteria, assignmentFileContent);
 
                 var aiResults = await _genAIService.GenerateBulkCriteriaFeedbackAsync(textForAI, criteria, context);
 
