@@ -22,6 +22,8 @@ namespace Service.RequestAndResponse.Response.Submission
         public decimal? InstructorScore { get; set; }
         public decimal? FinalScore { get; set; }
         public string? Feedback { get; set; }
+        public decimal InstructorWeight { get; set; }
+        public decimal PeerWeight { get; set; }
 
         public string? Status { get; set; }
         public DateTime? GradedAt { get; set; }
