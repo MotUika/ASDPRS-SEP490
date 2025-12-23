@@ -510,10 +510,10 @@ namespace Service.Service
                 {
                     overallScore = await CalculateReviewScoreFromRequest(request, assignment);
 
-                    if (overallScore <= 0)
+                    if (overallScore < 0.25m)
                     {
                         return new BaseResponse<ReviewResponse>(
-                            "Invalid review score: The calculated overall score cannot be 0.",
+                            "Total score must be at least 0.25. Please review your grading.",
                             StatusCodeEnum.BadRequest_400,
                             null);
                     }
