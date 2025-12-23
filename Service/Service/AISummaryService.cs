@@ -1286,7 +1286,9 @@ namespace Service.Service
             var feedbacks = new List<AICriteriaFeedbackItem>();
             foreach (var criterion in criteria)
             {
-                var content = $"Score: 0 | Summary: {violationMessage}";
+                decimal penaltyScore = 0.25m;
+
+                var content = $"Score: {penaltyScore} | Summary: {violationMessage}";
                 await SaveErrorSummaryAsync(submissionId, content, $"CriteriaFeedback*{criterion.CriteriaId}_Violation");
 
                 feedbacks.Add(new AICriteriaFeedbackItem
@@ -1295,7 +1297,7 @@ namespace Service.Service
                     Title = criterion.Title,
                     Description = criterion.Description ?? "",
                     Summary = violationMessage,
-                    Score = 0,
+                    Score = penaltyScore,
                     MaxScore = criterion.MaxScore
                 });
             }
@@ -1309,7 +1311,9 @@ namespace Service.Service
             var feedbacks = new List<AICriteriaFeedbackItem>();
             foreach (var criterion in criteria)
             {
-                var content = $"Score: 0 | Summary: {msg}";
+                decimal penaltyScore = 0.25m;
+
+                var content = $"Score: {penaltyScore} | Summary: {msg}";
                 await SaveErrorSummaryAsync(submissionId, content, $"CriteriaFeedback*{criterion.CriteriaId}_NotRelevant");
 
                 feedbacks.Add(new AICriteriaFeedbackItem
@@ -1318,7 +1322,7 @@ namespace Service.Service
                     Title = criterion.Title,
                     Description = criterion.Description ?? "",
                     Summary = msg,
-                    Score = 0,
+                    Score = penaltyScore,
                     MaxScore = criterion.MaxScore
                 });
             }
