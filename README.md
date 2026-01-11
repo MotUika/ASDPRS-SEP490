@@ -152,6 +152,13 @@ Best practices for secret storage
 - Use a high-entropy JWT signing key.
 - Restrict OAuth redirect URIs to trusted domains.
 
+---
+
+If helpful, I can also:
+- Create safe example `appsettings.Development.json` and `appsettings.Production.json` templates (without secrets).
+- Add a step-by-step Google OAuth setup guide.
+- Provide a GitHub Actions example workflow that injects secrets for deployment.
+
 Resources
 - Repository: https://github.com/MotUika/ASDPRS-SEP490
 - Deployment DNS/SSL guide: https://github.com/MotUika/ASDPRS-SEP490/blob/master/deploy/DNS_SSL_SETUP.md
